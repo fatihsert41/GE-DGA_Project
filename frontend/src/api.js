@@ -18,6 +18,8 @@ export const api = {
   trendFromSamples: (payload) =>
     client.post('/trend', payload).then((r) => r.data),
   fleetOverview: () => client.get('/fleet/overview').then((r) => r.data),
+  transformerTrend: (id, horizon = 6) =>
+    client.get(`/trend/${id}`, { params: { horizon } }).then((r) => r.data),
   measurements: (id) =>
     client.get(`/transformers/${id}/measurements`).then((r) => r.data),
 }

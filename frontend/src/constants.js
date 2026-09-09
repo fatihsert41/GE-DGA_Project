@@ -28,6 +28,11 @@ export const PRESETS = {
   'Termal T3': { H2: 120, CH4: 200, C2H6: 70, C2H4: 520, C2H2: 4, CO: 450, CO2: 3300 },
 }
 
-export const RISK_LABEL = {
-  low: 'low', medium: 'medium', high: 'high', critical: 'critical',
+// Risk seviyesi -> Türkçe etiket. Backend'deki core/risk.py::RISK_LEVELS_TR
+// ile aynı tutulmalı.
+export const RISK_TR = {
+  low: 'Düşük', medium: 'Orta', high: 'Yüksek', critical: 'Kritik',
 }
+
+// Şiddet sırası: en kötü önce. Risk çubuğunun segment sırası da budur.
+export const RISK_ORDER = ['critical', 'high', 'medium', 'low']

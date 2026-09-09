@@ -7,6 +7,7 @@ import DuvalTriangle from './components/DuvalTriangle'
 import ComparePanel from './components/ComparePanel'
 import TrendPanel from './components/TrendPanel'
 import FleetOverview from './components/FleetOverview'
+import TransformerDetail from './components/TransformerDetail'
 
 const TABS = [
   { id: 'diagnosis', label: 'Tanı' },
@@ -16,12 +17,14 @@ const TABS = [
 ]
 
 const VIEWS = [
-  { id: 'fleet', label: '🏭 Filo Genel Bakış' },
-  { id: 'analysis', label: '🔬 Tek Numune Analizi' },
+  { id: 'fleet', label: 'Filo' },
+  { id: 'analysis', label: 'Numune Analizi' },
 ]
 
 export default function App() {
   const [view, setView] = useState('fleet')
+  // Seçili trafo kartı (null ise filo listesi görünür).
+  const [selected, setSelected] = useState(null)
   const [tab, setTab] = useState('diagnosis')
   const [loading, setLoading] = useState(false)
   const [health, setHealth] = useState(null)
@@ -62,9 +65,9 @@ export default function App() {
     <div className="app">
       <header className="top">
         <div>
-          <h1>⚡ TransformerAI — DGA Arıza Tahmin</h1>
+          <h1>TransformerAI</h1>
           <div className="sub">
-            Çözünmüş gaz analizi · açıklanabilir AI · klasik yöntem karşılaştırma · trend
+            DGA arıza izleme · açıklanabilir ML · klasik yöntem karşılaştırma
           </div>
         </div>
         <span className={`status-pill ${trained ? 'ok' : 'warn'}`}>
@@ -75,7 +78,8 @@ export default function App() {
       </header>
 
       {error && (
-        <div className="panel" style={{ borderColor: '#ef4444', marginBottom: 16 }}>
+        <div className="panel"
+          style={{ borderLeft: '3px solid var(--critical)', marginBottom: 16 }}>
           <b>Hata:</b> {String(error)}
         </div>
       )}
@@ -84,11 +88,16 @@ export default function App() {
         {VIEWS.map((v) => (
           <button key={v.id}
             className={view === v.id ? 'active' : ''}
-            onClick={() => setView(v.id)}>{v.label}</button>
+            onClick={() => { setView(v.id); setSelected(null) }}>{v.label}</button>
         ))}
       </div>
 
-      {view === 'fleet' && <FleetOverview />}
+      {view === 'fleet' && (
+        selected
+          ? <TransformerDetail id={selected.id} meta={selected}
+              onBack={() => setSelected(null)} />
+          : <FleetOverview onSelect={setSelected} />
+      )}
 
       {/* Analiz ekranı DOM'da kalır (sadece gizlenir) ki görünüm
           değiştirince girilen gaz değerleri ve sonuçlar kaybolmasın. */}
@@ -119,7 +128,10 @@ export default function App() {
         </div>
       </div>
 
-      <p className="note" style={{ textAlign: 'center', marginTop: 24 }}>
+      <p className="note" style={{
+        textAlign: 'center', marginTop: 36, paddingTop: 16,
+        borderTop: '1px solid var(--rule)',
+      }}>
         Veriler tamamen sentetiktir (IEC 60599 / Duval / IEEE C57.104 temelli).
         Gerçek saha verisi kullanılmaz. — GE Vernova Staj Projesi
       </p>

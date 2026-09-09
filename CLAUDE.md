@@ -81,8 +81,21 @@ Testler: `cd backend; pytest -q` (18 test).
     (KPI kutuları + tek çubuklu risk kompozisyonu + trafo kartları),
     `App.jsx` içine "Filo / Tek Numune Analizi" görünüm anahtarı,
     `index.css` sonuna filo stilleri, `api.js` içine `fleetOverview()`.
-  - ⏭️ **SIRADAKİ: 5.4** Trafo detay sayfası (kart → geçmiş + trend grafiği).
-    Hazır altyapı: `api.measurements(id)` ve `GET /trend/{id}` zaten var.
+  - ✅ 5.4 Trafo detay sayfası — TAMAM. `components/TransformerDetail.jsx`:
+    trend hükmü şeridi, ölçülen geçmiş + kesikli 6 aylık öngörü grafiği,
+    gaz bazında trend tablosu (eğim/R²/kalan süre), ölçüm geçmişi tablosu.
+    Tamamı TEK istekten beslenir: `GET /trend/{id}`. Filo kartları artık
+    `<button>` (klavye erişilebilir) ve `App.jsx` `selected` durumunu tutar.
+  - ⏭️ **SIRADAKİ: 5.5** Cila — filo ekranında filtre/arama, alarm listesi.
+
+### Görsel dil (2026-09-09'da yenilendi)
+"Endüstriyel kontrol odası": kağıt zemin (#f5f2ea), mürekkep metin, saç teli
+çizgiler. Tipografi **Plus Jakarta Sans**; monospace (JetBrains Mono) SADECE
+rakamlarda. Renkler `frontend/src/theme.js` + `index.css :root` içinde İKİ YERDE
+tanımlı, ikisi de aynı tutulmalı. Risk rampası tek hüzmeli sıralı rampa
+(#cda760→#78380f) ve grafik serileri paleti, dataviz doğrulayıcısından geçirildi
+— renk körlüğü kontrolünden geçmeyen yeşil/sarı/turuncu/kırmızı kombinasyonu
+bilinçli olarak KULLANILMADI. Renk hiçbir yerde tek başına anlam taşımaz.
   - ⏳ 5.4 Trafo detay sayfası (geçmiş + trend).
   - ⏳ 5.5 Cila (filtre, arama, alarm).
 
