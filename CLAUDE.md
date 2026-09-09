@@ -12,8 +12,12 @@ projesi, tamamen demo.)
 ## ⚠️ Çalışma tarzı (ÇOK ÖNEMLİ — kullanıcıyla nasıl ilerlenir)
 - Kullanıcı **öğrenci** ve öğrenmek istiyor. Türkçe konuş.
 - **Adım adım** ilerle: küçük parçalar ver, her parçayı **neden** yaptığını açıkla.
-- Kullanıcı kodu **kendi yazmak** istiyor (öğrenmek için). Kodu ver, açıkla; o yazsın.
-  VS Code eklentisi kullanılıyorsa değişiklikleri **diff olarak göster, onay iste.**
+- **Kodu Claude yazar** (2026-09-09'da değişti — kullanıcı elle yazmıyor).
+  Değişikliği uygula, sonra **ne yaptığını ve nedenini detaylı anlat.**
+- Bir dosyadan bahsederken **tam yolunu** yaz (`backend/app/database.py`), sadece
+  dosya adını değil. Terminal komutu verirken **hangi dizinden** çalıştırılacağını
+  belirt (komutların çoğu `backend/` klasöründen çalışır).
+- **git push yalnızca büyük aşamalar sonunda ve kullanıcının onayıyla.** Sürekli push yok.
 - Yeni bir kavram geçtiğinde (ör. `iloc`, SHAP, API) **kısa bir açıklama** ekle.
 - Aynı anda çok şey yapma; bir adım bitince kullanıcıdan çıktı/onay al, sonra devam.
 
@@ -66,10 +70,19 @@ Testler: `cd backend; pytest -q` (18 test).
 ## Nerede kaldık (güncel durum)
 - ✅ Faz 0–4 bitti: klasik motor, ML+karşılaştırma, SHAP, FastAPI, React dashboard.
 - 🔄 **Faz 5 — Filo Dashboard (devam ediyor):**
-  - ✅ 5.1 `ml/seed.py` demo filo üreteci (8 trafo, ~89 ölçüm) — TAMAM.
-  - ⏭️ **SIRADAKİ: 5.2** — `/fleet/overview` API'si (her trafonun son tanısı +
-    filo geneli risk dağılımı).
-  - ⏳ 5.3 Frontend filo ekranı (kartlar + risk dağılımı).
+  - ✅ 5.1 `ml/seed.py` demo filo üreteci (8 trafo, 89 ölçüm) — TAMAM.
+  - ✅ 5.2 `GET /fleet/overview` — TAMAM. Zinciri:
+    `database.latest_measurements()` (pencere fonksiyonu ile trafo başına son
+    ölçüm, LEFT JOIN ile ölçümsüz trafolar da) → `services/fleet.py`
+    (`build_overview` saf hesap + `overview` I/O sarmalayıcı) → `routers/fleet.py`.
+    `core/risk.py` içine `RISK_LEVELS_TR` / `RISK_ORDER` eklendi.
+    Testler: `tests/test_fleet.py` (toplam 20 test).
+  - ✅ 5.3 Frontend filo ekranı — TAMAM. `components/FleetOverview.jsx`
+    (KPI kutuları + tek çubuklu risk kompozisyonu + trafo kartları),
+    `App.jsx` içine "Filo / Tek Numune Analizi" görünüm anahtarı,
+    `index.css` sonuna filo stilleri, `api.js` içine `fleetOverview()`.
+  - ⏭️ **SIRADAKİ: 5.4** Trafo detay sayfası (kart → geçmiş + trend grafiği).
+    Hazır altyapı: `api.measurements(id)` ve `GET /trend/{id}` zaten var.
   - ⏳ 5.4 Trafo detay sayfası (geçmiş + trend).
   - ⏳ 5.5 Cila (filtre, arama, alarm).
 

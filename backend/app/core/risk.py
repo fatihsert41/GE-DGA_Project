@@ -16,6 +16,9 @@ _LEVELS = {
     3: ("high", "Yüksek", "Belirgin arıza gelişimi. Detaylı inceleme planla."),
     4: ("critical", "Kritik", "İleri düzey arıza. Acil değerlendirme gerekli."),
 }
+# Public views of _LEVELS so other modules don't re-declare these strings.
+RISK_LEVELS_TR: Dict[str, str] = {lvl: tr for lvl, tr, _ in _LEVELS.values()}
+RISK_ORDER: Dict[str, int] = {lvl: cond for cond, (lvl, _, _) in _LEVELS.items()}
 
 
 def _tdcg_condition(tdcg: float) -> int:

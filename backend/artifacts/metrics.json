@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-04 08:28:04",
+  "generated_at": "2026-09-04 14:39:01",
   "n_samples": 4000,
   "n_test": 1000,
   "best_model": "RandomForest",
@@ -9,28 +9,28 @@
       "type": "ML",
       "accuracy": 0.967,
       "f1_macro": 0.9634,
-      "train_seconds": 1.05
+      "train_seconds": 0.94
     },
     {
       "model": "XGBoost",
       "type": "ML",
       "accuracy": 0.966,
-      "f1_macro": 0.9625,
-      "train_seconds": 0.93
+      "f1_macro": 0.9624,
+      "train_seconds": 1.84
     },
     {
       "model": "SVM",
       "type": "ML",
       "accuracy": 0.955,
       "f1_macro": 0.9505,
-      "train_seconds": 0.58
+      "train_seconds": 0.88
     },
     {
       "model": "NeuralNet",
       "type": "ML",
       "accuracy": 0.955,
       "f1_macro": 0.95,
-      "train_seconds": 5.08
+      "train_seconds": 7.31
     },
     {
       "model": "Classical Consensus",

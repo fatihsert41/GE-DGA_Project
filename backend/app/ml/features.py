@@ -35,7 +35,7 @@ def features_from_dict(g: Dict[str, float]) -> np.ndarray:
     ratios = _ratios(g)
     values = [float(g.get(name, 0.0)) for name in GASES]
     values += [ratios[name] for name in RATIO_FEATURES]
-    return np.asarray(values, dtype=float).reshape(1, -1)
+    return pd.DataFrame([values], columns=FEATURE_NAMES)
 
 
 def build_features(df: pd.DataFrame) -> pd.DataFrame:

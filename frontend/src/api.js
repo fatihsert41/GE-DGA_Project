@@ -17,6 +17,9 @@ export const api = {
       .then((r) => r.data),
   trendFromSamples: (payload) =>
     client.post('/trend', payload).then((r) => r.data),
+  fleetOverview: () => client.get('/fleet/overview').then((r) => r.data),
+  measurements: (id) =>
+    client.get(`/transformers/${id}/measurements`).then((r) => r.data),
 }
 
 export default api

@@ -127,3 +127,47 @@ def recent_measurements(limit: int = 20) -> List[Dict]:
         d["gases"] = json.loads(d.pop("gases_json"))
         out.append(d)
     return out
+
+def latest_measurements() -> List[Dict]:
+    """Her trafonun EN SON ölçümü — filo dashboard'unun ana sorgusu.
+
+    Hiç ölçümü olmayan trafolar da listede döner (ölçüm alanları None).
+    """
+    with _connect() as conn:
+        rows = conn.execute(
+            """
+            WITH ranked AS (
+                SELECT m.*,
+                       ROW_NUMBER() OVER (
+                           PARTITION BY m.transformer_id
+                           ORDER BY m.sampled_at DESC, m.id DESC
+                       ) AS rn
+                FROM measurements m
+            )
+            SELECT t.id       AS transformer_id,
+                   t.name     AS transformer_name,
+                   t.location AS location,
+                   r.id       AS measurement_id,
+                   r.sampled_at,
+                   r.gases_json,
+                   r.prediction,
+                   r.confidence,
+                   r.risk_level,
+                   r.risk_condition,
+                   (SELECT COUNT(*) FROM measurements m2
+                     WHERE m2.transformer_id = t.id) AS measurement_count
+            FROM transformers t
+            LEFT JOIN ranked r
+                   ON r.transformer_id = t.id AND r.rn = 1
+            ORDER BY t.id
+            """
+        ).fetchall()
+
+    out = []
+    for r in rows:
+        d = dict(r)
+        raw = d.pop("gases_json")
+        d["gases"] = json.loads(raw) if raw else None
+        out.append(d)
+    return out
+

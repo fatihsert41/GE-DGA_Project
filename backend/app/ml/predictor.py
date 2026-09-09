@@ -115,7 +115,7 @@ def explain(g: Dict[str, float]) -> Dict[str, object]:
         n_classes=len(classes))
 
     contribs: List[Dict[str, object]] = [
-        {"feature": name, "value": round(float(x[0, i]), 3),
+        {"feature": name, "value": round(float(x.iloc[0, i]), 3),
          "shap": round(float(contributions[i]), 4)}
         for i, name in enumerate(FEATURE_NAMES)
     ]
