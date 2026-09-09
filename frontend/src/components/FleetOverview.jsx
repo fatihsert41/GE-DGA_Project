@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import api from '../api'
-import { RISK_ORDER, RISK_TR } from '../constants'
+import { fold, RISK_ORDER, RISK_TR } from '../constants'
 
 const fmtDate = (iso) =>
   iso ? new Date(iso).toLocaleDateString('tr-TR',
@@ -87,9 +87,84 @@ function TransformerCard({ t, onSelect }) {
   )
 }
 
+/** Dikkat gerektiren varlıklar: kartları taramaya gerek kalmadan
+ *  "önce şuna bak" listesi. Zaten riske göre sıralı geldiği için
+ *  ilk sıradaki en acil olandır. */
+function AlarmList({ items, onSelect }) {
+  if (!items.length) {
+    return (
+      <div className="panel alarm-panel">
+        <h2>Alarmlar</h2>
+        <p className="empty">Yüksek veya kritik seviyede varlık yok.</p>
+      </div>
+    )
+  }
+  return (
+    <div className="panel alarm-panel">
+      <h2>Alarmlar <span className="count-pill">{items.length}</span></h2>
+      <ul className="alarm-list">
+        {items.map((t) => (
+          <li key={t.id}>
+            <button type="button" onClick={() => onSelect(t)}>
+              <span className={`alarm-mark ${t.risk_level}`} aria-hidden="true" />
+              <span className="alarm-id">{t.id}</span>
+              <span className="alarm-name">{t.name}</span>
+              <span className="alarm-fault">{t.prediction}</span>
+              <span className={`badge sm ${t.risk_level}`}>{t.risk_level_tr}</span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
+/** Filtre satırı: kartların hemen üstünde tek sıra. */
+function FilterBar({ query, onQuery, level, onLevel, counts, shown, total }) {
+  const chips = [{ key: 'all', label: 'Tümü', n: total }].concat(
+    RISK_ORDER.map((lvl) => ({ key: lvl, label: RISK_TR[lvl], n: counts[lvl] || 0 })))
+
+  return (
+    <div className="filter-bar">
+      <input type="search" className="search" value={query}
+        onChange={(e) => onQuery(e.target.value)}
+        placeholder="Trafo ara — kod, ad veya konum" />
+
+      <div className="chips">
+        {chips.map((c) => (
+          <button key={c.key} type="button"
+            className={`chip${level === c.key ? ' active' : ''}`}
+            disabled={c.n === 0 && c.key !== 'all'}
+            onClick={() => onLevel(c.key)}>
+            {c.label} <span className="chip-n">{c.n}</span>
+          </button>
+        ))}
+      </div>
+
+      <span className="shown-count">{shown} / {total}</span>
+    </div>
+  )
+}
+
 export default function FleetOverview({ onSelect }) {
   const [data, setData] = useState(null)
   const [error, setError] = useState(null)
+  const [query, setQuery] = useState('')
+  const [level, setLevel] = useState('all')
+
+  // Filo 8 varlık: filtreleme istemcide yapılır, API'ye tekrar gitmeye gerek yok.
+  // useMemo, her tuş vuruşunda listeyi baştan süzmemek için sonucu önbelleğe alır.
+  const visible = useMemo(() => {
+    if (!data) return []
+    const q = fold(query.trim())
+    return data.transformers.filter((t) => {
+      if (level !== 'all' && t.risk_level !== level) return false
+      if (!q) return true
+      return [t.id, t.name, t.location, t.prediction]
+        .filter(Boolean)
+        .some((f) => fold(f).includes(q))
+    })
+  }, [data, query, level])
 
   useEffect(() => {
     api.fleetOverview()
@@ -123,18 +198,28 @@ export default function FleetOverview({ onSelect }) {
         <RiskComposition distribution={summary.risk_distribution}
           total={summary.with_data} />
 
-        {summary.attention_ids.length > 0 && (
-          <p className="note">
-            Öncelikli: <b>{summary.attention_ids.join(', ')}</b>
-          </p>
-        )}
       </div>
 
-      <div className="fleet-grid">
-        {transformers.map((t) => (
-          <TransformerCard key={t.id} t={t} onSelect={onSelect} />
-        ))}
-      </div>
+      <AlarmList onSelect={onSelect}
+        items={transformers.filter(
+          (t) => t.risk_level === 'critical' || t.risk_level === 'high')} />
+
+      <FilterBar query={query} onQuery={setQuery}
+        level={level} onLevel={setLevel}
+        counts={summary.risk_distribution}
+        shown={visible.length} total={transformers.length} />
+
+      {visible.length === 0 ? (
+        <div className="panel">
+          <p className="empty">Bu ölçütlere uyan trafo yok.</p>
+        </div>
+      ) : (
+        <div className="fleet-grid">
+          {visible.map((t) => (
+            <TransformerCard key={t.id} t={t} onSelect={onSelect} />
+          ))}
+        </div>
+      )}
     </div>
   )
 }

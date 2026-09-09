@@ -86,7 +86,12 @@ Testler: `cd backend; pytest -q` (18 test).
     gaz bazında trend tablosu (eğim/R²/kalan süre), ölçüm geçmişi tablosu.
     Tamamı TEK istekten beslenir: `GET /trend/{id}`. Filo kartları artık
     `<button>` (klavye erişilebilir) ve `App.jsx` `selected` durumunu tutar.
-  - ⏭️ **SIRADAKİ: 5.5** Cila — filo ekranında filtre/arama, alarm listesi.
+  - ✅ 5.5 Cila — TAMAM. `FleetOverview.jsx` içine alarm paneli (yüksek+kritik,
+    tıklayınca detaya gider), arama kutusu ve risk filtresi çipleri.
+    Filtreleme istemcide (8 varlık, API'ye tekrar gitmeye gerek yok).
+    `constants.js::fold()` Türkçe duyarlı arama katlaması yapar (I/ı/İ/i).
+  - 🏁 **Faz 5 BİTTİ.** Sıradaki yol ayrımı: Faz 6 (gerçek veri seti) veya
+    Faz 7 (.NET bakım planlama servisi).
 
 ### Görsel dil (2026-09-09'da yenilendi)
 "Endüstriyel kontrol odası": kağıt zemin (#f5f2ea), mürekkep metin, saç teli

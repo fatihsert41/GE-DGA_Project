@@ -36,3 +36,15 @@ export const RISK_TR = {
 
 // Şiddet sırası: en kötü önce. Risk çubuğunun segment sırası da budur.
 export const RISK_ORDER = ['critical', 'high', 'medium', 'low']
+
+/** Türkçe duyarlı arama katlaması.
+ *
+ * Türkçede büyük I -> ı, büyük İ -> i olur. Bu yüzden düz bir
+ * toLocaleLowerCase('tr') ile "IST" araması "İstanbul" ile eşleşmez
+ * ("ıst" üretir). Aramada noktalı/noktasız ayrımı kullanıcıyı
+ * ilgilendirmediği için i/ı ailesini tek harfe indiriyoruz.
+ */
+export const fold = (str) =>
+  (str || '')
+    .toLocaleLowerCase('tr')
+    .replace(/[ıİI]/g, 'i')
