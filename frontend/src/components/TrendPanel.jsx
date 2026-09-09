@@ -4,13 +4,15 @@ import {
   Legend,
 } from 'recharts'
 import api from '../api'
+import { axis, grid, tooltip, muted, SERIES } from '../theme'
 
 const CLASSES = ['T1', 'T2', 'T3', 'D1', 'D2', 'PD']
+// Kategorik seriler sabit sırada atanır: bir gaz her zaman aynı rengi alır.
 const PLOT_GASES = [
-  { key: 'H2', color: '#2f81f7' },
-  { key: 'CH4', color: '#14b8a6' },
-  { key: 'C2H4', color: '#eab308' },
-  { key: 'C2H2', color: '#ef4444' },
+  { key: 'H2', color: SERIES[0] },
+  { key: 'CH4', color: SERIES[1] },
+  { key: 'C2H4', color: SERIES[2] },
+  { key: 'C2H2', color: SERIES[3] },
 ]
 
 const STATUS_CLASS = { stable: 'low', watch: 'medium', critical_soon: 'critical' }
@@ -63,14 +65,13 @@ export default function TrendPanel() {
       {loading ? <p className="empty">Yükleniyor…</p> : (
         <ResponsiveContainer width="100%" height={300}>
           <LineChart data={series} margin={{ left: 0, right: 20, top: 8 }}>
-            <CartesianGrid stroke="#2a3a52" strokeDasharray="3 3" />
-            <XAxis dataKey="month" stroke="#8ea0b8" fontSize={12}
-              label={{ value: 'Ay', position: 'insideBottom', offset: -2,
-                fill: '#8ea0b8', fontSize: 11 }} />
-            <YAxis stroke="#8ea0b8" fontSize={12} />
-            <Tooltip contentStyle={{ background: '#1e2a3c',
-              border: '1px solid #2a3a52', borderRadius: 8, color: '#e6edf6' }} />
-            <Legend wrapperStyle={{ fontSize: 12 }} />
+            <CartesianGrid stroke={grid.stroke} vertical={false} />
+            <XAxis dataKey="month" stroke={axis.stroke} tick={axis.tick}
+              label={{ value: 'AY', position: 'insideBottom', offset: -2,
+                fill: muted, fontSize: 10, letterSpacing: '0.1em' }} />
+            <YAxis stroke={axis.stroke} tick={axis.tick} unit=" ppm" width={68} />
+            <Tooltip {...tooltip} />
+            <Legend wrapperStyle={{ fontSize: 11, fontFamily: 'JetBrains Mono, monospace' }} />
             {PLOT_GASES.map((g) => (
               <Line key={g.key} type="monotone" dataKey={g.key}
                 stroke={g.color} dot={false} strokeWidth={2} />

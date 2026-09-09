@@ -1,4 +1,5 @@
 // Duval Triangle 1 rendered as SVG. The backend returns the sample's
+import { muted, ink, rule, surface, SERIES } from '../theme'
 // barycentric point in a unit triangle (CH4 at origin, C2H4 right, C2H2 top);
 // we map it into SVG space and mark it. Zone labels sit at their regions.
 const W = 360
@@ -41,25 +42,25 @@ export default function DuvalTriangle({ duval }) {
       <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ maxWidth: 380 }}>
         <polygon
           points={`${V_CH4.join(',')} ${V_C2H4.join(',')} ${V_C2H2.join(',')}`}
-          fill="#1e2a3c" stroke="#2a3a52" strokeWidth="1.5" />
+          fill={surface} stroke={rule} strokeWidth="1" />
         {ZONE_LABELS.map((l) => {
           const [lx, ly] = toSvg(l.x, l.y)
           return (
-            <text key={l.z} x={lx} y={ly} fill="#8ea0b8" fontSize="12"
+            <text key={l.z} x={lx} y={ly} fill={muted} fontSize="12"
               textAnchor="middle"
               fontWeight={l.z === duval.zone ? 700 : 400}
               opacity={l.z === duval.zone ? 1 : 0.6}>{l.z}</text>
           )
         })}
         {/* sample point */}
-        <circle cx={pt[0]} cy={pt[1]} r="7" fill="#2f81f7"
-          stroke="#fff" strokeWidth="2" />
+        <circle cx={pt[0]} cy={pt[1]} r="6" fill={SERIES[0]}
+          stroke={surface} strokeWidth="2" />
         {/* axis labels */}
-        <text x={V_CH4[0] - 6} y={V_CH4[1] + 16} fill="#8ea0b8" fontSize="11"
+        <text x={V_CH4[0] - 6} y={V_CH4[1] + 16} fill={ink} fontSize="11"
           textAnchor="middle">CH₄</text>
-        <text x={V_C2H4[0] + 6} y={V_C2H4[1] + 16} fill="#8ea0b8" fontSize="11"
+        <text x={V_C2H4[0] + 6} y={V_C2H4[1] + 16} fill={ink} fontSize="11"
           textAnchor="middle">C₂H₄</text>
-        <text x={V_C2H2[0]} y={V_C2H2[1] - 8} fill="#8ea0b8" fontSize="11"
+        <text x={V_C2H2[0]} y={V_C2H2[1] - 8} fill={ink} fontSize="11"
           textAnchor="middle">C₂H₂</text>
       </svg>
       <div className="kv">
