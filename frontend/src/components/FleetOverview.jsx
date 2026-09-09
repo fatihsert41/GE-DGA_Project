@@ -1,9 +1,6 @@
 import { useEffect, useState } from 'react'
 import api from '../api'
-
-// Severity order: worst first. Also the segment order of the risk bar.
-const RISK_ORDER = ['critical', 'high', 'medium', 'low']
-const RISK_TR = { critical: 'Kritik', high: 'Yüksek', medium: 'Orta', low: 'Düşük' }
+import { RISK_ORDER, RISK_TR } from '../constants'
 
 const fmtDate = (iso) =>
   iso ? new Date(iso).toLocaleDateString('tr-TR',
@@ -48,7 +45,7 @@ function RiskComposition({ distribution, total }) {
   )
 }
 
-function TransformerCard({ t }) {
+function TransformerCard({ t, onSelect }) {
   if (!t.has_data) {
     return (
       <div className="tcard">
@@ -61,8 +58,11 @@ function TransformerCard({ t }) {
     )
   }
 
+  // Gerçek <button>: klavyeyle gezinme ve ekran okuyucu desteği bedava gelir.
   return (
-    <div className={`tcard ${t.risk_level}`}>
+    <button type="button" className={`tcard clickable ${t.risk_level}`}
+      onClick={() => onSelect(t)}
+      aria-label={`${t.id} ${t.name} detayını aç`}>
       <div className="tcard-head">
         <div>
           <div className="tid">{t.id}</div>
@@ -82,11 +82,12 @@ function TransformerCard({ t }) {
         <span className="k">Son ölçüm</span><span>{fmtDate(t.last_sampled_at)}</span>
         <span className="k">Geçmiş</span><span>{t.measurement_count} ölçüm</span>
       </div>
-    </div>
+      <span className="tcard-go">Detay →</span>
+    </button>
   )
 }
 
-export default function FleetOverview() {
+export default function FleetOverview({ onSelect }) {
   const [data, setData] = useState(null)
   const [error, setError] = useState(null)
 
@@ -130,7 +131,9 @@ export default function FleetOverview() {
       </div>
 
       <div className="fleet-grid">
-        {transformers.map((t) => <TransformerCard key={t.id} t={t} />)}
+        {transformers.map((t) => (
+          <TransformerCard key={t.id} t={t} onSelect={onSelect} />
+        ))}
       </div>
     </div>
   )
