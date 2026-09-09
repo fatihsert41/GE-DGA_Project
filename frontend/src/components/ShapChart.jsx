@@ -1,9 +1,10 @@
 import {
   Bar, BarChart, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts'
+import { axis, tooltip, POSITIVE, NEGATIVE } from '../theme'
 
-// Horizontal bar of SHAP contributions; green pushes toward the prediction,
-// red pushes away. Shows the top drivers of the model's decision.
+// Horizontal bar of SHAP contributions; olive pushes toward the prediction,
+// brick pushes away. Shows the top drivers of the model's decision.
 export default function ShapChart({ explanation }) {
   if (!explanation) {
     return <p className="empty">Açıklama için önce bir analiz çalıştırın.</p>
@@ -22,22 +23,21 @@ export default function ShapChart({ explanation }) {
       <ResponsiveContainer width="100%" height={320}>
         <BarChart data={data} layout="vertical"
           margin={{ left: 20, right: 20, top: 8, bottom: 8 }}>
-          <XAxis type="number" stroke="#8ea0b8" fontSize={12} />
-          <YAxis type="category" dataKey="name" stroke="#8ea0b8"
-            fontSize={12} width={80} />
-          <Tooltip
-            contentStyle={{ background: '#1e2a3c', border: '1px solid #2a3a52',
-              borderRadius: 8, color: '#e6edf6' }}
+          <XAxis type="number" stroke={axis.stroke} tick={axis.tick} />
+          <YAxis type="category" dataKey="name" stroke={axis.stroke}
+            tick={axis.tick} width={80} />
+          <Tooltip {...tooltip}
+            cursor={{ fill: 'rgba(28,26,23,0.05)' }}
             formatter={(v, _n, p) => [`${v} (değer: ${p.payload.value})`, 'SHAP']} />
-          <Bar dataKey="shap" radius={[0, 4, 4, 0]}>
+          <Bar dataKey="shap" radius={[0, 2, 2, 0]} barSize={14}>
             {data.map((d, i) => (
-              <Cell key={i} fill={d.shap >= 0 ? '#22c55e' : '#ef4444'} />
+              <Cell key={i} fill={d.shap >= 0 ? POSITIVE : NEGATIVE} />
             ))}
           </Bar>
         </BarChart>
       </ResponsiveContainer>
       <p className="note">
-        Yeşil: tahmini <i>destekleyen</i> katkı · Kırmızı: <i>zayıflatan</i> katkı.
+        Zeytin yeşili: tahmini <i>destekleyen</i> katkı · Kiremit: <i>zayıflatan</i> katkı.
       </p>
     </div>
   )

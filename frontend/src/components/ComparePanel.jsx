@@ -1,6 +1,7 @@
 import {
   Bar, BarChart, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts'
+import { axis, tooltip, SERIES } from '../theme'
 
 function MethodTable({ compare }) {
   if (!compare) return <p className="empty">Karşılaştırma için bir analiz çalıştırın.</p>
@@ -40,23 +41,22 @@ function LeaderboardChart({ leaderboard }) {
       <h3>Doğruluk Karşılaştırması (aynı test seti)</h3>
       <ResponsiveContainer width="100%" height={240}>
         <BarChart data={data} margin={{ left: 0, right: 20, top: 8, bottom: 30 }}>
-          <XAxis dataKey="name" stroke="#8ea0b8" fontSize={11}
+          <XAxis dataKey="name" stroke={axis.stroke} tick={axis.tick}
             angle={-20} textAnchor="end" height={50} />
-          <YAxis stroke="#8ea0b8" fontSize={12} domain={[0, 100]}
+          <YAxis stroke={axis.stroke} tick={axis.tick} domain={[0, 100]}
             unit="%" />
-          <Tooltip
-            contentStyle={{ background: '#1e2a3c', border: '1px solid #2a3a52',
-              borderRadius: 8, color: '#e6edf6' }}
+          <Tooltip {...tooltip}
+            cursor={{ fill: 'rgba(28,26,23,0.05)' }}
             formatter={(v) => [`%${v}`, 'Doğruluk']} />
-          <Bar dataKey="acc" radius={[4, 4, 0, 0]}>
+          <Bar dataKey="acc" radius={[2, 2, 0, 0]} maxBarSize={46}>
             {data.map((d, i) => (
-              <Cell key={i} fill={d.type === 'ML' ? '#2f81f7' : '#14b8a6'} />
+              <Cell key={i} fill={d.type === 'ML' ? SERIES[0] : SERIES[3]} />
             ))}
           </Bar>
         </BarChart>
       </ResponsiveContainer>
       <p className="note">
-        Mavi: ML modelleri · Yeşil: klasik konsensüs. En iyi model:{' '}
+        Mavi: ML modelleri · Turkuaz: klasik konsensüs. En iyi model:{' '}
         <b>{leaderboard.best_model}</b>.
       </p>
     </div>
