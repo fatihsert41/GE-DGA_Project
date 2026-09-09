@@ -90,8 +90,23 @@ Testler: `cd backend; pytest -q` (18 test).
     tıklayınca detaya gider), arama kutusu ve risk filtresi çipleri.
     Filtreleme istemcide (8 varlık, API'ye tekrar gitmeye gerek yok).
     `constants.js::fold()` Türkçe duyarlı arama katlaması yapar (I/ı/İ/i).
-  - 🏁 **Faz 5 BİTTİ.** Sıradaki yol ayrımı: Faz 6 (gerçek veri seti) veya
-    Faz 7 (.NET bakım planlama servisi).
+  - 🏁 **Faz 5 BİTTİ.**
+- 🔄 **Faz 6 — Gerçek veri seti entegrasyonu (devam ediyor):**
+  - ✅ 6.1 Altyapı TAMAM (veriden bağımsız, veri gelmeden yazıldı):
+    - `ml/real_data.py` — dağınık dosyayı projenin şemasına çevirir
+      (sütun eşanlamlıları, metin+tam sayı etiketler, bozuk satır raporu).
+    - `ml/features.py` — `CORE_FEATURE_NAMES` (5 gaz + 4 oran) varyantı.
+      Açık veri setlerinde **CO/CO2 YOK**; karşılaştırma bu sette yapılır.
+    - `ml/evaluate_real.py` — dört senaryo: A sentetik→gerçek (sıfır atış),
+      B gerçek→gerçek, C karma, D klasik konsensüs. Çıktı:
+      `artifacts/real_data_report.json`.
+    - `data/README.md` + `.gitignore`: veri dosyaları repoya GİRMEZ (lisans).
+    - `tests/test_real_data.py` (toplam 25 test).
+  - ⏭️ **SIRADAKİ: 6.2** — kullanıcı IEEE DataPort'tan üç dosyayı indirip
+    `backend/data/` içine koyacak; sonra `python -m app.ml.evaluate_real`
+    çalıştırılıp gerçek sonuçlar yorumlanacak.
+  - ⏳ 6.3 Sonuçları `/compare` ve frontend'e taşı (veri kaynağı rozeti).
+- ⏳ **Faz 7 (.NET) — kullanıcı .NET bilmiyor, çok temelden ve yavaş anlatılacak.**
 
 ### Görsel dil (2026-09-09'da yenilendi)
 "Endüstriyel kontrol odası": kağıt zemin (#f5f2ea), mürekkep metin, saç teli

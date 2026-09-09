@@ -19,6 +19,18 @@ RATIO_FEATURES: List[str] = [
 ]
 FEATURE_NAMES: List[str] = [*GASES, *RATIO_FEATURES]
 
+# --- Beş gazlı (çekirdek) varyant — Faz 6 ---------------------------------
+# Açık DGA veri setleri (IEC TC 10 ve türevleri) CO/CO2 İÇERMEZ: bu ikisi
+# kağıt yalıtımın bozunmasını gösterir, klasik arıza veri tabanları ise
+# yağdaki arıza tipine odaklanır. Gerçek veriyle karşılaştırma yapabilmek
+# için aynı hattın CO/CO2'siz bir sürümü gerekiyor. CO2/CO oranı da doğal
+# olarak düşer.
+CORE_GASES: List[str] = ["H2", "CH4", "C2H6", "C2H4", "C2H2"]
+CORE_RATIO_FEATURES: List[str] = [
+    "C2H2/C2H4", "CH4/H2", "C2H4/C2H6", "C2H6/CH4",
+]
+CORE_FEATURE_NAMES: List[str] = [*CORE_GASES, *CORE_RATIO_FEATURES]
+
 
 def _ratios(row: Dict[str, float]) -> Dict[str, float]:
     return {
@@ -30,18 +42,32 @@ def _ratios(row: Dict[str, float]) -> Dict[str, float]:
     }
 
 
-def features_from_dict(g: Dict[str, float]) -> np.ndarray:
-    """Single sample -> 1 x n_features array in FEATURE_NAMES order."""
+def features_from_dict(g: Dict[str, float],
+                       features: List[str] = None) -> pd.DataFrame:
+    """Single sample -> 1 x n_features DataFrame in ``features`` order.
+
+    DataFrame (dizi değil) döner: model DataFrame ile eğitildiği için
+    sütun isimleri eşleşmeli — train/serve tutarlılığı.
+    """
+    features = features or FEATURE_NAMES
     ratios = _ratios(g)
-    values = [float(g.get(name, 0.0)) for name in GASES]
-    values += [ratios[name] for name in RATIO_FEATURES]
-    return pd.DataFrame([values], columns=FEATURE_NAMES)
+    values = [
+        ratios[name] if name in ratios else float(g.get(name, 0.0))
+        for name in features
+    ]
+    return pd.DataFrame([values], columns=features)
 
 
-def build_features(df: pd.DataFrame) -> pd.DataFrame:
-    """DataFrame of raw gases -> DataFrame with ratio columns appended."""
+def build_features(df: pd.DataFrame,
+                   features: List[str] = None) -> pd.DataFrame:
+    """DataFrame of raw gases -> DataFrame with ratio columns appended.
+
+    ``features`` verilmezse yedi gazlı tam set kullanılır; beş gazlı gerçek
+    veri için CORE_FEATURE_NAMES geçilir.
+    """
+    features = features or FEATURE_NAMES
     out = df.copy()
     ratios = df.apply(lambda r: _ratios(r.to_dict()), axis=1, result_type="expand")
     for col in RATIO_FEATURES:
         out[col] = ratios[col]
-    return out[FEATURE_NAMES]
+    return out[features]
