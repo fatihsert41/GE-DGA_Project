@@ -6,6 +6,7 @@ import ShapChart from './components/ShapChart'
 import DuvalTriangle from './components/DuvalTriangle'
 import ComparePanel from './components/ComparePanel'
 import TrendPanel from './components/TrendPanel'
+import FleetOverview from './components/FleetOverview'
 
 const TABS = [
   { id: 'diagnosis', label: 'Tanı' },
@@ -14,7 +15,13 @@ const TABS = [
   { id: 'trend', label: 'Trend Tahmini' },
 ]
 
+const VIEWS = [
+  { id: 'fleet', label: '🏭 Filo Genel Bakış' },
+  { id: 'analysis', label: '🔬 Tek Numune Analizi' },
+]
+
 export default function App() {
+  const [view, setView] = useState('fleet')
   const [tab, setTab] = useState('diagnosis')
   const [loading, setLoading] = useState(false)
   const [health, setHealth] = useState(null)
@@ -73,7 +80,19 @@ export default function App() {
         </div>
       )}
 
-      <div className="grid">
+      <div className="tabs view-switch">
+        {VIEWS.map((v) => (
+          <button key={v.id}
+            className={view === v.id ? 'active' : ''}
+            onClick={() => setView(v.id)}>{v.label}</button>
+        ))}
+      </div>
+
+      {view === 'fleet' && <FleetOverview />}
+
+      {/* Analiz ekranı DOM'da kalır (sadece gizlenir) ki görünüm
+          değiştirince girilen gaz değerleri ve sonuçlar kaybolmasın. */}
+      <div className="grid" hidden={view !== 'analysis'}>
         <GasForm onSubmit={runAnalysis} loading={loading} />
 
         <div className="panel">

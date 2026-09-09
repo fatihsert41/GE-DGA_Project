@@ -124,3 +124,73 @@ select {
   background: var(--panel-2); border: 1px solid var(--border);
   color: var(--text); padding: 8px 10px; border-radius: 8px;
 }
+
+/* ---------- Faz 5.3: Filo genel bakış ---------- */
+.view-switch { margin-bottom: 18px; }
+.view-switch button { padding: 9px 18px; font-size: 0.9rem; }
+
+.kpis {
+  display: grid; gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+.kpi {
+  background: var(--panel-2); border: 1px solid var(--border);
+  border-radius: 12px; padding: 14px 16px;
+}
+.kpi-label { font-size: 0.7rem; color: var(--muted);
+  text-transform: uppercase; letter-spacing: 0.6px; }
+.kpi-value { font-size: 1.9rem; font-weight: 700; line-height: 1.15; }
+.kpi-hint { font-size: 0.73rem; color: var(--muted); }
+.kpi.alert .kpi-value { color: var(--high); }
+.kpi.danger .kpi-value { color: var(--critical); }
+
+/* Tek çubukta parça-bütün: segmentler 2px yüzey boşluğuyla ayrılır
+   (kenarlık çizilmez), renk tek başına anlam taşımaz — altta etiketli lejant var. */
+.riskbar {
+  display: flex; gap: 2px; height: 12px; margin: 4px 0 10px;
+  border-radius: 6px; overflow: hidden; background: var(--panel-2);
+}
+.riskbar span { display: block; min-width: 3px; }
+.riskbar .low { background: var(--low); }
+.riskbar .medium { background: var(--medium); }
+.riskbar .high { background: var(--high); }
+.riskbar .critical { background: var(--critical); }
+
+.risk-legend { display: flex; flex-wrap: wrap; gap: 16px; font-size: 0.82rem; }
+.risk-legend .off { opacity: 0.4; }
+.risk-legend .dot {
+  display: inline-block; width: 10px; height: 10px; border-radius: 3px;
+  margin-right: 6px; vertical-align: baseline;
+}
+.risk-legend .dot.low { background: var(--low); }
+.risk-legend .dot.medium { background: var(--medium); }
+.risk-legend .dot.high { background: var(--high); }
+.risk-legend .dot.critical { background: var(--critical); }
+
+.fleet-grid {
+  display: grid; gap: 14px; margin-top: 18px;
+  grid-template-columns: repeat(auto-fill, minmax(255px, 1fr));
+}
+.tcard {
+  background: var(--panel); border: 1px solid var(--border);
+  border-left: 4px solid var(--border);
+  border-radius: 12px; padding: 14px 16px; box-shadow: var(--shadow);
+}
+.tcard.low { border-left-color: var(--low); }
+.tcard.medium { border-left-color: var(--medium); }
+.tcard.high { border-left-color: var(--high); }
+.tcard.critical { border-left-color: var(--critical); }
+
+.tcard-head { display: flex; justify-content: space-between;
+  align-items: flex-start; gap: 10px; }
+.tcard .tid { font-weight: 700; font-size: 0.95rem; letter-spacing: 0.4px; }
+.tcard .tname { font-size: 0.78rem; color: var(--muted); }
+.tcard .tverdict { font-size: 1.05rem; font-weight: 700; margin: 12px 0 2px; }
+.tcard .tmeta {
+  display: grid; grid-template-columns: auto 1fr; gap: 4px 12px;
+  font-size: 0.78rem; margin-top: 12px;
+  border-top: 1px solid var(--border); padding-top: 10px;
+}
+.tcard .tmeta .k { color: var(--muted); }
+
+.badge.sm { padding: 3px 9px; font-size: 0.7rem; border-radius: 8px; }
