@@ -555,3 +555,84 @@ button.tcard:hover .tcard-go { color: var(--accent); }
 
 .wo-actions { white-space: nowrap; }
 .wo-actions .chip { padding: 4px 10px; font-size: 0.75rem; margin-right: 4px; }
+
+/* ============================================================
+   Künye formu ve görünümü (Faz 8.2)
+   ============================================================ */
+
+.np-head {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+.np-head h2 { margin: 0; border: none; padding: 0; flex: 1; }
+
+.np-completeness {
+  font-family: var(--mono); font-size: 0.75rem; color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+/* Eksik künye sessizce durmasın: sonraki modüller onsuz çalışamaz. */
+.np-completeness.low { color: var(--high); font-weight: 600; }
+
+.detail-tabs { margin: 16px 0 0; }
+
+/* --- Form --------------------------------------------------------------- */
+.np-form h2 { margin-bottom: 6px; }
+
+.np-section { margin-top: 22px; }
+.np-section h3 {
+  margin: 0 0 10px; padding-bottom: 6px;
+  border-bottom: 1px solid var(--rule);
+}
+
+/* Alanlar gruplara ve iki-üç sütuna bölünür; 20 alanı tek sütunda alt
+   alta dizmek formu doldurulamaz yapar. */
+.np-grid {
+  display: grid; gap: 14px 18px;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+}
+.np-field label { display: flex; align-items: baseline; gap: 4px; }
+.np-hint { color: var(--muted); font-weight: 400; font-size: 0.68rem; }
+.np-field select, .np-field input { width: 100%; }
+.np-field input:disabled, .np-field select:disabled {
+  background: var(--surface-2); color: var(--muted); cursor: not-allowed;
+}
+
+.np-error {
+  color: var(--critical); font-size: 0.72rem; margin-top: 3px;
+  font-weight: 500;
+}
+
+.np-problems {
+  border-left: 3px solid var(--critical); background: var(--surface-2);
+  padding: 12px 16px; border-radius: 8px; margin-bottom: 16px;
+  font-size: 0.85rem;
+}
+.np-problems ul { margin: 6px 0 0; padding-left: 18px; }
+
+/* Canlı hesaplanan değerler: kullanıcı yazarken sonucu görsün. */
+.np-derived {
+  display: flex; gap: 22px; flex-wrap: wrap; align-items: baseline;
+  margin-top: 18px; padding: 12px 16px;
+  background: var(--surface-2); border-radius: 8px;
+  border-left: 3px solid var(--accent); font-size: 0.85rem;
+}
+.np-derived-title {
+  font-size: 0.7rem; font-weight: 700; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--muted);
+}
+.np-derived b { font-family: var(--mono); font-size: 1rem; }
+
+.np-actions {
+  display: flex; gap: 10px; align-items: center; margin-top: 24px;
+  padding-top: 18px; border-top: 1px solid var(--rule);
+}
+.np-actions .primary { width: auto; margin: 0; padding: 11px 26px; }
+
+/* --- Görünüm ------------------------------------------------------------ */
+.np-view {
+  display: grid; gap: 22px 32px;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+.np-view h3 { margin-top: 0; }
+.np-rowhint { font-size: 0.72rem; color: var(--muted); }
+.np-view .mono { font-family: var(--mono); }

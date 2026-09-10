@@ -9,6 +9,7 @@ import TrendPanel from './components/TrendPanel'
 import FleetOverview from './components/FleetOverview'
 import TransformerDetail from './components/TransformerDetail'
 import MaintenancePanel from './components/MaintenancePanel'
+import NameplateForm from './components/NameplateForm'
 
 const TABS = [
   { id: 'diagnosis', label: 'Tanı' },
@@ -28,6 +29,11 @@ export default function App() {
   const [view, setView] = useState('fleet')
   // Seçili trafo kartı (null ise filo listesi görünür).
   const [selected, setSelected] = useState(null)
+  // Yeni trafo kaydı formu açık mı? Filo listesinin yerine geçer.
+  const [creating, setCreating] = useState(false)
+  // Kayıt sonrası filo listesini tazelemek için sayaç: değeri değişince
+  // FleetOverview yeniden monte olur ve veriyi baştan çeker.
+  const [fleetVersion, setFleetVersion] = useState(0)
   const [tab, setTab] = useState('diagnosis')
   const [loading, setLoading] = useState(false)
   const [health, setHealth] = useState(null)
@@ -91,15 +97,25 @@ export default function App() {
         {VIEWS.map((v) => (
           <button key={v.id}
             className={view === v.id ? 'active' : ''}
-            onClick={() => { setView(v.id); setSelected(null) }}>{v.label}</button>
+            onClick={() => {
+              setView(v.id); setSelected(null); setCreating(false)
+            }}>{v.label}</button>
         ))}
       </div>
 
       {view === 'fleet' && (
-        selected
-          ? <TransformerDetail id={selected.id} meta={selected}
-              onBack={() => setSelected(null)} />
-          : <FleetOverview onSelect={setSelected} />
+        creating
+          ? <NameplateForm mode="create"
+              onCancel={() => setCreating(false)}
+              onSaved={() => {
+                setCreating(false)
+                setFleetVersion((v) => v + 1)
+              }} />
+          : selected
+            ? <TransformerDetail id={selected.id} meta={selected}
+                onBack={() => setSelected(null)} />
+            : <FleetOverview key={fleetVersion} onSelect={setSelected}
+                onCreate={() => setCreating(true)} />
       )}
 
       {view === 'maintenance' && <MaintenancePanel />}

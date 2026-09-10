@@ -93,6 +93,9 @@ function TransformerCard({ t, onSelect }) {
         <span className="k">Güven</span><span>%{Math.round(t.confidence * 100)}</span>
         <span className="k">TDCG</span><span>{t.tdcg} ppm</span>
         <span className="k">Konum</span><span>{t.location || '—'}</span>
+        {t.voltage && (<><span className="k">Gerilim</span><span>{t.voltage}</span></>)}
+        {t.age_years != null && (
+          <><span className="k">Yaş</span><span>{t.age_years} yıl</span></>)}
         <span className="k">Son ölçüm</span><span>{fmtDate(t.last_sampled_at)}</span>
         <span className="k">Geçmiş</span><span>{t.measurement_count} ölçüm</span>
         <span className="k">Öncelik</span>
@@ -186,7 +189,7 @@ function FilterBar({ query, onQuery, level, onLevel, cls, onClass,
   )
 }
 
-export default function FleetOverview({ onSelect }) {
+export default function FleetOverview({ onSelect, onCreate }) {
   const [data, setData] = useState(null)
   const [error, setError] = useState(null)
   const [query, setQuery] = useState('')
@@ -223,7 +226,14 @@ export default function FleetOverview({ onSelect }) {
   return (
     <div>
       <div className="panel">
-        <h2>Filo Genel Durumu</h2>
+        <div className="np-head">
+          <h2>Filo Genel Durumu</h2>
+          {onCreate && (
+            <button type="button" className="chip" onClick={onCreate}>
+              + Yeni trafo
+            </button>
+          )}
+        </div>
 
         <div className="kpis">
           <StatTile label="Trafo" value={summary.total}
