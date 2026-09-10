@@ -110,7 +110,17 @@ Testler: `cd backend; pytest -q` (18 test).
     saf gerçeği hiç geçmiyor; klasik konsensüs bağımsız sette (Normal yok)
     sentetik-eğitimli ML'in hepsini geçiyor (0.650 vs 0.492).
     Yükleyiciye Çince etiket desteği + tekrar/kesişim temizliği eklendi.
-  - ⏳ 6.3 Sonuçları `/compare` ve frontend'e taşı (veri kaynağı rozeti).
+  - ✅ 6.3 İyileştirme denemeleri (ablasyon) TAMAM. `ml/hybrid.py` klasik
+    yöntemlerin kararlarını ML'e GİRDİ olarak verir (14 indikatör);
+    `ml/experiments.py` üç hamleyi üst üste ekleyip her birinin katkısını
+    ölçer. Sonuç: B 0.757 → **0.780**, kazancın neredeyse tamamı T1'de
+    (duyarlılık %36 → %58). A (sıfır atış) 0.503 → 0.520, yani indikatörler
+    sıfır atışa daha çok yarıyor ama sorunu çözmüyor.
+    Ayrıntı: `docs/FAZ6-GERCEK-VERI-BULGULARI.md`.
+  - ⏭️ **SIRADAKİ seçenekler:** (a) `synth.py`'yi gerçekçileştirip A'yı
+    iyileştirmek (gürültü, sınıf örtüşmesi) — sentetik veri tercihini
+    savunmanın tek yolu; (b) sonuçları `/compare` ve arayüze taşımak
+    (dürüstlük rozeti: "sentetik test 0.96 / gerçek veri 0.52").
 - ⏳ **Faz 7 (.NET) — kullanıcı .NET bilmiyor, çok temelden ve yavaş anlatılacak.**
 
 ### Görsel dil (2026-09-09'da yenilendi)
