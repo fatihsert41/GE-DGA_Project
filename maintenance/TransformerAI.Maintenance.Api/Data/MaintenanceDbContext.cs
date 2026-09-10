@@ -60,6 +60,7 @@ public class MaintenanceDbContext : DbContext
         wo.Property(o => o.TransformerId).HasMaxLength(20).IsRequired();
         wo.Property(o => o.Title).HasMaxLength(200).IsRequired();
         wo.Property(o => o.Reason).HasMaxLength(500);
+        wo.Property(o => o.CompletionNote).HasMaxLength(1000);
 
         // Enum'ları veritabanına METİN olarak yaz.
         // Varsayılan davranış sayıdır (0,1,2) ve kırılgandır: enum'a ortadan
@@ -72,6 +73,9 @@ public class MaintenanceDbContext : DbContext
         // düşünmemiştik; 9 trafoda fark etmez ama alışkanlık doğru olsun.
         wo.HasIndex(o => o.TransformerId);
         wo.HasIndex(o => o.Status);
+        // Tekil indeks: eşzamanlı iki isteğin aynı numarayı almasını
+        // veritabanı seviyesinde engeller.
+        wo.HasIndex(o => o.Seq).IsUnique();
 
         // --- Teknisyen ---------------------------------------------------
         var tech = modelBuilder.Entity<Technician>();

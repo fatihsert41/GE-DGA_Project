@@ -324,9 +324,17 @@ app.MapGet("/workorders/suggestions",
 
     var existing = await repo.ListAsync();
     var today = DateOnly.FromDateTime(DateTime.UtcNow);
-    var suggestions = planner.Suggest(fleet, existing, today);
+    var plan = planner.Plan(fleet, existing, today);
 
-    return Results.Ok(new { count = suggestions.Count, suggestions });
+    return Results.Ok(new
+    {
+        count = plan.Suggestions.Count,
+        suggestions = plan.Suggestions,
+        // Açık emri olan ama durumu kötüleşen trafolar. Bunlar için yeni
+        // emir AÇILMAZ, mevcut emrin aciliyeti yükseltilir.
+        escalationCount = plan.Escalations.Count,
+        escalations = plan.Escalations,
+    });
 })
 .WithName("SuggestWorkOrders");
 
@@ -346,17 +354,35 @@ app.MapPost("/workorders/suggestions/apply",
 
     var existing = await repo.ListAsync();
     var today = DateOnly.FromDateTime(DateTime.UtcNow);
-    var suggestions = planner.Suggest(fleet, existing, today);
+    var plan = planner.Plan(fleet, existing, today);
 
     var created = new List<WorkOrder>();
-    foreach (var suggestion in suggestions)
+    foreach (var suggestion in plan.Suggestions)
     {
         created.Add(await repo.AddAsync(WorkOrderPlanner.ToRequest(suggestion)));
     }
 
-    // Bu uç nokta güvenle tekrar çağrılabilir: planlayıcı zaten açık emri
-    // olan (trafo, tür) çiftini atlıyor. İkinci çağrıda created boş döner.
-    return Results.Ok(new { created = created.Count, items = created });
+    // Kötüleşen durumlar için YENİ emir açmıyoruz; mevcut emri güncelliyoruz.
+    var escalated = new List<WorkOrder>();
+    foreach (var e in plan.Escalations)
+    {
+        var updated = await repo.EscalateAsync(e.WorkOrderId, e.NewPriority,
+                                               e.NewDueDate, e.Reason, ct);
+        if (updated is not null)
+        {
+            escalated.Add(updated);
+        }
+    }
+
+    // Bu uç nokta güvenle tekrar çağrılabilir: durum değişmediyse ikinci
+    // çağrıda hem created hem escalated boş döner.
+    return Results.Ok(new
+    {
+        created = created.Count,
+        items = created,
+        escalated = escalated.Count,
+        escalatedItems = escalated,
+    });
 })
 .WithName("ApplySuggestions");
 
@@ -400,10 +426,27 @@ app.MapPost("/workorders", async (WorkOrderRepository repo,
 app.MapPatch("/workorders/{id}/status",
     async (WorkOrderRepository repo, string id, UpdateStatusRequest request) =>
 {
-    var order = await repo.UpdateStatusAsync(id, request);
-    return order is null
-        ? Results.NotFound(new { message = $"İş emri bulunamadı: {id}" })
-        : Results.Ok(order);
+    var result = await repo.UpdateStatusAsync(id, request);
+
+    if (result.Order is null)
+    {
+        return Results.NotFound(new { message = $"İş emri bulunamadı: {id}" });
+    }
+
+    // Geçiş kuralı ihlali 409 Conflict: istek biçimsel olarak geçerli
+    // (400 değil) ama kaydın MEVCUT DURUMU buna izin vermiyor.
+    if (result.Error is not null)
+    {
+        return Results.Conflict(new
+        {
+            message = result.Error,
+            currentStatus = result.Order.Status.ToString(),
+            allowedNext = WorkOrderTransitions.Next(result.Order.Status)
+                .Select(x => x.ToString()),
+        });
+    }
+
+    return Results.Ok(result.Order);
 })
 .WithName("UpdateWorkOrderStatus");
 

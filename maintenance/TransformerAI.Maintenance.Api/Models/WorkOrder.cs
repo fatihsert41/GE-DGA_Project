@@ -48,6 +48,20 @@ public class WorkOrder
     /// <summary>Benzersiz iş emri numarası, ör. WO-0001.</summary>
     public string Id { get; set; } = string.Empty;
 
+    /// <summary>Sayısal sıra numarası — kimliğin kaynağı.</summary>
+    /// <remarks>
+    /// Neden ayrı bir sayı? Kimlik metin olarak sıralandığında
+    /// <c>WO-9999 &gt; WO-10001</c> çıkıyordu (alfabetik sıra). Üretici
+    /// "en büyük" olarak WO-9999'u görüp tekrar WO-10000 veriyordu ve
+    /// birincil anahtar çakışıyordu. Sayı üzerinde sıralama bu sorunu
+    /// tanım gereği ortadan kaldırır.
+    ///
+    /// Üzerinde TEKİL indeks var: iki paralel istek aynı numarayı almaya
+    /// çalışırsa veritabanı ikincisini reddeder ve depo yeniden dener.
+    /// Doğruluğu uygulamaya değil veritabanına yaptırmak daha güvenli.
+    /// </remarks>
+    public int Seq { get; set; }
+
     /// <summary>Hangi trafo için açıldı (Python servisindeki id: TR-01).</summary>
     public string TransformerId { get; set; } = string.Empty;
 
@@ -91,6 +105,9 @@ public class WorkOrder
 
     public DateTime? CompletedAt { get; set; }
 
+    /// <summary>Tamamlanırken yazılan iş notu — bakım kaydının kanıtı.</summary>
+    public string? CompletionNote { get; set; }
+
     // { get; set; } yazımına "property" (özellik) denir. Python'da
     // self.title = title ile alan tanımlarsın; C#'ta property hem alanı
     // hem de okuma/yazma erişimini tek satırda tanımlar.
@@ -122,7 +139,60 @@ public record CreateWorkOrderRequest(
 
 /// <summary>Durum güncelleme isteği.</summary>
 /// <remarks>
-/// Teknisyen ataması artık ayrı bir uç noktadan yapılıyor
+/// Teknisyen ataması ayrı bir uç noktadan yapılıyor
 /// (POST /workorders/{id}/assign): bir isteğin tek bir işi olmalı.
+///
+/// <c>Note</c>, işi TAMAMLANDI'ya taşırken zorunludur: yapılan işin kaydı
+/// olmadan iş emri kapatmak, denetlenemeyen bir bakım geçmişi üretir.
 /// </remarks>
-public record UpdateStatusRequest(WorkOrderStatus Status);
+public record UpdateStatusRequest(WorkOrderStatus Status, string? Note = null);
+
+
+/// <summary>İş emri durum makinesi — hangi geçiş serbest?</summary>
+/// <remarks>
+/// Önceden hiçbir kural yoktu: <c>Planned → Done</c> doğrudan yapılabiliyor,
+/// tamamlanmış bir iş sessizce geri alınabiliyordu. Bakım kaydının
+/// denetlenebilir olması için geçişlerin kısıtlı olması gerekir.
+///
+/// <code>
+///   Planned ──► InProgress ──► Done
+///      │             │
+///      └─────────────┴────────► Cancelled ──► Planned (yeniden aç)
+/// </code>
+///
+/// Done son durumdur: yanlışlıkla kapatılan bir iş "geri alınmaz", yeni
+/// bir iş emri açılır. Böylece geçmiş silinmez.
+/// </remarks>
+public static class WorkOrderTransitions
+{
+    private static readonly Dictionary<WorkOrderStatus, WorkOrderStatus[]> Allowed =
+        new()
+        {
+            [WorkOrderStatus.Planned] =
+                [WorkOrderStatus.InProgress, WorkOrderStatus.Cancelled],
+            [WorkOrderStatus.InProgress] =
+                [WorkOrderStatus.Done, WorkOrderStatus.Cancelled],
+            [WorkOrderStatus.Done] = [],
+            [WorkOrderStatus.Cancelled] = [WorkOrderStatus.Planned],
+        };
+
+    public static bool IsAllowed(WorkOrderStatus from, WorkOrderStatus to) =>
+        from == to || Allowed.GetValueOrDefault(from, []).Contains(to);
+
+    public static IReadOnlyList<WorkOrderStatus> Next(WorkOrderStatus from) =>
+        Allowed.GetValueOrDefault(from, []);
+
+    /// <summary>Geçiş neden reddedildi? Kullanıcıya gösterilecek açıklama.</summary>
+    public static string Explain(WorkOrderStatus from, WorkOrderStatus to)
+    {
+        var next = Next(from);
+        if (next.Count == 0)
+        {
+            return $"'{from}' son durumdur; buradan geçiş yapılamaz. "
+                   + "Yeni bir iş emri açın.";
+        }
+
+        return $"'{from}' durumundan '{to}' durumuna geçilemez. "
+               + $"İzin verilen: {string.Join(", ", next)}.";
+    }
+}

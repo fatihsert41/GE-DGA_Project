@@ -76,11 +76,37 @@ public class WorkOrderRepository
             .FirstOrDefaultAsync(o => o.Id == id);
     }
 
+    /// <summary>Kimlik çakışmasında kaç kez yeniden denenecek.</summary>
+    private const int MaxIdRetries = 5;
+
     public async Task<WorkOrder> AddAsync(CreateWorkOrderRequest request)
     {
+        // Eşzamanlı iki istek aynı sıra numarasını alabilir. Veritabanındaki
+        // TEKİL indeks ikinciyi reddeder; burada yeniden deniyoruz.
+        // "Önce kontrol et, sonra yaz" yaklaşımı yarışı çözmez — iki istek
+        // aynı anda kontrol edip ikisi de boş bulabilir. Doğru çözüm:
+        // veritabanına yazdır, reddedilirse tekrar dene.
+        for (var attempt = 0; ; attempt++)
+        {
+            try
+            {
+                return await TryAddAsync(request);
+            }
+            catch (DbUpdateException) when (attempt < MaxIdRetries)
+            {
+                // Numara kapılmış; izlenen nesneyi bırak ve yeniden dene.
+                _db.ChangeTracker.Clear();
+            }
+        }
+    }
+
+    private async Task<WorkOrder> TryAddAsync(CreateWorkOrderRequest request)
+    {
+        var nextSeq = await NextSeqAsync();
         var order = new WorkOrder
         {
-            Id = await NextIdAsync(),
+            Seq = nextSeq,
+            Id = $"WO-{nextSeq:D4}",
             TransformerId = request.TransformerId.Trim(),
             Kind = request.Kind,
             Title = request.Title.Trim(),
@@ -100,16 +126,41 @@ public class WorkOrderRepository
         return order;
     }
 
-    public async Task<WorkOrder?> UpdateStatusAsync(string id,
-                                                    UpdateStatusRequest request)
+    /// <summary>Durum güncelleme sonucu — neden reddedildiğini de taşır.</summary>
+    public record StatusResult(WorkOrder? Order, string? Error);
+
+    public async Task<StatusResult> UpdateStatusAsync(string id,
+                                                      UpdateStatusRequest request)
     {
-        var order = await _db.WorkOrders.FindAsync(id);
+        var order = await _db.WorkOrders
+            .Include(o => o.Technician)
+            .FirstOrDefaultAsync(o => o.Id == id);
         if (order is null)
         {
-            return null;
+            return new StatusResult(null, null);   // bulunamadı
+        }
+
+        // Geçiş kuralı: durum makinesi dışına çıkılamaz.
+        if (!WorkOrderTransitions.IsAllowed(order.Status, request.Status))
+        {
+            return new StatusResult(
+                order, WorkOrderTransitions.Explain(order.Status, request.Status));
+        }
+
+        // Tamamlanma kanıtı: yapılan işin kaydı olmadan kapatma yok.
+        if (request.Status == WorkOrderStatus.Done
+            && string.IsNullOrWhiteSpace(request.Note))
+        {
+            return new StatusResult(
+                order, "İş emrini tamamlamak için yapılan işi anlatan bir "
+                       + "not (note) zorunludur.");
         }
 
         order.Status = request.Status;
+        if (!string.IsNullOrWhiteSpace(request.Note))
+        {
+            order.CompletionNote = request.Note.Trim();
+        }
 
         order.CompletedAt = request.Status == WorkOrderStatus.Done
             ? DateTime.UtcNow
@@ -119,6 +170,38 @@ public class WorkOrderRepository
         // ile getirdiği nesneyi İZLER (change tracking) ve neyin değiştiğini
         // kendisi bulup sadece o sütunlar için UPDATE üretir.
         await _db.SaveChangesAsync();
+        return new StatusResult(order, null);
+    }
+
+    /// <summary>Mevcut bir emrin aciliyetini yükseltir.</summary>
+    /// <remarks>
+    /// Yeni emir AÇMAZ, mevcut olanı günceller. Sebep alanına eklenen not
+    /// geçmişi korur: emrin neden ve ne zaman yükseltildiği görünür kalır.
+    /// </remarks>
+    public async Task<WorkOrder?> EscalateAsync(string id, double newPriority,
+                                                DateOnly newDueDate,
+                                                string reason,
+                                                CancellationToken ct = default)
+    {
+        var order = await _db.WorkOrders
+            .Include(o => o.Technician)
+            .FirstOrDefaultAsync(o => o.Id == id, ct);
+        if (order is null)
+        {
+            return null;
+        }
+
+        order.Priority = newPriority;
+        order.DueDate = newDueDate;
+
+        var stamp = DateTime.UtcNow.ToString("yyyy-MM-dd");
+        // Yeni not ALTA eklenir, eskisi silinmez: emrin neden ve ne
+        // zaman yükseltildiği geçmişte kalmalı.
+        order.Reason = string.IsNullOrWhiteSpace(order.Reason)
+            ? $"[{stamp}] {reason}"
+            : order.Reason + Environment.NewLine + $"[{stamp}] {reason}";
+
+        await _db.SaveChangesAsync(ct);
         return order;
     }
 
@@ -147,26 +230,20 @@ public class WorkOrderRepository
         };
     }
 
-    /// <summary>Sıradaki iş emri numarası: WO-0001, WO-0002 ...</summary>
-    private async Task<string> NextIdAsync()
+    /// <summary>Sıradaki sayısal sıra numarası.</summary>
+    /// <remarks>
+    /// SAYI üzerinde MAX alıyoruz, metin üzerinde değil. Eskiden kimlik
+    /// metni sıralanıyordu ve alfabetik olarak WO-9999 > WO-10001 çıkıyordu;
+    /// 9999'dan sonra üretici aynı numarayı tekrar veriyordu.
+    ///
+    /// Yarış durumu burada ÇÖZÜLMEZ — çözümü tekil indeks + yeniden deneme
+    /// (bkz. AddAsync). Bu metot yalnızca makul bir aday üretir.
+    /// </remarks>
+    private async Task<int> NextSeqAsync()
     {
-        // Bellekteki sayaç kalıcı değildi; veritabanındaki en büyük numarayı
-        // okuyup bir artırıyoruz. Tek örnek çalışan bir servis için yeterli.
-        // (Birden çok kopya çalışsaydı yarış durumu oluşurdu; o zaman
-        // veritabanı dizisi (sequence) kullanılırdı.)
-        var last = await _db.WorkOrders
-            .OrderByDescending(o => o.Id)
-            .Select(o => o.Id)
-            .FirstOrDefaultAsync();
-
-        var next = 1;
-        if (last is not null && int.TryParse(last[3..], out var n))
-        {
-            next = n + 1;
-        }
-
-        // last[3..] = "WO-0007" dizisinin 3. karakterinden sonrası -> "0007".
-        // Buna "range" (aralık) söz dizimi denir; Python'daki last[3:] ile aynı.
-        return $"WO-{next:D4}";
+        var max = await _db.WorkOrders
+            .Select(o => (int?)o.Seq)
+            .MaxAsync();
+        return (max ?? 0) + 1;
     }
 }

@@ -6,7 +6,7 @@
 > sonucu **bakım iş emrine** dönüştüren polyglot bir sistem.
 
 **Üç servis:** Python (ML) · .NET (bakım planlama) · React (arayüz).
-**109 test** (73 Python + 36 .NET).
+**123 test** (73 Python + 50 .NET).
 
 ---
 
@@ -137,7 +137,7 @@ Vite iki servise birden yönlendirir: `/api` → :8000, `/maint` → :5080.
 
 ```powershell
 cd backend      ; pytest -q            # 73 test
-cd maintenance  ; dotnet test          # 36 test
+cd maintenance  ; dotnet test          # 50 test
 ```
 
 .NET testleri veritabanı ve HTTP kullanmaz (195 ms): iş kuralları saf
