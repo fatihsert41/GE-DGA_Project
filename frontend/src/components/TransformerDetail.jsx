@@ -6,6 +6,7 @@ import {
 import api from '../api'
 import { axis, grid, tooltip, muted, SERIES } from '../theme'
 import { RISK_TR } from '../constants'
+import NameplatePanel from './NameplatePanel'
 
 /* Faz 5.4 — tek trafonun detayı.
  *
@@ -148,6 +149,8 @@ function HistoryTable({ measurements }) {
 export default function TransformerDetail({ id, meta, onBack }) {
   const [data, setData] = useState(null)
   const [error, setError] = useState(null)
+  // Ölçüm/trend görünümü ile künye görünümü arasında geçiş.
+  const [tab, setTab] = useState('measurements')
 
   useEffect(() => {
     setData(null); setError(null)
@@ -175,11 +178,31 @@ export default function TransformerDetail({ id, meta, onBack }) {
     </div>
   )
 
+  const tabs = (
+    <div className="tabs detail-tabs">
+      <button type="button" className={tab === 'measurements' ? 'active' : ''}
+        onClick={() => setTab('measurements')}>Ölçümler ve Trend</button>
+      <button type="button" className={tab === 'nameplate' ? 'active' : ''}
+        onClick={() => setTab('nameplate')}>Künye</button>
+    </div>
+  )
+
+  // Künye sekmesi ölçüm verisinden bağımsızdır: hiç ölçümü olmayan yeni
+  // bir trafonun künyesi de görüntülenebilmeli.
+  if (tab === 'nameplate') {
+    return (
+      <div>
+        <div className="panel">{header}{tabs}</div>
+        <div style={{ marginTop: 16 }}><NameplatePanel id={id} /></div>
+      </div>
+    )
+  }
+
   if (error) {
-    return <div className="panel">{header}<p className="empty">Hata: {error}</p></div>
+    return <div className="panel">{header}{tabs}<p className="empty">Hata: {error}</p></div>
   }
   if (!data) {
-    return <div className="panel">{header}<p className="empty">Yükleniyor…</p></div>
+    return <div className="panel">{header}{tabs}<p className="empty">Yükleniyor…</p></div>
   }
 
   const measurements = data.measurements || []
@@ -191,6 +214,7 @@ export default function TransformerDetail({ id, meta, onBack }) {
     <div>
       <div className="panel">
         {header}
+        {tabs}
         <TrendVerdict trend={data} />
 
         <h3>Gaz Geçmişi ve 6 Aylık Öngörü</h3>

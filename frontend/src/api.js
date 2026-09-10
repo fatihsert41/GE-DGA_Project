@@ -30,6 +30,16 @@ export const api = {
   measurements: (id) =>
     client.get(`/transformers/${id}/measurements`).then((r) => r.data),
 
+  // --- Varlık kaydı / künye (Faz 8.1-8.2) ---------------------------------
+  transformer: (id) => client.get(`/transformers/${id}`).then((r) => r.data),
+  // Form açılır listeleri backend'den gelir; seçenekleri burada tekrar
+  // yazmak iki yerde iki farklı gerçek yaratırdı.
+  nameplateSchema: () => client.get('/transformers/schema').then((r) => r.data),
+  createTransformer: (payload) =>
+    client.post('/transformers', payload).then((r) => r.data),
+  updateNameplate: (id, fields) =>
+    client.put(`/transformers/${id}/nameplate`, fields).then((r) => r.data),
+
   // --- Bakım planlama servisi (.NET) ---------------------------------------
   maintenance: {
     health: () => maint.get('/health').then((r) => r.data),
