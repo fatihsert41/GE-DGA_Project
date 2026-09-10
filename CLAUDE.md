@@ -123,10 +123,21 @@ Testler: `cd backend; pytest -q` (18 test).
     **arıza yakalama %97.4**, aile doğruluğu (Normal/Termal/Deşarj) **%93.8**,
     ciddi arızalarda (D2/T3) 198 vakada **1** kaçırma. Seçici tahmin:
     güven ≥0.9'da %84 kapsama ile %91.3 doğruluk, kalanı uzmana devir.
-  - ⏭️ **SIRADAKİ seçenekler:** (a) `synth.py`'yi gerçekçileştirip A'yı
+  - ✅ 6.5 Belirsizlik ürüne girdi. `services/diagnosis.py` her tanıya
+    `review` (uzman incelemesi gerekli mi + gerekçe) ve `prediction_family`
+    ekler. Eşik **ölçülerek** seçildi (`CONFIDENCE_THRESHOLD = 0.90`).
+    ⚠ İlk tasarımda "ML ve klasik ayrışıyor" da tetikleyiciydi; ÖLÇÜLDÜ ve
+    ELENDİ: %45 tetikleniyor ama tetiklendiğinde model %92 doğru
+    (tetiklenmediğinde %80) — yani modelin değil klasik motorun zayıflığını
+    gösteriyor. Kural eklemeden önce ölç.
+    Ayrıca: `GET /compare/reality-check` (sentetik vs gerçek), filo kartında
+    `needs_review`/`severe`, arayüzde inceleme şeridi ve Gerçeklik Kontrolü
+    paneli. Demo filoya TR-09 eklendi (erken evre D1: model "Normal" diyor
+    ama güven %54) — belirsiz vaka olmadan özellik demoda görünmüyordu.
+  - ⏭️ **SIRADAKİ:** `synth.py`'yi gerçekçileştirip A senaryosunu
     iyileştirmek (gürültü, sınıf örtüşmesi) — sentetik veri tercihini
-    savunmanın tek yolu; (b) sonuçları `/compare` ve arayüze taşımak
-    (dürüstlük rozeti: "sentetik test 0.96 / gerçek veri 0.52").
+    savunmanın tek yolu. Not: sentetik üreteç şu an belirsiz vaka HİÇ
+    üretemiyor (Faz 6.5'te fark edildi), bu da alan kaymasının kanıtı.
 - ⏳ **Faz 7 (.NET) — kullanıcı .NET bilmiyor, çok temelden ve yavaş anlatılacak.**
 
 ### Görsel dil (2026-09-09'da yenilendi)

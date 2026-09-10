@@ -13,8 +13,10 @@ from __future__ import annotations
 from typing import Dict, List
 
 from .. import database
-from ..core.gases import FAULT_GROUP, FAULT_LABELS_TR, total_combustible
+from ..core.gases import (FAULT_FAMILY, FAULT_GROUP, FAULT_LABELS_TR,
+                          SEVERE_FAULTS, total_combustible)
 from ..core.risk import RISK_LEVELS_TR, RISK_ORDER
+from .diagnosis import CONFIDENCE_THRESHOLD
 
 
 def _to_card(row: Dict) -> Dict:
@@ -34,7 +36,13 @@ def _to_card(row: Dict) -> Dict:
         "prediction": pred,
         "prediction_label": FAULT_LABELS_TR.get(pred) if pred else None,
         "prediction_group": FAULT_GROUP.get(pred) if pred else None,
+        "prediction_family": FAULT_FAMILY.get(pred) if pred else None,
         "confidence": row.get("confidence"),
+        # Ölçüm kaydedilirken saklanan güvenden yeniden hesaplanır; eşik
+        # değişirse eski kayıtlar da yeni eşiğe göre değerlendirilir.
+        "needs_review": bool(has_data and (row.get("confidence") or 0.0)
+                             < CONFIDENCE_THRESHOLD),
+        "severe": bool(pred in SEVERE_FAULTS),
         "risk_level": level,
         "risk_level_tr": RISK_LEVELS_TR.get(level) if level else None,
         "risk_condition": row.get("risk_condition"),
@@ -80,6 +88,7 @@ def build_overview(rows: List[Dict]) -> Dict:
             "fault_distribution": fault_distribution,
             "needs_attention": len(needs_attention),
             "attention_ids": [c["id"] for c in needs_attention],
+            "needs_review": sum(1 for c in measured if c["needs_review"]),
         },
         "transformers": cards,
     }

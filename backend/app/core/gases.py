@@ -59,6 +59,21 @@ FAULT_GROUP: Dict[str, str] = {
     "DT": "Belirsiz",
 }
 
+# --- Eylem seviyesi (Faz 6.4) ---------------------------------------------
+# FAULT_GROUP arayüzün etiketi içindir ve Ark'ı ayrı gösterir. Bakım kararı
+# ise üç aileden birine indirger: ne yapılacağı bu seviyede belirlenir.
+# Model T1 yerine T2 derse ekip yine "termal arıza, incele" der — sonuç aynı.
+# Ama Deşarj yerine Normal derse iş değişir. Ölçüm de burada yapılır.
+FAULT_FAMILY: Dict[str, str] = {
+    "Normal": "Normal",
+    "PD": "Deşarj", "D1": "Deşarj", "D2": "Deşarj",
+    "T1": "Termal", "T2": "Termal", "T3": "Termal",
+    "DT": "Belirsiz",
+}
+
+# Acil müdahale gerektiren sınıflar: yüksek enerjili ark ve >700 °C ısınma.
+SEVERE_FAULTS = {"D2", "T3"}
+
 # --- IEEE C57.104-2008 Condition 1 upper limits (ppm) ---
 # A gas above its limit is flagged; the count of exceedances drives the
 # condition level (1-4) used for the risk badge.

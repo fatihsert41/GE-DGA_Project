@@ -71,6 +71,12 @@ function TransformerCard({ t, onSelect }) {
         <span className={`badge sm ${t.risk_level}`}>{t.risk_level_tr}</span>
       </div>
 
+      {t.needs_review && (
+        <span className="review-chip" title="Model bu tanıdan emin değil">
+          Uzman incelemesi
+        </span>
+      )}
+
       <div className="tverdict">{t.prediction}
         <span className="group-tag"> · {t.prediction_group}</span></div>
       <div className="tname">{t.prediction_label}</div>
@@ -192,6 +198,8 @@ export default function FleetOverview({ onSelect }) {
             hint="yüksek + kritik" tone={summary.needs_attention ? 'alert' : ''} />
           <StatTile label="Kritik" value={critical}
             hint="acil değerlendirme" tone={critical ? 'danger' : ''} />
+          <StatTile label="Uzman incelemesi" value={summary.needs_review ?? 0}
+            hint="model kararsız" />
         </div>
 
         <h3>Risk Dağılımı</h3>

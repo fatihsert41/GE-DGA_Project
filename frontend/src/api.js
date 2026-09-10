@@ -12,6 +12,7 @@ export const api = {
   explain: (gases) => client.post('/explain', gases).then((r) => r.data),
   compare: (gases) => client.post('/compare', gases).then((r) => r.data),
   leaderboard: () => client.get('/compare/leaderboard').then((r) => r.data),
+  realityCheck: () => client.get('/compare/reality-check').then((r) => r.data),
   trendDemo: (cls, months = 24, horizon = 6) =>
     client.get(`/trend/demo/${cls}`, { params: { months, horizon } })
       .then((r) => r.data),

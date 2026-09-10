@@ -9,8 +9,11 @@ from app.ml.safety_eval import FAMILY, SEVERE, _selective
 
 def test_family_covers_every_class():
     """Her arıza sınıfının bir ailesi olmalı; yoksa ölçüt sessizce patlar."""
-    assert set(FAMILY) == set(FAULT_CLASSES)
-    assert set(FAMILY.values()) == {"Normal", "Termal", "Deşarj"}
+    assert set(FAULT_CLASSES) <= set(FAMILY)
+    # DT (Duval'in karışık bölgesi) yedi sınıftan biri değil ama klasik
+    # yöntemler onu üretebiliyor; ailesi "Belirsiz".
+    assert FAMILY["DT"] == "Belirsiz"
+    assert {FAMILY[c] for c in FAULT_CLASSES} == {"Normal", "Termal", "Deşarj"}
     assert SEVERE <= set(FAULT_CLASSES)
 
 
