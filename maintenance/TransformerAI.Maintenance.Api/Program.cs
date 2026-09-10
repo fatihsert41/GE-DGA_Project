@@ -51,6 +51,11 @@ var mlBaseUrl = builder.Configuration["MlService:BaseUrl"]
                 ?? "http://localhost:8000";
 var mlTimeout = builder.Configuration.GetValue<int?>("MlService:TimeoutSeconds") ?? 10;
 
+// Planlayıcı durumsuzdur (alan tutmaz, sadece hesap yapar), bu yüzden tek
+// örnek yeterli: AddSingleton. Repository'nin Scoped olmasının sebebi
+// veritabanı bağlamını taşımasıydı; burada öyle bir şey yok.
+builder.Services.AddSingleton<WorkOrderPlanner>();
+
 builder.Services.AddHttpClient<MlServiceClient>(client =>
 {
     client.BaseAddress = new Uri(mlBaseUrl);
@@ -169,6 +174,68 @@ app.MapGet("/workorders", async (WorkOrderRepository repo,
     return Results.Ok(new { count = items.Count, items });
 })
 .WithName("ListWorkOrders");
+
+// ---------------------------------------------------------------------------
+// Otomatik öneri
+//
+// Sistem filoya bakıp hangi trafolar için iş emri açılması gerektiğini
+// kendisi söylüyor. İki ayrı uç nokta olmasının sebebi: ÖNERMEK ile
+// UYGULAMAK farklı yetkiler ister. Planlama mühendisi önce listeyi görür,
+// sonra onaylar.
+// ---------------------------------------------------------------------------
+
+app.MapGet("/workorders/suggestions",
+    async (MlServiceClient ml, WorkOrderRepository repo, WorkOrderPlanner planner,
+           CancellationToken ct) =>
+{
+    var fleet = await ml.GetFleetAsync(ct);
+    if (fleet is null)
+    {
+        return Results.Problem(
+            title: "ML servisine ulaşılamıyor",
+            detail: "Öneri üretmek için güncel filo durumu gerekiyor.",
+            statusCode: StatusCodes.Status503ServiceUnavailable);
+    }
+
+    var existing = await repo.ListAsync();
+    var today = DateOnly.FromDateTime(DateTime.UtcNow);
+    var suggestions = planner.Suggest(fleet, existing, today);
+
+    return Results.Ok(new { count = suggestions.Count, suggestions });
+})
+.WithName("SuggestWorkOrders");
+
+// Önerileri gerçek iş emrine çevirir.
+// POST çünkü sistemi DEĞİŞTİRİYOR; GET yan etkisiz olmalıdır.
+app.MapPost("/workorders/suggestions/apply",
+    async (MlServiceClient ml, WorkOrderRepository repo, WorkOrderPlanner planner,
+           CancellationToken ct) =>
+{
+    var fleet = await ml.GetFleetAsync(ct);
+    if (fleet is null)
+    {
+        return Results.Problem(
+            title: "ML servisine ulaşılamıyor",
+            statusCode: StatusCodes.Status503ServiceUnavailable);
+    }
+
+    var existing = await repo.ListAsync();
+    var today = DateOnly.FromDateTime(DateTime.UtcNow);
+    var suggestions = planner.Suggest(fleet, existing, today);
+
+    var created = new List<WorkOrder>();
+    foreach (var suggestion in suggestions)
+    {
+        created.Add(await repo.AddAsync(WorkOrderPlanner.ToRequest(suggestion)));
+    }
+
+    // Bu uç nokta güvenle tekrar çağrılabilir: planlayıcı zaten açık emri
+    // olan (trafo, tür) çiftini atlıyor. İkinci çağrıda created boş döner.
+    return Results.Ok(new { created = created.Count, items = created });
+})
+.WithName("ApplySuggestions");
+
+// ---------------------------------------------------------------------------
 
 // DİKKAT: Bu satır /workorders/{id} kuralından ÖNCE gelmeli.
 // Aksi halde "summary" kelimesi bir id sanılır ve 404 döner.

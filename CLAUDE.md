@@ -225,7 +225,19 @@ Testler: `cd backend; pytest -q` (18 test).
     **Dayanıklılık doğrulandı:** Python kapatıldığında /health
     "unreachable" diyor, /fleet 503 + açıklayıcı mesaj dönüyor, ama
     /workorders KENDİ verisiyle çalışmaya devam ediyor.
-  - ⏭️ **SIRADAKİ: 7.5** Otomatik iş emri önerisi (riskli trafolar için).
+  - ✅ 7.5 Otomatik iş emri önerisi TAMAM. `Services/WorkOrderPlanner.cs`
+    — kurallar uç noktada değil, HTTP ve veritabanı bilmeyen SAF bir
+    sınıfta (girdi: filo + mevcut emirler + bugün → çıktı: öneri listesi).
+    `today` parametre olarak alınıyor ki test tarihe bağlı olmasın.
+    Dört kural: ciddi arıza (D2/T3) → 3 gün, kritik risk → 7 gün,
+    yüksek risk → 14 gün, düşük güven → 30 gün, numune gecikmesi → 30 gün
+    (önceliği yarıya indirilir ki incelemeler öne geçsin).
+    Uç noktalar: `GET /workorders/suggestions` (önerir),
+    `POST /workorders/suggestions/apply` (uygular) — ayrı olmalarının
+    sebebi önermek ile uygulamanın farklı yetkiler istemesi.
+    **İdempotent:** açık emri olan (trafo, tür) çifti atlanır; ikinci
+    çağrıda 0 kayıt üretti. Doğrulandı: 5 öneri → 5 emir → tekrar 0.
+  - ⏭️ **SIRADAKİ: 7.6** Teknisyen ve planlama (ilişkiler, foreign key).
   ⚠ Kurallar: Python servisi DEĞİŞTİRİLMEZ, .NET onu dışarıdan tüketir.
   İş emirleri .NET'in KENDİ veritabanında durur (ortak DB mikroservis
   mimarisinin en yaygın hatası). Veritabanı 7.3'ten önce eklenmez.
