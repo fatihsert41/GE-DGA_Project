@@ -44,7 +44,10 @@ public class WorkOrderRepository
         // Buradaki Where/OrderBy çağrıları BELLEKTE çalışmaz — EF Core
         // hepsini biriktirip TEK bir SQL cümlesine çevirir ve veritabanına
         // öyle gönderir. Yani 1000 satır çekip sonra süzmüyoruz.
-        var query = _db.WorkOrders.AsQueryable();
+        // Include: atanan teknisyeni de getir. Olmadan order.Technician
+        // null gelir ve arayüzde "atanmadı" yazar — ilişkiyi kurmuş olmak
+        // yetmiyor, o sorguda İSTEMEK gerekiyor.
+        var query = _db.WorkOrders.Include(o => o.Technician).AsQueryable();
 
         if (status is not null)
         {
@@ -66,9 +69,11 @@ public class WorkOrderRepository
 
     public async Task<WorkOrder?> GetAsync(string id)
     {
-        // FindAsync birincil anahtarla arar ve önce bellekteki izlemeye bakar;
-        // veritabanına gitmeden bulabilirse gitmez.
-        return await _db.WorkOrders.FindAsync(id);
+        // FindAsync Include desteklemez (önce belleğe bakar), bu yüzden
+        // ilişkili veri gerektiğinde normal sorgu kullanılır.
+        return await _db.WorkOrders
+            .Include(o => o.Technician)
+            .FirstOrDefaultAsync(o => o.Id == id);
     }
 
     public async Task<WorkOrder> AddAsync(CreateWorkOrderRequest request)

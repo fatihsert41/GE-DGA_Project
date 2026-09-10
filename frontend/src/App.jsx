@@ -8,6 +8,7 @@ import ComparePanel from './components/ComparePanel'
 import TrendPanel from './components/TrendPanel'
 import FleetOverview from './components/FleetOverview'
 import TransformerDetail from './components/TransformerDetail'
+import MaintenancePanel from './components/MaintenancePanel'
 
 const TABS = [
   { id: 'diagnosis', label: 'Tanı' },
@@ -19,6 +20,8 @@ const TABS = [
 const VIEWS = [
   { id: 'fleet', label: 'Filo' },
   { id: 'analysis', label: 'Numune Analizi' },
+  // Bakım ekranı .NET servisinden beslenir (diğer ikisi Python'dan).
+  { id: 'maintenance', label: 'Bakım Planlama' },
 ]
 
 export default function App() {
@@ -98,6 +101,8 @@ export default function App() {
               onBack={() => setSelected(null)} />
           : <FleetOverview onSelect={setSelected} />
       )}
+
+      {view === 'maintenance' && <MaintenancePanel />}
 
       {/* Analiz ekranı DOM'da kalır (sadece gizlenir) ki görünüm
           değiştirince girilen gaz değerleri ve sonuçlar kaybolmasın. */}
