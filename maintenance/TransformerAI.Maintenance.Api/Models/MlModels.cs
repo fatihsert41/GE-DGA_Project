@@ -28,7 +28,11 @@ public record TransformerRisk(
     string? Prediction,
     string? PredictionLabel,
     string? PredictionFamily,
-    double Confidence,
+    // Ölçümü olmayan trafoda null gelir. Bu alan "double" iken hiç
+    // ölçülmemiş bir varlık eklendiğinde TÜM filo çözümlemesi çöküyordu —
+    // tek bir kayıt yüzünden servis komple 500 veriyordu. Servisler arası
+    // sınırda savunmacı olmanın somut karşılığı.
+    double? Confidence,
     bool NeedsReview,
     bool Severe,
     string? RiskLevel,
@@ -36,6 +40,7 @@ public record TransformerRisk(
     int? RiskCondition,
     double Priority,
     bool SamplingOverdue,
+    string? SamplingStatus,
     int? DaysSinceSample,
     int SamplingMonths,
     int MeasurementCount,
