@@ -199,7 +199,19 @@ Testler: `cd backend; pytest -q` (18 test).
     PATCH /workorders/{id}/status, GET /workorders/summary.
     ⚠ Öğrenilen tuzak: **JSON'da enum varsayılan olarak SAYIDIR**;
     `JsonStringEnumConverter` eklendi, artık {"status":"Planned"}.
-  - ⏭️ **SIRADAKİ: 7.3** EF Core + SQLite (async/await kavramı).
+  - ✅ 7.3 EF Core + SQLite TAMAM. `Data/MaintenanceDbContext.cs`
+    (tablo/sütun tanımı, enum'lar METİN olarak saklanıyor, indeksler),
+    `Data/WorkOrderRepository.cs` (bellekteki store'un yerini aldı, tüm
+    metotlar `async`). Migration: `Migrations/*_IlkSema.cs`.
+    Uygulama açılışında `db.Database.Migrate()` şemayı uyguluyor.
+    DI ömürleri: DbContext ve repository **Scoped** (istek başına bir örnek);
+    Singleton OLMAMALI — DbContext isteğe ait değişiklikleri izler.
+    ⚠ Öğrenilen tuzak: **SQLite `DateTimeOffset` ile ORDER BY yapamıyor**
+    (C#'ta derlenir, çalışma anında patlar). `DateTime` (UTC) kullanıldı.
+    ORM soyutlaması sızdırır — veritabanının sınırlarını bilmek gerekir.
+    Kalıcılık doğrulandı: servis kapatılıp açıldı, kayıtlar durdu.
+    Komutlar: `dotnet ef migrations add <ad>`; araç: `dotnet tool install --global dotnet-ef`.
+  - ⏭️ **SIRADAKİ: 7.4** Python servisinden risk okuma (HttpClient + DI).
   ⚠ Kurallar: Python servisi DEĞİŞTİRİLMEZ, .NET onu dışarıdan tüketir.
   İş emirleri .NET'in KENDİ veritabanında durur (ortak DB mikroservis
   mimarisinin en yaygın hatası). Veritabanı 7.3'ten önce eklenmez.

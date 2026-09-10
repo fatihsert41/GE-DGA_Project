@@ -65,11 +65,15 @@ public class WorkOrder
 
     public string? AssignedTo { get; set; }
 
-    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+    // DateTimeOffset DEĞİL DateTime (UTC): SQLite, DateTimeOffset tipine
+    // göre ORDER BY yapamıyor ve sorgu çalışma anında patlıyor. Biz zaten
+    // her yerde UTC kullanıyoruz, saat dilimi farkını taşımaya gerek yok.
+    // Ders: ORM soyutlaması sızdırır — veritabanının sınırlarını bilmek gerek.
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     public DateOnly? DueDate { get; set; }
 
-    public DateTimeOffset? CompletedAt { get; set; }
+    public DateTime? CompletedAt { get; set; }
 
     // { get; set; } yazımına "property" (özellik) denir. Python'da
     // self.title = title ile alan tanımlarsın; C#'ta property hem alanı
