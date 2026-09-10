@@ -31,6 +31,28 @@ public class WorkOrderPlanner
         DateOnly DueDate,
         string Rule);
 
+    /// <summary>Mevcut bir emrin aciliyetinin yükseltilmesi gerektiği bulgusu.</summary>
+    /// <remarks>
+    /// Önceden açık emri olan (trafo, tür) çifti tamamen ATLANIYORDU.
+    /// Bu idempotens için doğruydu ama bir boşluk bırakıyordu: "izlemede"
+    /// diye 30 günlük açılmış bir emir, trafo kritik hâle gelse bile eski
+    /// son tarihiyle kalıyordu. Kötüleşen risk sessiz kalmamalı.
+    /// </remarks>
+    public record Escalation(
+        string WorkOrderId,
+        string TransformerId,
+        double OldPriority,
+        double NewPriority,
+        DateOnly? OldDueDate,
+        DateOnly NewDueDate,
+        string Reason,
+        string Rule);
+
+    /// <summary>Planlama sonucu: yeni öneriler + aciliyet yükseltmeleri.</summary>
+    public record PlanResult(
+        IReadOnlyList<Suggestion> Suggestions,
+        IReadOnlyList<Escalation> Escalations);
+
     // Kural tetiklendiğinde işin ne kadar sürede yapılması gerektiği.
     // Sabitleri tek yerde tutmak: eşik değişirse tek satır değişir.
     private const int DueDaysSevere = 3;
@@ -51,22 +73,40 @@ public class WorkOrderPlanner
     /// <param name="today">Bugünün tarihi — dışarıdan alınıyor ki testte
     /// sabitlenebilsin. Kod içinde DateTime.Today çağırsaydık testin sonucu
     /// hangi gün çalıştırıldığına bağlı olurdu.</param>
+    /// <summary>Yeni açılması gereken iş emirleri (geriye uyumlu kısayol).</summary>
     public IReadOnlyList<Suggestion> Suggest(FleetOverview fleet,
                                              IReadOnlyList<WorkOrder> existing,
                                              DateOnly today)
+        => Plan(fleet, existing, today).Suggestions;
+
+    /// <summary>
+    /// Filo durumundan planlama sonucu üretir: yeni öneriler + yükseltmeler.
+    /// </summary>
+    /// <param name="fleet">ML servisinden gelen güncel filo.</param>
+    /// <param name="existing">Veritabanındaki mevcut iş emirleri.</param>
+    /// <param name="today">Bugünün tarihi — dışarıdan alınıyor ki testte
+    /// sabitlenebilsin.</param>
+    public PlanResult Plan(FleetOverview fleet,
+                           IReadOnlyList<WorkOrder> existing,
+                           DateOnly today)
     {
-        // Zaten AÇIK iş emri olan (trafo, tür) çiftlerini topla.
-        // Aynı iş için ikinci emir açmak saha ekibini boğar; bu kontrol
-        // öneriyi "idempotent" yapar: kaç kez çalıştırırsan çalıştır,
-        // aynı iş için tek emir çıkar.
-        var openPairs = existing
+        // Açık emirleri (trafo, tür) anahtarıyla indeksle. Eskiden yalnızca
+        // "var mı yok mu" bakılıyordu; artık emrin KENDİSİ lazım, çünkü
+        // aciliyetini karşılaştıracağız.
+        var openOrders = existing
             .Where(o => o.Status is WorkOrderStatus.Planned
                             or WorkOrderStatus.InProgress)
-            .Select(o => (o.TransformerId, o.Kind))
-            .ToHashSet();
-        // HashSet: Python'daki set. Aranması O(1); listede aramak O(n) olurdu.
+            .GroupBy(o => (o.TransformerId, o.Kind))
+            // Aynı çiftte birden çok açık emir varsa en acili (en erken
+            // son tarihli) temel alınır.
+            .ToDictionary(g => g.Key,
+                          g => g.OrderBy(o => o.DueDate ?? DateOnly.MaxValue)
+                                .First());
 
-        var suggestions = new List<Suggestion>();
+        // Kuralların ürettiği "olması gereken" işler — henüz mevcut
+        // emirlerle karşılaştırılmadı.
+        var desired = new List<Suggestion>();
+        var claimed = new HashSet<(string, WorkOrderKind)>();
 
         foreach (var t in fleet.Transformers)
         {
@@ -74,17 +114,53 @@ public class WorkOrderPlanner
             // ama numune alma kuralı yine de geçerli olabilir.
             if (t.HasData)
             {
-                AddFaultRules(t, today, openPairs, suggestions);
+                AddFaultRules(t, today, claimed, desired);
             }
 
-            AddSamplingRule(t, today, openPairs, suggestions);
+            AddSamplingRule(t, today, claimed, desired);
         }
 
-        // En acil olan başta.
-        return suggestions
-            .OrderByDescending(s => s.Priority)
-            .ThenBy(s => s.DueDate)
-            .ToList();
+        var suggestions = new List<Suggestion>();
+        var escalations = new List<Escalation>();
+
+        foreach (var d in desired)
+        {
+            if (!openOrders.TryGetValue((d.TransformerId, d.Kind), out var open))
+            {
+                suggestions.Add(d);          // açık emir yok -> yeni öneri
+                continue;
+            }
+
+            // Açık emir var. Kuralın istediği iş DAHA MI ACİL?
+            var noDeadline = open.DueDate is null;
+            var earlier = open.DueDate is not null && d.DueDate < open.DueDate;
+            var higher = d.Priority > open.Priority + 0.001;
+
+            if (!noDeadline && !earlier && !higher)
+            {
+                continue;   // ne daha acil ne daha önemli -> dokunma (idempotens)
+            }
+
+            // ÖNCELİK ASLA DÜŞÜRÜLMEZ. Kural bu kez daha düşük bir öncelik
+            // hesaplasa bile (ör. numune kuralı yarıya indiriyor), açık emrin
+            // mevcut önceliği korunur. "Yükseltme" adı gereği tek yönlüdür;
+            // aksi halde bir emir sessizce önemsizleştirilebilirdi.
+            var newPriority = Math.Max(d.Priority, open.Priority);
+
+            var reason = noDeadline
+                ? $"Son tarih belirlenmemişti; kural gereği belirlendi: {d.Reason}"
+                : $"Durum kötüleşti: {d.Reason}";
+
+            escalations.Add(new Escalation(
+                open.Id, d.TransformerId, open.Priority, newPriority,
+                open.DueDate, d.DueDate, reason, d.Rule));
+        }
+
+        return new PlanResult(
+            suggestions.OrderByDescending(s => s.Priority)
+                       .ThenBy(s => s.DueDate).ToList(),
+            escalations.OrderByDescending(e => e.NewPriority)
+                       .ThenBy(e => e.NewDueDate).ToList());
     }
 
     /// <summary>Tanı ve riske dayalı kurallar.</summary>
@@ -175,20 +251,22 @@ public class WorkOrderPlanner
             today.AddDays(DueDaysRoutine), "sampling-overdue"));
     }
 
-    /// <summary>Aynı iş için açık emir yoksa öneriyi listeye ekler.</summary>
+    /// <summary>Aynı (trafo, tür) için ikinci kez iş üretilmesini engeller.</summary>
+    /// <remarks>
+    /// Artık yalnızca AYNI ÇALIŞTIRMA içindeki tekrarı engelliyor. Mevcut
+    /// açık emirlerle karşılaştırma <see cref="Plan"/> içinde yapılıyor —
+    /// çünkü orada "atla" ile "aciliyeti yükselt" ayrımı var.
+    /// </remarks>
     private static void Add(List<Suggestion> output,
-                            HashSet<(string, WorkOrderKind)> openPairs,
+                            HashSet<(string, WorkOrderKind)> claimed,
                             Suggestion suggestion)
     {
-        if (openPairs.Contains((suggestion.TransformerId, suggestion.Kind)))
+        if (!claimed.Add((suggestion.TransformerId, suggestion.Kind)))
         {
-            return;
+            return;   // bu çalıştırmada zaten üretildi
         }
 
         output.Add(suggestion);
-
-        // Aynı çalıştırmada iki kuralın aynı öneriyi üretmesini de engelle.
-        openPairs.Add((suggestion.TransformerId, suggestion.Kind));
     }
 
     /// <summary>Öneriyi kaydedilebilir bir isteğe çevirir.</summary>
