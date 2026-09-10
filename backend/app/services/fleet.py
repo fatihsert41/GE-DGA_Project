@@ -10,13 +10,28 @@ services/diagnosis.py tarafından üretilip DB'ye yazılmıştır.
 """
 from __future__ import annotations
 
-from typing import Dict, List
+from datetime import datetime, timezone
+from typing import Dict, List, Optional
 
 from .. import database
+from ..core import assets
 from ..core.gases import (FAULT_FAMILY, FAULT_GROUP, FAULT_LABELS_TR,
                           SEVERE_FAULTS, total_combustible)
 from ..core.risk import RISK_LEVELS_TR, RISK_ORDER
 from .diagnosis import CONFIDENCE_THRESHOLD
+
+
+def _days_since(iso: Optional[str]) -> Optional[int]:
+    """Son ölçümün üstünden kaç gün geçti? Bozuk tarihte None döner."""
+    if not iso:
+        return None
+    try:
+        ts = datetime.fromisoformat(iso)
+    except ValueError:
+        return None
+    if ts.tzinfo is None:
+        ts = ts.replace(tzinfo=timezone.utc)
+    return max(0, (datetime.now(timezone.utc) - ts).days)
 
 
 def _to_card(row: Dict) -> Dict:
@@ -26,7 +41,24 @@ def _to_card(row: Dict) -> Dict:
     pred = row.get("prediction")
     level = row.get("risk_level")
 
+    cls = assets.get(row.get("asset_class"))
+    condition = row.get("risk_condition")
+    days = _days_since(row.get("sampled_at"))
+    # Numune aralığı sınıfa göre değişir: LPT 6 ay, MPT 12, SPT 24.
+    interval_days = int(cls["sampling_months"]) * 30
+
     return {
+        "asset_class": cls["code"],
+        "asset_class_name": cls["name_tr"],
+        "asset_class_active": cls["active"],
+        "mva": row.get("mva"),
+        # Öncelik = IEEE kondisyonu × varlık ağırlığı. Açıklanabilir olsun
+        # diye bileşenleri de gönderiliyor; arayüz formülü gösterebiliyor.
+        "priority": assets.priority_score(condition, cls["code"]),
+        "asset_weight": cls["weight"],
+        "sampling_months": cls["sampling_months"],
+        "days_since_sample": days,
+        "sampling_overdue": bool(days is not None and days > interval_days),
         "id": row["transformer_id"],
         "name": row["transformer_name"],
         "location": row["location"],
@@ -52,8 +84,16 @@ def _to_card(row: Dict) -> Dict:
 
 
 def _severity_key(card: Dict) -> tuple:
-    """En riskli trafo en üstte; eşitlik durumunda id'ye göre alfabetik."""
-    return (-RISK_ORDER.get(card["risk_level"], 0), card["id"])
+    """Sıralama: önce ÖNCELİK, sonra ham risk, sonra id.
+
+    Ham riske göre sıralamak yanıltıcıdır: kritik durumdaki küçük bir ünite,
+    ciddi arıza geliştiren bir LPT'nin önüne geçerdi. Öncelik skoru sonucu
+    da hesaba katar. Eşitlikte id devreye girer, böylece sıra deterministik
+    kalır ve kartlar her istekte aynı yerde durur.
+    """
+    return (-card.get("priority", 0.0),
+            -RISK_ORDER.get(card["risk_level"], 0),
+            card["id"])
 
 
 def build_overview(rows: List[Dict]) -> Dict:
@@ -70,6 +110,12 @@ def build_overview(rows: List[Dict]) -> Dict:
     # anahtar var olsun ki frontend'in eksenleri/renkleri kaymasın.
     risk_distribution: Dict[str, int] = {lvl: 0 for lvl in RISK_LEVELS_TR}
     fault_distribution: Dict[str, int] = {}
+    # Sınıf dağılımı ölçümsüz trafoları da sayar: filo envanteri tanıya
+    # bağlı değildir.
+    class_distribution: Dict[str, int] = {c: 0 for c in assets.CLASS_ORDER}
+    for c in cards:
+        class_distribution[c["asset_class"]] = (
+            class_distribution.get(c["asset_class"], 0) + 1)
     for c in measured:
         risk_distribution[c["risk_level"]] += 1
         fault_distribution[c["prediction"]] = (
@@ -89,6 +135,8 @@ def build_overview(rows: List[Dict]) -> Dict:
             "needs_attention": len(needs_attention),
             "attention_ids": [c["id"] for c in needs_attention],
             "needs_review": sum(1 for c in measured if c["needs_review"]),
+            "class_distribution": class_distribution,
+            "sampling_overdue": sum(1 for c in cards if c["sampling_overdue"]),
         },
         "transformers": cards,
     }

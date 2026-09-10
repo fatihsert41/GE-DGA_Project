@@ -492,3 +492,35 @@ button.tcard:hover .tcard-go { color: var(--accent); }
   line-height: 1.15; font-variant-numeric: tabular-nums;
 }
 .reality-sub { font-size: 0.74rem; color: var(--muted); }
+
+/* ============================================================
+   Varlık sınıfları — LPT / MPT / SPT (Faz 6.6)
+   ============================================================ */
+
+/* Sınıf rozeti kasıtlı olarak NÖTR: risk rampasının kehribar/pas tonlarını
+   kullanmaz. Sınıf bir tehlike seviyesi değil, envanter bilgisidir; renkleri
+   karıştırmak "LPT = tehlikeli" gibi yanlış bir okuma yaratırdı. */
+.class-tag {
+  display: inline-block; margin-left: 8px; vertical-align: middle;
+  font-size: 0.62rem; font-weight: 700; letter-spacing: 0.08em;
+  padding: 2px 7px; border-radius: 4px;
+  border: 1px solid var(--rule-strong); color: var(--ink-soft);
+  background: var(--surface-2);
+}
+/* LPT dolu, MPT çerçeveli, SPT kesik çizgili: sınıf, renk körlüğünde bile
+   ayırt edilebilsin diye biçimle de kodlanıyor. */
+.class-tag.LPT {
+  background: var(--ink); color: var(--surface); border-color: var(--ink);
+}
+.class-tag.SPT { border-style: dashed; color: var(--muted); }
+
+.overdue-chip {
+  display: inline-block; margin-top: 10px;
+  font-size: 0.7rem; font-weight: 600; padding: 3px 10px;
+  border-radius: 999px; background: rgba(160, 92, 28, 0.12);
+  color: var(--high);
+}
+
+/* İkinci filtre satırı ilkinden ayrılsın diye biraz daha silik */
+.chip.alt { font-size: 0.78rem; padding: 6px 12px; }
+.chip.alt:not(.active) { color: var(--muted); }

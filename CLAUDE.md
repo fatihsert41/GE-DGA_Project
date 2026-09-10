@@ -134,6 +134,17 @@ Testler: `cd backend; pytest -q` (18 test).
     `needs_review`/`severe`, arayüzde inceleme şeridi ve Gerçeklik Kontrolü
     paneli. Demo filoya TR-09 eklendi (erken evre D1: model "Normal" diyor
     ama güven %54) — belirsiz vaka olmadan özellik demoda görünmüyordu.
+  - ✅ 6.6 Varlık sınıfları (GE Vernova bağlamı) TAMAM. `core/assets.py`:
+    **LPT** (>=100 MVA) ve **MPT** (10-100) üretimde, **SPT** (<10) hattı
+    kapandı ama saha üniteleri izlenmeye devam ediyor (`active: False`).
+    Sınıf sadece etiket değil: **öncelik = IEEE kondisyonu × varlık ağırlığı**
+    (LPT 1.0 / MPT 0.7 / SPT 0.45). Böylece yüksek riskli bir LPT (3.00),
+    kritik riskli bir MPT'nin (2.80) önüne geçiyor — risk = olasılık × SONUÇ.
+    Numune aralığı da sınıfa göre (6/12/24 ay) ve gecikme işaretleniyor.
+    `database.py::_ensure_column` ile güvenli göç: eski dga.db'ler
+    silinmeden yeni sütunları alıyor. Demo filo 9 trafo; TR-06 ve TR-09
+    kasten "numunesi gecikmiş" (ihmal edilen varlık senaryosu).
+    Testler: `tests/test_assets.py` (toplam 43 test).
   - ⏭️ **SIRADAKİ:** `synth.py`'yi gerçekçileştirip A senaryosunu
     iyileştirmek (gürültü, sınıf örtüşmesi) — sentetik veri tercihini
     savunmanın tek yolu. Not: sentetik üreteç şu an belirsiz vaka HİÇ
