@@ -1,3 +1,4 @@
 <Solution>
   <Project Path="TransformerAI.Maintenance.Api/TransformerAI.Maintenance.Api.csproj" />
+  <Project Path="TransformerAI.Maintenance.Tests/TransformerAI.Maintenance.Tests.csproj" />
 </Solution>
