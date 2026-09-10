@@ -1,39 +1,53 @@
 // TransformerAI — Bakım Planlama Servisi
 //
 // Uygulamanın başladığı yer. Python tarafındaki app/main.py'nin karşılığı.
-//
-// Bu dosyada "Minimal API" yazım stili kullanılıyor: uç noktalar doğrudan
-// burada tanımlanıyor. FastAPI'deki @app.get(...) dekoratörünün karşılığı
-// app.MapGet(...) çağrısıdır.
+// "Minimal API" stili: uç noktalar doğrudan burada tanımlanıyor.
+// FastAPI'deki @app.get(...) dekoratörünün karşılığı app.MapGet(...).
 
 using System.Text.Json.Serialization;
+using Microsoft.EntityFrameworkCore;
 using TransformerAI.Maintenance.Api.Data;
 using TransformerAI.Maintenance.Api.Models;
 
-// 1) İnşaatçı (builder): uygulamanın kurulum aşaması.
-//    Python'da "app = FastAPI()" tek satırdı; .NET bunu ikiye ayırır —
-//    önce SERVİSLERİ kaydedersin, sonra uygulamayı inşa edersin.
 var builder = WebApplication.CreateBuilder(args);
 
-// 2) Servis kaydı. Buraya kaydedilen her şey uygulamanın her yerinden
-//    istenebilir hale gelir (bağımlılık enjeksiyonu — 7.4'te detaylıca).
+// ---------------------------------------------------------------------------
+// Servis kaydı (kurulum aşaması)
+// ---------------------------------------------------------------------------
+
 builder.Services.AddOpenApi();
 
-// JSON'da enum'lar VARSAYILAN OLARAK SAYIDIR: {"status": 0}.
-// Bu hem okunmaz hem de kırılgan — sıralamayı değiştirirsek anlam kayar.
-// JsonStringEnumConverter ile metne çeviriyoruz: {"status": "Planned"}.
-// Hem istek gövdesini okurken hem de cevabı yazarken geçerli olur.
+// JSON'da enum'lar varsayılan olarak SAYIDIR: {"status": 0}.
+// Metne çeviriyoruz: {"status": "Planned"} — hem okunur hem kırılgan değil.
 builder.Services.ConfigureHttpJsonOptions(options =>
 {
     options.SerializerOptions.Converters.Add(new JsonStringEnumConverter());
 });
 
-// İş emri deposu. AddSingleton = "uygulama boyunca TEK bir örnek olsun".
-// Bellekte tuttuğumuz için tek örnek şart: her istek yeni bir depo alsaydı
-// veriler kaybolurdu. 7.3'te bunun yerini veritabanı alacak.
-builder.Services.AddSingleton<WorkOrderStore>();
+// Veritabanı. Bağlantı adresi appsettings.json'dan okunur; yoksa varsayılan
+// kullanılır. Ayarı koda gömmemek önemli: aynı kod farklı ortamlarda
+// (geliştirme / üretim) farklı veritabanına bağlanabilmeli.
+var connectionString = builder.Configuration.GetConnectionString("Maintenance")
+                       ?? "Data Source=maintenance.db";
+
+builder.Services.AddDbContext<MaintenanceDbContext>(options =>
+    options.UseSqlite(connectionString));
+
+// AddScoped = "her HTTP isteği için bir örnek".
+// AddSingleton (7.2'de kullandığımız) = uygulama boyunca tek örnek.
+// Veritabanı bağlamı asla singleton olmamalı: içinde o isteğe ait
+// değişiklikleri izler, paylaşılırsa istekler birbirine karışır.
+builder.Services.AddScoped<WorkOrderRepository>();
 
 var app = builder.Build();
+
+// Uygulama açılırken şemayı uygula. Migration dosyaları koddadır;
+// bu satır "veritabanı bu sürüme kadar güncellensin" der.
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<MaintenanceDbContext>();
+    db.Database.Migrate();
+}
 
 if (app.Environment.IsDevelopment())
 {
@@ -47,9 +61,10 @@ if (app.Environment.IsDevelopment())
 app.MapGet("/", () => new
 {
     name = "TransformerAI Bakım Planlama Servisi",
-    version = "0.2.0",
+    version = "0.3.0",
     role = "İş emri, teknisyen atama ve bakım planlama",
     mlService = "Python/FastAPI (risk ve tanı buradan okunur)",
+    storage = "SQLite (maintenance.db) — ölçüm verisinden ayrı",
 })
 .WithName("ServiceInfo");
 
@@ -58,42 +73,41 @@ app.MapGet("/health", () => new { status = "ok" })
 
 // ---------------------------------------------------------------------------
 // İş emirleri
+//
+// Uç noktalar artık "async" ve "Task" döndürüyor. Sebep: veritabanı çağrıları
+// asenkron; onları beklerken iş parçacığı serbest kalıyor ve sunucu başka
+// isteklere bakabiliyor.
 // ---------------------------------------------------------------------------
 
-// Listeleme. Sorgu parametreleri (?status=Planned&transformerId=TR-01)
-// doğrudan fonksiyon parametresi olarak alınır — FastAPI'deki gibi.
-// ASP.NET Core metin değeri otomatik olarak enum'a çevirir; çeviremezse
-// isteği 400 ile reddeder. Doğrulamayı elle yazmıyoruz, tip sistemi yapıyor.
-app.MapGet("/workorders", (WorkOrderStore store,
-                           WorkOrderStatus? status,
-                           string? transformerId) =>
+app.MapGet("/workorders", async (WorkOrderRepository repo,
+                                 WorkOrderStatus? status,
+                                 string? transformerId) =>
 {
-    var items = store.List(status, transformerId);
+    var items = await repo.ListAsync(status, transformerId);
     return Results.Ok(new { count = items.Count, items });
 })
 .WithName("ListWorkOrders");
 
-// Tekil kayıt. {id} kısmı yol parametresi (route parameter).
-// Python: @app.get("/workorders/{id}")
-app.MapGet("/workorders/{id}", (WorkOrderStore store, string id) =>
-{
-    var order = store.Get(id);
+// DİKKAT: Bu satır /workorders/{id} kuralından ÖNCE gelmeli.
+// Aksi halde "summary" kelimesi bir id sanılır ve 404 döner.
+// Minimal API çoğu durumda daha spesifik olanı seçer ama sıraya güvenmek
+// yerine açıkça yukarı almak daha sağlam.
+app.MapGet("/workorders/summary", async (WorkOrderRepository repo) =>
+        await repo.SummaryAsync())
+   .WithName("WorkOrderSummary");
 
-    // Results.X yardımcıları HTTP durum kodunu belirler:
-    //   Ok       -> 200   NotFound -> 404
-    //   Created  -> 201   BadRequest -> 400
-    // FastAPI'de HTTPException fırlatırdık; burada değer olarak döndürüyoruz.
+app.MapGet("/workorders/{id}", async (WorkOrderRepository repo, string id) =>
+{
+    var order = await repo.GetAsync(id);
     return order is null
         ? Results.NotFound(new { message = $"İş emri bulunamadı: {id}" })
         : Results.Ok(order);
 })
 .WithName("GetWorkOrder");
 
-// Oluşturma. Gövde (body) otomatik olarak CreateWorkOrderRequest'e çevrilir.
-app.MapPost("/workorders", (WorkOrderStore store, CreateWorkOrderRequest request) =>
+app.MapPost("/workorders", async (WorkOrderRepository repo,
+                                  CreateWorkOrderRequest request) =>
 {
-    // Tip sistemi "bu alan string mi?" sorusunu çözer ama "boş mu?" sorusunu
-    // çözmez. İş kuralları hâlâ elle doğrulanır.
     if (string.IsNullOrWhiteSpace(request.TransformerId))
     {
         return Results.BadRequest(new { message = "transformerId zorunludur." });
@@ -104,28 +118,19 @@ app.MapPost("/workorders", (WorkOrderStore store, CreateWorkOrderRequest request
         return Results.BadRequest(new { message = "title zorunludur." });
     }
 
-    var order = store.Add(request);
-
-    // 201 Created + Location başlığı: yeni kaynağın adresini söyler.
-    // REST geleneği budur; sadece 200 dönmekten daha doğrudur.
+    var order = await repo.AddAsync(request);
     return Results.Created($"/workorders/{order.Id}", order);
 })
 .WithName("CreateWorkOrder");
 
-// Durum güncelleme. PATCH = "kaydın bir kısmını değiştir"
-// (PUT ise "kaydın tamamını değiştir" demektir).
 app.MapPatch("/workorders/{id}/status",
-    (WorkOrderStore store, string id, UpdateStatusRequest request) =>
+    async (WorkOrderRepository repo, string id, UpdateStatusRequest request) =>
 {
-    var order = store.UpdateStatus(id, request);
+    var order = await repo.UpdateStatusAsync(id, request);
     return order is null
         ? Results.NotFound(new { message = $"İş emri bulunamadı: {id}" })
         : Results.Ok(order);
 })
 .WithName("UpdateWorkOrderStatus");
-
-// Özet: panoda gösterilecek sayımlar.
-app.MapGet("/workorders/summary", (WorkOrderStore store) => store.Summary())
-   .WithName("WorkOrderSummary");
 
 app.Run();
