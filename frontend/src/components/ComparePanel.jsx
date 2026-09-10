@@ -32,6 +32,9 @@ function RealityCheck() {
           <div className="reality-sub">
             {syn ? `${syn.model} · ${syn.n_test} numune` : 'model eğitilmedi'}
           </div>
+          {syn?.data_profile === 'field_like' && (
+            <div className="reality-sub">saha benzeri profil</div>
+          )}
         </div>
 
         <div className="reality-card">

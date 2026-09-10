@@ -46,12 +46,18 @@ def reality_check() -> dict:
             m = json.load(fh)
         best = next((r for r in m.get("leaderboard", [])
                      if r["model"] == m.get("best_model")), None)
+        profile = m.get("data_profile", "textbook")
         synthetic = {
             "model": m.get("best_model"),
             "accuracy": (best or {}).get("accuracy"),
             "f1_macro": (best or {}).get("f1_macro"),
             "n_test": m.get("n_test"),
-            "note": "Sentetik test verisi (IEC 60599 imzalarından üretildi).",
+            "data_profile": profile,
+            "note": ("Sentetik test verisi — saha benzeri profil "
+                     "(başlangıç evresi + ölçüm gürültüsü dahil)."
+                     if profile == "field_like" else
+                     "Sentetik test verisi — ders kitabı profili "
+                     "(sınıflar keskin ayrık)."),
         }
 
     if not _SAFETY.exists():

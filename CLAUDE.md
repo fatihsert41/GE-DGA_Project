@@ -157,6 +157,15 @@ Testler: `cd backend; pytest -q` (18 test).
     `train.py --field-like` ile üretim modeli bu profille eğitilebilir
     (varsayılan KAPALI; açılınca sentetik test doğruluğu düşer, gerçek
     dünyaya aktarım artar — iki sayı farklı şeyleri ölçer).
+  - ✅ 6.8 Üretim modeli saha benzeri profile GEÇİRİLDİ
+    (`python -m app.ml.train --field-like`, `metrics.json.data_profile`).
+    Sentetik test doğruluğu 0.967 → 0.904 (sınav zorlaştı, beklenen);
+    gerçeğe aktarım 0.530 → 0.578. Demo filo yeniden tanılandı:
+    **TR-09 artık "Normal %54" değil "D1 %85"** — erken evre arızayı doğru
+    buluyor ve yine incelemeye gönderiyor. TR-08 de sınırda olduğu için
+    incelemeye düştü (filoda 2 vaka).
+    ⚠ Model yeniden eğitilirse `--field-like` KULLANILMALI, yoksa demo
+    eski davranışa döner.
   - 🏁 **Faz 6 BİTTİ.**
 - ⏳ **Faz 7 (.NET) — kullanıcı .NET bilmiyor, çok temelden ve yavaş anlatılacak.**
 
