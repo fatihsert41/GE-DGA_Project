@@ -55,6 +55,8 @@ var mlTimeout = builder.Configuration.GetValue<int?>("MlService:TimeoutSeconds")
 // örnek yeterli: AddSingleton. Repository'nin Scoped olmasının sebebi
 // veritabanı bağlamını taşımasıydı; burada öyle bir şey yok.
 builder.Services.AddSingleton<WorkOrderPlanner>();
+builder.Services.AddSingleton<AssignmentService>();
+builder.Services.AddScoped<TechnicianRepository>();
 
 builder.Services.AddHttpClient<MlServiceClient>(client =>
 {
@@ -174,6 +176,129 @@ app.MapGet("/workorders", async (WorkOrderRepository repo,
     return Results.Ok(new { count = items.Count, items });
 })
 .WithName("ListWorkOrders");
+
+// ---------------------------------------------------------------------------
+// Teknisyenler
+// ---------------------------------------------------------------------------
+
+app.MapGet("/technicians", async (TechnicianRepository repo, CancellationToken ct) =>
+{
+    var workloads = await repo.WorkloadsAsync(ct);
+    return Results.Ok(new
+    {
+        count = workloads.Count,
+        // Sadece ihtiyacımız olan alanları döndürüyoruz. Technician nesnesini
+        // doğrudan verseydik içindeki WorkOrders listesi de serileşmeye
+        // çalışır ve döngüye girerdi (iş emri -> teknisyen -> iş emri...).
+        items = workloads.Select(w => new
+        {
+            w.Technician.Id,
+            w.Technician.Name,
+            w.Technician.Region,
+            specialty = w.Technician.Specialty.ToString(),
+            w.Technician.MaxOpenOrders,
+            w.Technician.IsActive,
+            openOrders = w.OpenOrders,
+            hasCapacity = w.HasCapacity,
+        }),
+    });
+})
+.WithName("ListTechnicians");
+
+// İş emrine teknisyen atama.
+// Gövdede technicianId verilirse o kişi atanır (insanın kararı üstündür);
+// verilmezse sistem en uygun kişiyi seçer.
+app.MapPost("/workorders/{id}/assign",
+    async (WorkOrderRepository orders, TechnicianRepository techs,
+           AssignmentService assigner, MlServiceClient ml,
+           string id, AssignRequest? request, CancellationToken ct) =>
+{
+    var order = await orders.GetAsync(id);
+    if (order is null)
+    {
+        return Results.NotFound(new { message = $"İş emri bulunamadı: {id}" });
+    }
+
+    string technicianId;
+    string reason;
+    string? warning = null;
+
+    if (!string.IsNullOrWhiteSpace(request?.TechnicianId))
+    {
+        // Elle atama: teknisyen gerçekten var mı?
+        var chosen = await techs.GetAsync(request.TechnicianId, ct);
+        if (chosen is null)
+        {
+            return Results.BadRequest(new
+            {
+                message = $"Teknisyen bulunamadı: {request.TechnicianId}",
+            });
+        }
+
+        technicianId = chosen.Id;
+        reason = "elle atandı";
+
+        // Elle atama kapasiteyi AŞABİLİR — planlama mühendisi bazen
+        // mecbur kalır ve sistem onun kararını engellememeli. Ama sessizce
+        // geçmek de yanlış: aşım görünür olmalı ki yük dengesizliği
+        // fark edilsin.
+        var load = (await techs.WorkloadsAsync(ct))
+            .FirstOrDefault(w => w.Technician.Id == chosen.Id);
+        if (load is not null && !load.HasCapacity)
+        {
+            warning = $"{chosen.Name} kapasitesi dolu "
+                      + $"({load.OpenOrders}/{chosen.MaxOpenOrders}); "
+                      + "atama yine de yapıldı.";
+        }
+    }
+    else
+    {
+        // Otomatik atama: trafonun konumu ve arıza ailesi ML servisinden.
+        // Ulaşılamazsa atama yine yapılır, sadece bölge/uzmanlık puanı
+        // olmadan — bağımlılığın kapalı olması işi tamamen durdurmamalı.
+        var risk = await ml.GetTransformerAsync(order.TransformerId, ct);
+        var workloads = await techs.WorkloadsAsync(ct);
+
+        var assignment = assigner.Choose(workloads, order.Kind,
+                                         risk?.Location, risk?.PredictionFamily);
+        if (assignment is null)
+        {
+            return Results.Problem(
+                title: "Uygun teknisyen yok",
+                detail: "Tüm teknisyenlerin kapasitesi dolu veya pasif.",
+                statusCode: StatusCodes.Status409Conflict);
+        }
+
+        technicianId = assignment.Technician.Id;
+        reason = assignment.Reason;
+    }
+
+    var updated = await techs.AssignAsync(id, technicianId, ct);
+
+    return Results.Ok(new
+    {
+        workOrder = new
+        {
+            updated!.Id,
+            updated.TransformerId,
+            updated.Title,
+            status = updated.Status.ToString(),
+            kind = updated.Kind.ToString(),
+            updated.Priority,
+            updated.DueDate,
+            technician = updated.Technician is null ? null : new
+            {
+                updated.Technician.Id,
+                updated.Technician.Name,
+                updated.Technician.Region,
+                specialty = updated.Technician.Specialty.ToString(),
+            },
+        },
+        reason,
+        warning,
+    });
+})
+.WithName("AssignWorkOrder");
 
 // ---------------------------------------------------------------------------
 // Otomatik öneri

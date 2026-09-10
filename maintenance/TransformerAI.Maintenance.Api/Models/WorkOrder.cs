@@ -63,7 +63,23 @@ public class WorkOrder
     /// <summary>Python servisinden okunan öncelik skoru (kondisyon × ağırlık).</summary>
     public double Priority { get; set; }
 
-    public string? AssignedTo { get; set; }
+    /// <summary>Atanan teknisyenin kimliği — yabancı anahtar (foreign key).</summary>
+    /// <remarks>
+    /// Önce burada serbest metin vardı ("Ahmet Y."). Sorunu şuydu: yazım
+    /// hatası kimseyi rahatsız etmezdi, teknisyenin yükü hesaplanamazdı,
+    /// adı değişince eski kayıtlar eski adı taşırdı.
+    ///
+    /// Şimdi Technician tablosuna işaret eden bir ANAHTAR. Veritabanı,
+    /// olmayan bir teknisyene atama yapılmasına izin vermez — bu kurala
+    /// "bütünlük kısıtı" (referential integrity) denir ve doğruluğu
+    /// uygulamaya değil veritabanına yaptırmak her zaman daha güvenlidir.
+    ///
+    /// Nullable (?) çünkü yeni açılan iş emri henüz atanmamış olabilir.
+    /// </remarks>
+    public string? TechnicianId { get; set; }
+
+    /// <summary>Atanan teknisyen — navigation property.</summary>
+    public Technician? Technician { get; set; }
 
     // DateTimeOffset DEĞİL DateTime (UTC): SQLite, DateTimeOffset tipine
     // göre ORDER BY yapamıyor ve sorgu çalışma anında patlıyor. Biz zaten
@@ -105,4 +121,8 @@ public record CreateWorkOrderRequest(
     DateOnly? DueDate = null);
 
 /// <summary>Durum güncelleme isteği.</summary>
-public record UpdateStatusRequest(WorkOrderStatus Status, string? AssignedTo = null);
+/// <remarks>
+/// Teknisyen ataması artık ayrı bir uç noktadan yapılıyor
+/// (POST /workorders/{id}/assign): bir isteğin tek bir işi olmalı.
+/// </remarks>
+public record UpdateStatusRequest(WorkOrderStatus Status);
