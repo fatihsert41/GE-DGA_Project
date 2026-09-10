@@ -1,0 +1,391 @@
+{
+  "generated_at": "2026-09-10 09:59:56",
+  "n_synthetic": 4000,
+  "n_real_train": 1380,
+  "n_real_test": 592,
+  "source": {
+    "file": "dga_china_2321.xlsx",
+    "rows_in": 2321,
+    "rows_out": 1972,
+    "column_mapping": {
+      "H2": "H2",
+      "CH4": "CH4",
+      "C2H6": "C2H6",
+      "C2H4": "C2H4",
+      "C2H2": "C2H2",
+      "故障类型": "label"
+    },
+    "dropped": {
+      "etiket_cevrilemedi": 0,
+      "gaz_sayisal_degil": 0,
+      "negatif_deger": 0,
+      "tamami_sifir": 0,
+      "tekrar_eden": 349
+    },
+    "duplicates_found": 349,
+    "class_counts": {
+      "Normal": 707,
+      "T3": 436,
+      "D1": 274,
+      "D2": 223,
+      "PD": 112,
+      "T2": 111,
+      "T1": 109
+    },
+    "missing_classes": []
+  },
+  "configs": [
+    "E0_cekirdek",
+    "E1_indikator",
+    "E2_dengeleme",
+    "E3_log"
+  ],
+  "results": [
+    {
+      "config": "E0_cekirdek",
+      "scenario": "A_sentetik",
+      "model": "RandomForest",
+      "accuracy": 0.5608,
+      "f1_macro": 0.4493
+    },
+    {
+      "config": "E0_cekirdek",
+      "scenario": "A_sentetik",
+      "model": "SVM",
+      "accuracy": 0.5389,
+      "f1_macro": 0.4301
+    },
+    {
+      "config": "E0_cekirdek",
+      "scenario": "A_sentetik",
+      "model": "NeuralNet",
+      "accuracy": 0.6199,
+      "f1_macro": 0.5032
+    },
+    {
+      "config": "E0_cekirdek",
+      "scenario": "A_sentetik",
+      "model": "XGBoost",
+      "accuracy": 0.5726,
+      "f1_macro": 0.4675
+    },
+    {
+      "config": "E0_cekirdek",
+      "scenario": "B_gercek",
+      "model": "RandomForest",
+      "accuracy": 0.8243,
+      "f1_macro": 0.7324
+    },
+    {
+      "config": "E0_cekirdek",
+      "scenario": "B_gercek",
+      "model": "SVM",
+      "accuracy": 0.5693,
+      "f1_macro": 0.3535
+    },
+    {
+      "config": "E0_cekirdek",
+      "scenario": "B_gercek",
+      "model": "NeuralNet",
+      "accuracy": 0.7652,
+      "f1_macro": 0.6334
+    },
+    {
+      "config": "E0_cekirdek",
+      "scenario": "B_gercek",
+      "model": "XGBoost",
+      "accuracy": 0.8446,
+      "f1_macro": 0.757
+    },
+    {
+      "config": "E1_indikator",
+      "scenario": "A_sentetik",
+      "model": "RandomForest",
+      "accuracy": 0.6267,
+      "f1_macro": 0.5232
+    },
+    {
+      "config": "E1_indikator",
+      "scenario": "A_sentetik",
+      "model": "SVM",
+      "accuracy": 0.5422,
+      "f1_macro": 0.4262
+    },
+    {
+      "config": "E1_indikator",
+      "scenario": "A_sentetik",
+      "model": "NeuralNet",
+      "accuracy": 0.5456,
+      "f1_macro": 0.423
+    },
+    {
+      "config": "E1_indikator",
+      "scenario": "A_sentetik",
+      "model": "XGBoost",
+      "accuracy": 0.5963,
+      "f1_macro": 0.4981
+    },
+    {
+      "config": "E1_indikator",
+      "scenario": "B_gercek",
+      "model": "RandomForest",
+      "accuracy": 0.8378,
+      "f1_macro": 0.7629
+    },
+    {
+      "config": "E1_indikator",
+      "scenario": "B_gercek",
+      "model": "SVM",
+      "accuracy": 0.8108,
+      "f1_macro": 0.737
+    },
+    {
+      "config": "E1_indikator",
+      "scenario": "B_gercek",
+      "model": "NeuralNet",
+      "accuracy": 0.8024,
+      "f1_macro": 0.7194
+    },
+    {
+      "config": "E1_indikator",
+      "scenario": "B_gercek",
+      "model": "XGBoost",
+      "accuracy": 0.8463,
+      "f1_macro": 0.7607
+    },
+    {
+      "config": "E2_dengeleme",
+      "scenario": "A_sentetik",
+      "model": "RandomForest",
+      "accuracy": 0.6318,
+      "f1_macro": 0.5231
+    },
+    {
+      "config": "E2_dengeleme",
+      "scenario": "A_sentetik",
+      "model": "SVM",
+      "accuracy": 0.576,
+      "f1_macro": 0.4432
+    },
+    {
+      "config": "E2_dengeleme",
+      "scenario": "A_sentetik",
+      "model": "NeuralNet",
+      "accuracy": 0.3564,
+      "f1_macro": 0.332
+    },
+    {
+      "config": "E2_dengeleme",
+      "scenario": "A_sentetik",
+      "model": "XGBoost",
+      "accuracy": 0.6098,
+      "f1_macro": 0.5131
+    },
+    {
+      "config": "E2_dengeleme",
+      "scenario": "B_gercek",
+      "model": "RandomForest",
+      "accuracy": 0.8345,
+      "f1_macro": 0.7569
+    },
+    {
+      "config": "E2_dengeleme",
+      "scenario": "B_gercek",
+      "model": "SVM",
+      "accuracy": 0.7956,
+      "f1_macro": 0.7217
+    },
+    {
+      "config": "E2_dengeleme",
+      "scenario": "B_gercek",
+      "model": "NeuralNet",
+      "accuracy": 0.799,
+      "f1_macro": 0.7166
+    },
+    {
+      "config": "E2_dengeleme",
+      "scenario": "B_gercek",
+      "model": "XGBoost",
+      "accuracy": 0.8446,
+      "f1_macro": 0.7792
+    },
+    {
+      "config": "E3_log",
+      "scenario": "A_sentetik",
+      "model": "RandomForest",
+      "accuracy": 0.6284,
+      "f1_macro": 0.5203
+    },
+    {
+      "config": "E3_log",
+      "scenario": "A_sentetik",
+      "model": "SVM",
+      "accuracy": 0.603,
+      "f1_macro": 0.4751
+    },
+    {
+      "config": "E3_log",
+      "scenario": "A_sentetik",
+      "model": "NeuralNet",
+      "accuracy": 0.5693,
+      "f1_macro": 0.461
+    },
+    {
+      "config": "E3_log",
+      "scenario": "A_sentetik",
+      "model": "XGBoost",
+      "accuracy": 0.6081,
+      "f1_macro": 0.5117
+    },
+    {
+      "config": "E3_log",
+      "scenario": "B_gercek",
+      "model": "RandomForest",
+      "accuracy": 0.8446,
+      "f1_macro": 0.775
+    },
+    {
+      "config": "E3_log",
+      "scenario": "B_gercek",
+      "model": "SVM",
+      "accuracy": 0.8243,
+      "f1_macro": 0.749
+    },
+    {
+      "config": "E3_log",
+      "scenario": "B_gercek",
+      "model": "NeuralNet",
+      "accuracy": 0.8142,
+      "f1_macro": 0.7347
+    },
+    {
+      "config": "E3_log",
+      "scenario": "B_gercek",
+      "model": "XGBoost",
+      "accuracy": 0.8514,
+      "f1_macro": 0.7802
+    }
+  ],
+  "summary": {
+    "E0_cekirdek|A_sentetik": {
+      "config": "E0_cekirdek",
+      "scenario": "A_sentetik",
+      "model": "NeuralNet",
+      "accuracy": 0.6199,
+      "f1_macro": 0.5032
+    },
+    "E0_cekirdek|B_gercek": {
+      "config": "E0_cekirdek",
+      "scenario": "B_gercek",
+      "model": "XGBoost",
+      "accuracy": 0.8446,
+      "f1_macro": 0.757
+    },
+    "E1_indikator|A_sentetik": {
+      "config": "E1_indikator",
+      "scenario": "A_sentetik",
+      "model": "RandomForest",
+      "accuracy": 0.6267,
+      "f1_macro": 0.5232
+    },
+    "E1_indikator|B_gercek": {
+      "config": "E1_indikator",
+      "scenario": "B_gercek",
+      "model": "RandomForest",
+      "accuracy": 0.8378,
+      "f1_macro": 0.7629
+    },
+    "E2_dengeleme|A_sentetik": {
+      "config": "E2_dengeleme",
+      "scenario": "A_sentetik",
+      "model": "RandomForest",
+      "accuracy": 0.6318,
+      "f1_macro": 0.5231
+    },
+    "E2_dengeleme|B_gercek": {
+      "config": "E2_dengeleme",
+      "scenario": "B_gercek",
+      "model": "XGBoost",
+      "accuracy": 0.8446,
+      "f1_macro": 0.7792
+    },
+    "E3_log|A_sentetik": {
+      "config": "E3_log",
+      "scenario": "A_sentetik",
+      "model": "RandomForest",
+      "accuracy": 0.6284,
+      "f1_macro": 0.5203
+    },
+    "E3_log|B_gercek": {
+      "config": "E3_log",
+      "scenario": "B_gercek",
+      "model": "XGBoost",
+      "accuracy": 0.8514,
+      "f1_macro": 0.7802
+    }
+  },
+  "best": {
+    "config": "E3_log",
+    "scenario": "B_gercek",
+    "model": "XGBoost",
+    "accuracy": 0.8514,
+    "f1_macro": 0.7802
+  },
+  "best_per_class": {
+    "Normal": {
+      "precision": 0.95260663507109,
+      "recall": 0.9481132075471698,
+      "f1-score": 0.950354609929078,
+      "support": 212.0
+    },
+    "PD": {
+      "precision": 0.8787878787878788,
+      "recall": 0.8529411764705882,
+      "f1-score": 0.8656716417910447,
+      "support": 34.0
+    },
+    "D1": {
+      "precision": 0.7764705882352941,
+      "recall": 0.8048780487804879,
+      "f1-score": 0.7904191616766467,
+      "support": 82.0
+    },
+    "D2": {
+      "precision": 0.746268656716418,
+      "recall": 0.746268656716418,
+      "f1-score": 0.746268656716418,
+      "support": 67.0
+    },
+    "T1": {
+      "precision": 0.5428571428571428,
+      "recall": 0.5757575757575758,
+      "f1-score": 0.5588235294117647,
+      "support": 33.0
+    },
+    "T2": {
+      "precision": 0.6896551724137931,
+      "recall": 0.6060606060606061,
+      "f1-score": 0.6451612903225806,
+      "support": 33.0
+    },
+    "T3": {
+      "precision": 0.9015151515151515,
+      "recall": 0.9083969465648855,
+      "f1-score": 0.9049429657794676,
+      "support": 131.0
+    },
+    "accuracy": 0.8513513513513513,
+    "macro avg": {
+      "precision": 0.7840230322281097,
+      "recall": 0.7774880311282474,
+      "f1-score": 0.7802345508038572,
+      "support": 592.0
+    },
+    "weighted avg": {
+      "precision": 0.8518131317594235,
+      "recall": 0.8513513513513513,
+      "f1-score": 0.8513537364048798,
+      "support": 592.0
+    }
+  }
+}
