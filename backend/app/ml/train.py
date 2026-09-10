@@ -32,7 +32,7 @@ from sklearn.svm import SVC
 from ..core.classify import consensus
 from ..core.gases import FAULT_CLASSES
 from .features import FEATURE_NAMES, build_features
-from .synth import make_dataset
+from .synth import make_dataset, make_field_like_dataset
 
 try:  # XGBoost is optional at runtime but expected in requirements.
     from xgboost import XGBClassifier
@@ -84,9 +84,18 @@ def _classical_accuracy(raw_test: pd.DataFrame) -> float:
     return correct / len(raw_test)
 
 
-def train(n_samples: int = 4000, seed: int = 42) -> Dict[str, object]:
+def train(n_samples: int = 4000, seed: int = 42,
+          field_like: bool = False) -> Dict[str, object]:
+    """Modelleri eğitir, kazananı ve karşılaştırma tablosunu kaydeder.
+
+    ``field_like=True`` sentetik veriyi saha benzeri üretir (Faz 6.7):
+    gerçek trafo ölçümlerine aktarım belirgin iyileşir (sıfır atış F1
+    0.530 -> 0.578) ama SENTETİK test doğruluğu düşer — üretilen veri
+    artık daha zor. İki sayı farklı şeyleri ölçer; karıştırılmamalı.
+    """
     ARTIFACT_DIR.mkdir(parents=True, exist_ok=True)
-    raw = make_dataset(n=n_samples, seed=seed)
+    raw = (make_field_like_dataset(n=n_samples, seed=seed) if field_like
+           else make_dataset(n=n_samples, seed=seed))
 
     X = build_features(raw.drop(columns=["label"]))
     y_str = raw["label"].astype(str)
@@ -157,6 +166,7 @@ def train(n_samples: int = 4000, seed: int = 42) -> Dict[str, object]:
 
     metrics = {
         "generated_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "data_profile": "field_like" if field_like else "textbook",
         "n_samples": n_samples,
         "n_test": int(len(X_test)),
         "best_model": best_name,
@@ -172,7 +182,16 @@ def train(n_samples: int = 4000, seed: int = 42) -> Dict[str, object]:
 
 
 if __name__ == "__main__":
-    m = train()
+    import argparse
+
+    ap = argparse.ArgumentParser(description="Model eğitimi")
+    ap.add_argument("--field-like", action="store_true",
+                    help="Saha benzeri sentetik veri (Faz 6.7 ön ayarı)")
+    ap.add_argument("--n", type=int, default=4000)
+    args = ap.parse_args()
+
+    m = train(n_samples=args.n, field_like=args.field_like)
+    print(f"Veri profili: {m['data_profile']}")
     print(f"Best model: {m['best_model']}")
     for row in m["leaderboard"]:
         f1 = row["f1_macro"]

@@ -238,6 +238,68 @@ Artırmayacak şeyler:
   sürekli; etiketi koyan uzmanlar bile bazı vakalarda ayrılıyor. Hiçbir
   model "doğru cevabın kendisi belirsiz" olan veriyi %100 bilemez.
 
+## Faz 6.7 — Sentetik üreteci gerçekçileştirmek
+
+Sıfır atış (A) senaryosu 0.52'de takılıydı. Sebebi Faz 6.5'te fark edilmişti:
+üreteç hiç **belirsiz vaka** üretemiyordu. Önce farkı ölçtük:
+
+| | Gerçek veri | Sentetik (eski) |
+|---|---|---|
+| Değer aralığı | 10⁶–10⁷ kat | 10²–10³ kat |
+| Sınıf içi değişkenlik (CV) | 1.7 – 4.9 | 0.24 – 0.46 |
+
+Sentetik sınıflar gerçeklerden **~10 kat dar**. Kök sebep: üreteç her arızayı
+tek bir şiddette üretiyordu.
+
+### Beş bileşen, tek tek ölçüldü
+
+`synth.py`'ye beş gerçekçilik bileşeni eklendi ve her biri **tek başına**
+sıfır atış F1'i üzerinde denendi (n=4000, aynı gerçek test seti):
+
+| Bileşen | F1 | Temele göre |
+|---|---|---|
+| **Başlangıç evresi** (imza henüz Normal'e yakın) | **0.585** | **+0.066** ✅ |
+| temel (gerçekçilik kapalı) | 0.519 | — |
+| Etiket gürültüsü (uzman komşu sınıfı karıştırır) | 0.511 | −0.008 |
+| Ölçüm gürültüsü (laboratuvar tekrarlanabilirliği) | 0.507 | −0.012 |
+| Karışık arıza (termal + deşarj birlikte) | 0.456 | −0.063 ❌ |
+| **Şiddet** (aynı arıza farklı yoğunlukta) | **0.423** | **−0.096** ❌ |
+
+### En önemli ders: dağılımı benzetmek ≠ aktarımı iyileştirmek
+
+**Şiddet**, sınıf içi değişkenliği 0.3'ten 2.5'e çıkararak dağılımı gerçeğe
+en çok yaklaştıran bileşendi — ve sıfır atışa **en çok zarar veren** oydu.
+
+Sebebi iki aşamada anlaşıldı:
+
+1. İlk sürümde şiddet çarpanı **Normal sınıfa da** uygulanıyordu: normal bir
+   numuneyi 10 katına çıkarıp hâlâ "Normal" diye etiketlemek, doğrudan etiket
+   bozmaktır. Düzeltildi.
+2. Düzeltmeden **sonra da** zarar verdi. Çünkü şiddet çarpanı düşük şiddetli
+   arızaları Normal seviyesine indirip yüksek şiddetlileri uçuruyor; model
+   mutlak konsantrasyon seviyesinden öğrendiği her şeyi kaybediyor.
+
+Bu, sentetik veri üretiminde genel bir kural: **hedef, gerçek verinin
+histogramını taklit etmek değil, gerçek verideki KARAR PROBLEMİNİ taklit
+etmektir.**
+
+### Sonuç: `PRESET_FIELD_LIKE`
+
+Ölçülerek seçilen yapılandırma — başlangıç evresi + ölçüm gürültüsü,
+şiddet ve karışık arıza kapalı. Üç tohumla doğrulandı:
+
+| | F1-makro | Doğruluk | Aile doğruluğu |
+|---|---|---|---|
+| temel | 0.530 ±0.001 | 0.628 | 0.856 |
+| **saha benzeri** | **0.578 ±0.003** | **0.673** | **0.883** |
+
+Kazanç (+0.048) tohum değişkenliğinin (±0.003) çok üstünde.
+
+Kullanımı: `python -m app.ml.train --field-like`. Varsayılan kapalıdır;
+açıldığında **sentetik test doğruluğu düşer** (üretilen veri artık daha zor)
+ama gerçek dünyaya aktarım iyileşir. İki sayı farklı şeyleri ölçer,
+karıştırılmamalıdır.
+
 ## Sonuç ve öneri
 
 1. Demo/filo tarafı sentetik veriyle çalışmaya devam etmeli — orada amaç
