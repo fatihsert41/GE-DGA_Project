@@ -72,6 +72,8 @@ def init_db() -> None:
         # bozulmadan yaşamaya devam eder, künye sonradan doldurulabilir.
         for col, coltype in NAMEPLATE_COLUMNS:
             _ensure_column(conn, "transformers", col, coltype)
+
+        _init_oil_tests(conn)
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS measurements (
@@ -89,6 +91,15 @@ def init_db() -> None:
         )
 
 
+# Yağ kalitesi testi sütunları. DGA ölçümünden AYRI bir tablo:
+# farklı laboratuvar testleri, farklı sıklık, farklı birimler. Aynı tabloya
+# sıkıştırmak her satırın yarısını boş bırakırdı.
+OIL_TEST_FIELDS = [
+    "water_ppm", "bdv_kv", "acidity_mgkoh_g", "ift_mn_m",
+    "furan_2fal_mgl", "color_astm",
+]
+
+
 def _ensure_column(conn: sqlite3.Connection, table: str, column: str,
                    ddl: str) -> None:
     """Sütun yoksa ekler; varsa hiçbir şey yapmaz (yinelenebilir göç).
@@ -101,6 +112,33 @@ def _ensure_column(conn: sqlite3.Connection, table: str, column: str,
     cols = {r["name"] for r in conn.execute(f"PRAGMA table_info({table})")}
     if column not in cols:
         conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}")
+
+
+def _init_oil_tests(conn: sqlite3.Connection) -> None:
+    """Yağ kalitesi testleri tablosu (Faz 8.3)."""
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS oil_tests (
+            id             INTEGER PRIMARY KEY AUTOINCREMENT,
+            transformer_id TEXT NOT NULL,
+            sampled_at     TEXT NOT NULL,
+            water_ppm      REAL,
+            bdv_kv         REAL,
+            acidity_mgkoh_g REAL,
+            ift_mn_m       REAL,
+            furan_2fal_mgl REAL,
+            color_astm     REAL,
+            lab            TEXT,
+            notes          TEXT,
+            created_at     TEXT NOT NULL,
+            FOREIGN KEY (transformer_id) REFERENCES transformers(id)
+        )
+        """
+    )
+    conn.execute(
+        """CREATE INDEX IF NOT EXISTS idx_oil_tests_transformer
+           ON oil_tests(transformer_id, sampled_at DESC)"""
+    )
 
 
 def _now() -> str:
@@ -247,6 +285,64 @@ def get_measurements(transformer_id: str) -> List[Dict]:
         d["gases"] = json.loads(d.pop("gases_json"))
         out.append(d)
     return out
+
+
+# ---------------------------------------------------------------------------
+# Yağ kalitesi testleri (Faz 8.3)
+# ---------------------------------------------------------------------------
+
+def save_oil_test(transformer_id: str, values: Dict[str, object],
+                  sampled_at: Optional[str] = None,
+                  lab: Optional[str] = None,
+                  notes: Optional[str] = None) -> int:
+    """Bir yağ kalitesi testi kaydeder ve id'sini döndürür."""
+    known = {k: values.get(k) for k in OIL_TEST_FIELDS}
+    columns = ["transformer_id", "sampled_at", *OIL_TEST_FIELDS,
+               "lab", "notes", "created_at"]
+    row = [transformer_id, sampled_at or _now(),
+           *[known[k] for k in OIL_TEST_FIELDS], lab, notes, _now()]
+
+    with _connect() as conn:
+        cur = conn.execute(
+            f"""INSERT INTO oil_tests ({", ".join(columns)})
+                VALUES ({", ".join("?" for _ in columns)})""",
+            row,
+        )
+        return int(cur.lastrowid)
+
+
+def get_oil_tests(transformer_id: str) -> List[Dict]:
+    """Bir trafonun tüm yağ testleri, eskiden yeniye."""
+    with _connect() as conn:
+        rows = conn.execute(
+            """SELECT * FROM oil_tests WHERE transformer_id = ?
+               ORDER BY sampled_at ASC""",
+            (transformer_id,),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def latest_oil_tests() -> Dict[str, Dict]:
+    """Her trafonun EN SON yağ testi — filo görünümü için.
+
+    Faz 5.2'deki ``latest_measurements`` ile aynı desen: pencere fonksiyonu
+    ile trafo başına tek satır.
+    """
+    with _connect() as conn:
+        rows = conn.execute(
+            """
+            WITH ranked AS (
+                SELECT o.*,
+                       ROW_NUMBER() OVER (
+                           PARTITION BY o.transformer_id
+                           ORDER BY o.sampled_at DESC, o.id DESC
+                       ) AS rn
+                FROM oil_tests o
+            )
+            SELECT * FROM ranked WHERE rn = 1
+            """
+        ).fetchall()
+    return {r["transformer_id"]: dict(r) for r in rows}
 
 
 def recent_measurements(limit: int = 20) -> List[Dict]:

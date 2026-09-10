@@ -10,7 +10,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from . import database
 from .ml import predictor
-from .routers import compare, explain, fleet, predict, transformers, trend
+from .routers import (compare, explain, fleet, oil, predict,
+                      transformers, trend)
 
 app = FastAPI(
     title="TransformerAI - DGA Fault Prediction API",
@@ -35,6 +36,7 @@ app.include_router(explain.router)
 app.include_router(trend.router)
 app.include_router(transformers.router)
 app.include_router(fleet.router)
+app.include_router(oil.router)
 
 
 @app.on_event("startup")

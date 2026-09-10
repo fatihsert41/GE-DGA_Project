@@ -18,6 +18,7 @@ from ..core import assets, nameplate
 from ..core.gases import (FAULT_FAMILY, FAULT_GROUP, FAULT_LABELS_TR,
                           SEVERE_FAULTS, total_combustible)
 from ..core.risk import RISK_LEVELS_TR, RISK_ORDER
+from . import oil as oil_service
 from .diagnosis import CONFIDENCE_THRESHOLD
 
 
@@ -119,12 +120,20 @@ def _severity_key(card: Dict) -> tuple:
             card["id"])
 
 
-def build_overview(rows: List[Dict]) -> Dict:
+def build_overview(rows: List[Dict],
+                   oil_tests: Optional[Dict[str, Dict]] = None) -> Dict:
     """Saf hesaplama: DB satırlarını özet + kart listesine çevirir.
 
     Veritabanına dokunmaz, bu yüzden sahte satırlarla test edilebilir.
     """
-    cards: List[Dict] = [_to_card(r) for r in rows]
+    oil_tests = oil_tests or {}
+    cards: List[Dict] = []
+    for r in rows:
+        card = _to_card(r)
+        # Yağ özeti karta eklenir; testi olmayan trafo için güvenli boş değer.
+        card.update(oil_service.oil_card(card["id"],
+                                         oil_tests.get(card["id"])))
+        cards.append(card)
     cards.sort(key=_severity_key)
 
     measured = [c for c in cards if c["has_data"]]
@@ -169,4 +178,5 @@ def build_overview(rows: List[Dict]) -> Dict:
 
 def overview() -> Dict:
     """I/O katmanı: satırları DB'den çeker, hesabı build_overview'a bırakır."""
-    return build_overview(database.latest_measurements())
+    return build_overview(database.latest_measurements(),
+                          database.latest_oil_tests())
