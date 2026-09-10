@@ -252,7 +252,19 @@ Testler: `cd backend; pytest -q` (18 test).
     (gövde boşsa otomatik seçer, `technicianId` verilirse insanın kararı
     üstündür — kapasiteyi aşarsa `warning` alanıyla GÖRÜNÜR kılınır).
     Migration: `TeknisyenVeAtama` (veri kaybı uyarısı verdi: AssignedTo silindi).
-  - ⏭️ **SIRADAKİ: 7.7** React arayüzünde bakım/planlama ekranı.
+  - ✅ 7.7 Arayüz TAMAM. `vite.config.js` artık İKİ servise yönlendiriyor:
+    `/api` → Python :8000, `/maint` → .NET :5080 (tarayıcı ikisini de
+    localhost:5173'ten görür, CORS derdi yok).
+    `api.js` içinde ayrı `maintenance` istemcisi (ayrı olması bilinçli:
+    .NET kapalıyken ML tarafı çalışmaya devam etmeli).
+    `components/MaintenancePanel.jsx`: KPI'lar, öneri paneli (+uygula
+    düğmesi), iş emri tablosu (ata / başlat / bitir), teknisyen yük tablosu.
+    `App.jsx`'e "Bakım Planlama" sekmesi.
+    ⚠ Öğrenilen tuzak: `Include` olmadan `order.Technician` null geliyordu
+    ve arayüz "atanmadı" yazıyordu — ilişkiyi kurmak yetmiyor, o sorguda
+    İSTEMEK gerekiyor. Ayrıca `Technician.WorkOrders` üzerine `[JsonIgnore]`
+    şart: yoksa iş emri→teknisyen→iş emri sonsuz serileştirme döngüsü.
+  - ⏭️ **SIRADAKİ: 7.8** Testler (xUnit).
   ⚠ Kurallar: Python servisi DEĞİŞTİRİLMEZ, .NET onu dışarıdan tüketir.
   İş emirleri .NET'in KENDİ veritabanında durur (ortak DB mikroservis
   mimarisinin en yaygın hatası). Veritabanı 7.3'ten önce eklenmez.

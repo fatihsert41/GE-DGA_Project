@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace TransformerAI.Maintenance.Api.Models;
 
 /// <summary>Teknisyenin uzmanlık alanı.</summary>
@@ -47,7 +49,12 @@ public class Technician
     ///
     /// Python tarafında bunu elle yapardık: ayrı bir sorgu çalıştırıp
     /// sonuçları birleştirmek. Burada ilişki modelin parçası.
+    ///
+    /// [JsonIgnore] ŞART: iş emri JSON'a çevrilirken içindeki teknisyeni de
+    /// yazar, teknisyen de iş emirlerini yazar, o iş emirleri de teknisyeni...
+    /// Sonsuz döngü. Bu özellik SORGU için var, cevap gövdesi için değil.
     /// </remarks>
+    [JsonIgnore]
     public List<WorkOrder> WorkOrders { get; set; } = new();
 }
 

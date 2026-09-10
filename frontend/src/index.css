@@ -524,3 +524,34 @@ button.tcard:hover .tcard-go { color: var(--accent); }
 /* İkinci filtre satırı ilkinden ayrılsın diye biraz daha silik */
 .chip.alt { font-size: 0.78rem; padding: 6px 12px; }
 .chip.alt:not(.active) { color: var(--muted); }
+
+/* ============================================================
+   Bakım planlama (Faz 7.7)
+   ============================================================ */
+
+/* İş emri durumu bir TEHLİKE seviyesi değil, iş akışı aşamasıdır.
+   Bu yüzden risk rampasının kehribar/pas tonları KULLANILMIYOR —
+   karıştırmak "tamamlandı = düşük risk" gibi yanlış okuma yaratırdı. */
+.wo-badge {
+  display: inline-block; font-size: 0.72rem; font-weight: 600;
+  padding: 3px 10px; border-radius: 999px; white-space: nowrap;
+  border: 1px solid var(--rule-strong); color: var(--ink-soft);
+  background: var(--surface-2);
+}
+.wo-planned { border-style: dashed; color: var(--muted); }
+.wo-progress {
+  background: var(--ink); border-color: var(--ink); color: var(--surface);
+}
+.wo-done { border-color: var(--s2); color: var(--s2); background: transparent; }
+.wo-cancelled { opacity: 0.45; text-decoration: line-through; }
+
+/* Geniş tablo küçük ekranda sayfayı yatay kaydırmasın: kendi içinde kaysın. */
+.table-scroll { overflow-x: auto; }
+.wo-table { min-width: 760px; }
+.wo-table td { vertical-align: top; }
+.wo-table .mono { font-family: var(--mono); font-size: 0.8rem; }
+
+.row-overdue td { background: rgba(160, 92, 28, 0.06); }
+
+.wo-actions { white-space: nowrap; }
+.wo-actions .chip { padding: 4px 10px; font-size: 0.75rem; margin-right: 4px; }

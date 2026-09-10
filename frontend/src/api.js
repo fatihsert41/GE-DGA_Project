@@ -6,6 +6,12 @@ const baseURL = import.meta.env.VITE_API_BASE || '/api'
 
 const client = axios.create({ baseURL, timeout: 30000 })
 
+// .NET bakım servisi ayrı bir istemci. Ayrı olmasının sebebi sadece adres
+// değil: bu servis kapalıyken ML tarafı çalışmaya devam etmeli, o yüzden
+// hataları da ayrı ele alıyoruz.
+const maintBase = import.meta.env.VITE_MAINT_BASE || '/maint'
+const maint = axios.create({ baseURL: maintBase, timeout: 30000 })
+
 export const api = {
   health: () => client.get('/health').then((r) => r.data),
   predict: (payload) => client.post('/predict', payload).then((r) => r.data),
@@ -23,6 +29,23 @@ export const api = {
     client.get(`/trend/${id}`, { params: { horizon } }).then((r) => r.data),
   measurements: (id) =>
     client.get(`/transformers/${id}/measurements`).then((r) => r.data),
+
+  // --- Bakım planlama servisi (.NET) ---------------------------------------
+  maintenance: {
+    health: () => maint.get('/health').then((r) => r.data),
+    workOrders: (params = {}) =>
+      maint.get('/workorders', { params }).then((r) => r.data),
+    summary: () => maint.get('/workorders/summary').then((r) => r.data),
+    suggestions: () => maint.get('/workorders/suggestions').then((r) => r.data),
+    applySuggestions: () =>
+      maint.post('/workorders/suggestions/apply').then((r) => r.data),
+    technicians: () => maint.get('/technicians').then((r) => r.data),
+    assign: (id, technicianId = null) =>
+      maint.post(`/workorders/${id}/assign`, { technicianId })
+        .then((r) => r.data),
+    setStatus: (id, status) =>
+      maint.patch(`/workorders/${id}/status`, { status }).then((r) => r.data),
+  },
 }
 
 export default api
