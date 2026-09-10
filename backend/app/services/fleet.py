@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
 from .. import database
-from ..core import assets
+from ..core import assets, nameplate
 from ..core.gases import (FAULT_FAMILY, FAULT_GROUP, FAULT_LABELS_TR,
                           SEVERE_FAULTS, total_combustible)
 from ..core.risk import RISK_LEVELS_TR, RISK_ORDER
@@ -52,6 +52,16 @@ def _to_card(row: Dict) -> Dict:
         "asset_class_name": cls["name_tr"],
         "asset_class_active": cls["active"],
         "mva": row.get("mva"),
+        # Künye özeti (Faz 8.1). Tam künye /transformers/{id} adresinde;
+        # kartta yalnızca bir bakışta gereken alanlar var.
+        "manufacturer": row.get("manufacturer"),
+        "voltage": (f"{row['hv_kv']:g}/{row['lv_kv']:g} kV"
+                    if row.get("hv_kv") and row.get("lv_kv") else None),
+        "cooling": row.get("cooling"),
+        "age_years": nameplate.age_years({
+            "commissioned_at": row.get("commissioned_at"),
+            "year_made": row.get("year_made"),
+        }),
         # Öncelik = IEEE kondisyonu × varlık ağırlığı. Açıklanabilir olsun
         # diye bileşenleri de gönderiliyor; arayüz formülü gösterebiliyor.
         "priority": assets.priority_score(condition, cls["code"]),

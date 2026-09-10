@@ -13,8 +13,32 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from .core import assets
+from .core import assets, nameplate
 from .core.gases import GASES
+
+# Künye sütunları: (ad, SQLite tipi). Tek yerde tutuluyor ki tablo
+# oluşturma, göç ve okuma hep aynı listeye baksın.
+NAMEPLATE_COLUMNS = [
+    ("manufacturer", "TEXT"),
+    ("serial_no", "TEXT"),
+    ("year_made", "INTEGER"),
+    ("commissioned_at", "TEXT"),
+    ("hv_kv", "REAL"),
+    ("lv_kv", "REAL"),
+    ("vector_group", "TEXT"),
+    ("cooling", "TEXT"),
+    ("oil_volume_l", "REAL"),
+    ("winding_material", "TEXT"),
+    ("insulation_type", "TEXT"),
+    ("tap_changer_type", "TEXT"),
+    ("tap_min", "INTEGER"),
+    ("tap_max", "INTEGER"),
+    ("tap_step_percent", "REAL"),
+    ("rated_hotspot_c", "REAL"),
+    ("rated_top_oil_c", "REAL"),
+    ("notes", "TEXT"),
+]
+NAMEPLATE_FIELDS = [name for name, _ in NAMEPLATE_COLUMNS]
 
 DB_PATH = Path(__file__).resolve().parents[1] / "dga.db"
 
@@ -44,6 +68,10 @@ def init_db() -> None:
         _ensure_column(conn, "transformers", "asset_class",
                        "TEXT NOT NULL DEFAULT 'MPT'")
         _ensure_column(conn, "transformers", "mva", "REAL")
+        # Künye alanları (Faz 8.1). Hepsi opsiyonel: eski kayıtlar
+        # bozulmadan yaşamaya devam eder, künye sonradan doldurulabilir.
+        for col, coltype in NAMEPLATE_COLUMNS:
+            _ensure_column(conn, "transformers", col, coltype)
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS measurements (
@@ -81,20 +109,74 @@ def _now() -> str:
 
 def upsert_transformer(tid: str, name: str, location: str = "",
                        asset_class: str = assets.DEFAULT_CLASS,
-                       mva: Optional[float] = None) -> None:
-    # Bilinmeyen sınıf kodu sessizce varsayılana düşer (assets.get).
+                       mva: Optional[float] = None,
+                       **np_fields: object) -> None:
+    """Trafoyu ekler veya günceller; künye alanları isteğe bağlıdır.
+
+    ``**np_fields`` ile künye alanları geçilebilir (manufacturer, hv_kv ...).
+    Bilinmeyen alan adları sessizce yok sayılır — dışarıdan gelen fazladan
+    anahtar yüzünden kayıt kaybetmek istemeyiz.
+    """
     code = str(assets.get(asset_class)["code"])
+
+    # Yalnızca tanıdığımız künye alanlarını al.
+    np_values = {k: np_fields.get(k) for k in NAMEPLATE_FIELDS
+                 if k in np_fields}
+
+    columns = ["id", "name", "location", "asset_class", "mva", "created_at"]
+    values = [tid, name, location, code, mva, _now()]
+    for key, value in np_values.items():
+        columns.append(key)
+        values.append(value)
+
+    placeholders = ", ".join("?" for _ in columns)
+    # created_at güncellemede korunur: kaydın ilk oluşturulma zamanıdır.
+    updates = ", ".join(f"{c}=excluded.{c}" for c in columns
+                        if c not in ("id", "created_at"))
+
     with _connect() as conn:
         conn.execute(
-            """INSERT INTO transformers
-                   (id, name, location, asset_class, mva, created_at)
-               VALUES (?, ?, ?, ?, ?, ?)
-               ON CONFLICT(id) DO UPDATE SET name=excluded.name,
-                                             location=excluded.location,
-                                             asset_class=excluded.asset_class,
-                                             mva=excluded.mva""",
-            (tid, name, location, code, mva, _now()),
+            f"""INSERT INTO transformers ({", ".join(columns)})
+                VALUES ({placeholders})
+                ON CONFLICT(id) DO UPDATE SET {updates}""",
+            values,
         )
+
+
+def update_nameplate(tid: str, fields: Dict[str, object]) -> Optional[Dict]:
+    """Var olan bir trafonun künyesini günceller.
+
+    Sadece GÖNDERİLEN alanları değiştirir; gönderilmeyenler olduğu gibi
+    kalır. Tam kaydı üzerine yazsaydık, arayüzde bir alanı boş bırakmak
+    veritabanındaki değeri silerdi.
+    """
+    known = {k: v for k, v in fields.items() if k in NAMEPLATE_FIELDS}
+    if not known:
+        return get_transformer(tid)
+
+    assignments = ", ".join(f"{k}=?" for k in known)
+    with _connect() as conn:
+        cur = conn.execute(
+            f"UPDATE transformers SET {assignments} WHERE id = ?",
+            [*known.values(), tid],
+        )
+        if cur.rowcount == 0:
+            return None
+    return get_transformer(tid)
+
+
+def get_transformer(tid: str) -> Optional[Dict]:
+    """Tek trafo: künyesi ve türetilmiş büyüklükleriyle."""
+    with _connect() as conn:
+        row = conn.execute("SELECT * FROM transformers WHERE id = ?",
+                           (tid,)).fetchone()
+    if row is None:
+        return None
+
+    record = dict(row)
+    record["nameplate"] = {k: record.get(k) for k in NAMEPLATE_FIELDS}
+    record["derived"] = nameplate.summary(record["nameplate"])
+    return record
 
 
 def list_transformers() -> List[Dict]:
@@ -177,6 +259,12 @@ def latest_measurements() -> List[Dict]:
                    t.location AS location,
                    t.asset_class AS asset_class,
                    t.mva AS mva,
+                   t.manufacturer AS manufacturer,
+                   t.hv_kv AS hv_kv,
+                   t.lv_kv AS lv_kv,
+                   t.cooling AS cooling,
+                   t.commissioned_at AS commissioned_at,
+                   t.year_made AS year_made,
                    r.id       AS measurement_id,
                    r.sampled_at,
                    r.gases_json,

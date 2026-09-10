@@ -38,7 +38,38 @@ class TrendRequest(BaseModel):
     horizon: int = Field(6, ge=1, le=36)
 
 
+class NameplateIn(BaseModel):
+    """Trafo künyesi — hepsi opsiyonel, kısmi güncelleme yapılabilir.
+
+    Alanların hiçbiri zorunlu değil: künye çoğu zaman parça parça girilir
+    (saha ekibi seri numarasını sonra bulur). Gönderilmeyen alan
+    değiştirilmez, silinmez.
+    """
+    manufacturer: Optional[str] = Field(None, max_length=100)
+    serial_no: Optional[str] = Field(None, max_length=50)
+    year_made: Optional[int] = Field(None, ge=1900, le=2100)
+    commissioned_at: Optional[str] = Field(
+        None, description="YYYY-AA-GG biçiminde devreye alma tarihi")
+    hv_kv: Optional[float] = Field(None, gt=0, description="YG gerilimi (kV)")
+    lv_kv: Optional[float] = Field(None, gt=0, description="AG gerilimi (kV)")
+    vector_group: Optional[str] = Field(None, description="Ör. YNd11")
+    cooling: Optional[str] = Field(None, description="ONAN/ONAF/OFAF/ODAF")
+    oil_volume_l: Optional[float] = Field(None, gt=0)
+    winding_material: Optional[str] = Field(None, description="Cu veya Al")
+    insulation_type: Optional[str] = Field(None, description="kraft veya tuk")
+    tap_changer_type: Optional[str] = Field(None, description="OLTC/DETC/none")
+    tap_min: Optional[int] = None
+    tap_max: Optional[int] = None
+    tap_step_percent: Optional[float] = Field(None, gt=0)
+    rated_hotspot_c: Optional[float] = Field(None, gt=0)
+    rated_top_oil_c: Optional[float] = Field(None, gt=0)
+    notes: Optional[str] = Field(None, max_length=500)
+
+
 class TransformerCreate(BaseModel):
     id: str
     name: str
     location: str = ""
+    asset_class: str = "MPT"
+    mva: Optional[float] = Field(None, gt=0)
+    nameplate: Optional[NameplateIn] = None

@@ -2,8 +2,12 @@
 
 Dış veri yok: her trafonun geçmişini sentetik "yaşlanma serisi"
 üretecinden oluşturur, her örneğe tam tanıyı (ML + klasik + risk)
-uygular ve SQLite'a kaydeder. Filo dashboard'unun göstereceği veriyi
-üretmek için kullanılır.
+uygular ve SQLite'a kaydeder.
+
+⚠ Buradaki künye bilgileri (üretici, seri no, tarih) TAMAMEN KURGUSALDIR.
+Gerçek hiçbir trafoya ait değildir; yalnızca alanların nasıl doldurulacağını
+ve hesapların nasıl çalıştığını göstermek için üretilmiştir. Gerilim
+seviyeleri Türkiye şebekesine uygun seçilmiştir (400/154/34.5/6.3 kV).
 
 Çalıştırma (backend/ klasöründen):  python -m app.ml.seed
 """
@@ -18,37 +22,144 @@ from ..core.gases import GASES
 from ..services.diagnosis import diagnose
 from .synth import make_aging_series
 
-# (id, ad, konum, sınıf, MVA, senaryo, ay sayısı, kaç ay saklanacak, gecikme)
+# Demo filosu. Sözlük kullanılıyor çünkü alan sayısı arttıkça konumsal
+# tuple okunmaz hale geliyordu ("bu 12 neydi?"). Sözlükte her değer
+# anahtarıyla birlikte duruyor.
 #
-# Son sütun (gecikme) tüm seriyi geçmişe kaydırır: "bu trafodan uzun süredir
-# numune alınmamış" demektir. Gerçek filolarda ihmal edilen varlıklar olur ve
-# sorunlar tam oralarda saklanır — TR-06 ve TR-09 bunu temsil ediyor.
-#
-# Sınıflar GE Vernova'nın hattına göre: LPT (Large) ve MPT (Medium) üretimde,
-# SPT (Small) hattı kalktı ama saha üniteleri çalışmaya devam ediyor — TR-09
-# bilinçli olarak öyle bir eski ünite.
-#
-# Dağılım öncelik mantığını GÖRÜNÜR kılacak şekilde seçildi: TR-03 yüksek
-# riskli bir LPT (öncelik 3.0), TR-07 ise kritik riskli bir MPT (2.8). Yani
-# ham riske göre TR-07 önde olurdu; varlık ağırlığı devreye girince TR-03
-# öne geçiyor. Sahada da böyle davranılır.
-# "Normal" senaryosu = sağlıklı kalan trafo; diğerleri o arızaya doğru kötüleşir.
-#
-# Son sütun (keep) serinin YALNIZCA ilk N ayını kaydeder: "yeni bozulmaya
-# başlamış, imzası henüz oturmamış" trafoyu temsil eder. TR-09 bunun için
-# var — model orada "Normal" diyor ama güveni düşük, yani uzman incelemesi
-# uyarısı tetikleniyor. Gerçek bir filoda böyle belirsiz vakalar hep olur;
-# demo filosunda da olmalı ki sistemin belirsizliği nasıl ele aldığı görünsün.
+# Senaryo alanları:
+#   scenario : hangi arızaya doğru kötüleşiyor ("Normal" = sağlıklı kalıyor)
+#   months   : üretilecek ölçüm sayısı
+#   keep     : serinin yalnızca ilk N ayını sakla (erken evre trafosu)
+#   lag      : tüm seriyi N ay geçmişe kaydır (numunesi gecikmiş trafo)
 FLEET = [
-    ("TR-01", "Ana Merkez Trafosu", "İstanbul-Avrupa",  "LPT", 250.0, "D2", 12, None, 0),
-    ("TR-02", "Yük Merkezi 2",       "İstanbul-Anadolu", "LPT", 150.0, "Normal", 12, None, 0),
-    ("TR-03", "OSB Besleme",         "Kocaeli",          "LPT", 180.0, "T3", 10, None, 0),
-    ("TR-04", "Şehir Dağıtım",       "Bursa",            "MPT",  50.0, "T1", 12, None, 0),
-    ("TR-05", "Sahil GIS",           "İzmir",            "MPT",  80.0, "Normal", 12, None, 0),
-    ("TR-06", "Demiryolu Besleme",   "Ankara",           "MPT",  25.0, "PD", 8, None, 14),
-    ("TR-07", "Sanayi Fider",        "Gebze",            "MPT",  40.0, "D1", 11, None, 0),
-    ("TR-08", "Rüzgar Bağlantı",     "Çanakkale",        "LPT", 120.0, "T2", 12, None, 0),
-    ("TR-09", "Liman Besleme",       "Mersin",           "SPT",   8.0, "D1", 12, 5, 26),
+    {
+        "id": "TR-01", "name": "Ana Merkez Trafosu",
+        "location": "İstanbul-Avrupa", "asset_class": "LPT", "mva": 250.0,
+        "scenario": "D2", "months": 12,
+        "nameplate": {
+            "manufacturer": "GE Vernova", "serial_no": "GV-250-0842",
+            "year_made": 2008, "commissioned_at": "2009-04-17",
+            "hv_kv": 400.0, "lv_kv": 154.0, "vector_group": "YNyn0",
+            "cooling": "OFAF", "oil_volume_l": 65000.0,
+            "winding_material": "Cu", "insulation_type": "tuk",
+            "tap_changer_type": "OLTC", "tap_min": -8, "tap_max": 8,
+            "tap_step_percent": 1.25,
+            "notes": "Şebeke bağlantı noktası; yedeği yok.",
+        },
+    },
+    {
+        "id": "TR-02", "name": "Yük Merkezi 2",
+        "location": "İstanbul-Anadolu", "asset_class": "LPT", "mva": 150.0,
+        "scenario": "Normal", "months": 12,
+        "nameplate": {
+            "manufacturer": "Siemens Energy", "serial_no": "SE-150-3311",
+            "year_made": 2015, "commissioned_at": "2015-11-02",
+            "hv_kv": 154.0, "lv_kv": 34.5, "vector_group": "YNd11",
+            "cooling": "ONAF", "oil_volume_l": 42000.0,
+            "winding_material": "Cu", "insulation_type": "tuk",
+            "tap_changer_type": "OLTC", "tap_min": -9, "tap_max": 9,
+            "tap_step_percent": 1.25,
+        },
+    },
+    {
+        "id": "TR-03", "name": "OSB Besleme", "location": "Kocaeli",
+        "asset_class": "LPT", "mva": 180.0, "scenario": "T3", "months": 10,
+        "nameplate": {
+            "manufacturer": "BEST A.Ş.", "serial_no": "BST-180-1074",
+            "year_made": 2012, "commissioned_at": "2012-08-30",
+            "hv_kv": 154.0, "lv_kv": 34.5, "vector_group": "YNd11",
+            "cooling": "OFAF", "oil_volume_l": 48000.0,
+            "winding_material": "Cu", "insulation_type": "tuk",
+            "tap_changer_type": "OLTC", "tap_min": -9, "tap_max": 9,
+            "tap_step_percent": 1.25,
+            "notes": "Organize sanayi bölgesi, yüksek ve değişken yük.",
+        },
+    },
+    {
+        "id": "TR-04", "name": "Şehir Dağıtım", "location": "Bursa",
+        "asset_class": "MPT", "mva": 50.0, "scenario": "T1", "months": 12,
+        "nameplate": {
+            "manufacturer": "BEST A.Ş.", "serial_no": "BST-050-0619",
+            "year_made": 2006, "commissioned_at": "2006-06-12",
+            "hv_kv": 154.0, "lv_kv": 34.5, "vector_group": "YNd11",
+            "cooling": "ONAF", "oil_volume_l": 22000.0,
+            "winding_material": "Cu", "insulation_type": "kraft",
+            "tap_changer_type": "OLTC", "tap_min": -8, "tap_max": 8,
+            "tap_step_percent": 1.25,
+        },
+    },
+    {
+        "id": "TR-05", "name": "Sahil GIS", "location": "İzmir",
+        "asset_class": "MPT", "mva": 80.0, "scenario": "Normal", "months": 12,
+        "nameplate": {
+            "manufacturer": "Hitachi Energy", "serial_no": "HE-080-7725",
+            "year_made": 2018, "commissioned_at": "2019-01-21",
+            "hv_kv": 154.0, "lv_kv": 34.5, "vector_group": "YNd11",
+            "cooling": "ONAF", "oil_volume_l": 28000.0,
+            "winding_material": "Cu", "insulation_type": "tuk",
+            "tap_changer_type": "OLTC", "tap_min": -9, "tap_max": 9,
+            "tap_step_percent": 1.25,
+            "notes": "Deniz kenarı; tuzlu nem etkisi izlenmeli.",
+        },
+    },
+    {
+        "id": "TR-06", "name": "Demiryolu Besleme", "location": "Ankara",
+        "asset_class": "MPT", "mva": 25.0, "scenario": "PD", "months": 8,
+        "lag": 14,
+        "nameplate": {
+            "manufacturer": "BEST A.Ş.", "serial_no": "BST-025-0288",
+            "year_made": 2003, "commissioned_at": "2003-09-08",
+            "hv_kv": 154.0, "lv_kv": 34.5, "vector_group": "YNd11",
+            "cooling": "ONAN", "oil_volume_l": 14000.0,
+            "winding_material": "Al", "insulation_type": "kraft",
+            "tap_changer_type": "DETC", "tap_min": -2, "tap_max": 2,
+            "tap_step_percent": 2.5,
+            "notes": "Darbeli yük profili.",
+        },
+    },
+    {
+        "id": "TR-07", "name": "Sanayi Fider", "location": "Gebze",
+        "asset_class": "MPT", "mva": 40.0, "scenario": "D1", "months": 11,
+        "nameplate": {
+            "manufacturer": "ABB", "serial_no": "AB-040-4460",
+            "year_made": 1998, "commissioned_at": "1998-10-05",
+            "hv_kv": 154.0, "lv_kv": 34.5, "vector_group": "YNd11",
+            "cooling": "ONAN", "oil_volume_l": 18000.0,
+            "winding_material": "Cu", "insulation_type": "kraft",
+            "tap_changer_type": "OLTC", "tap_min": -8, "tap_max": 8,
+            "tap_step_percent": 1.25,
+            "notes": "Filonun en eski ünitelerinden.",
+        },
+    },
+    {
+        "id": "TR-08", "name": "Rüzgar Bağlantı", "location": "Çanakkale",
+        "asset_class": "LPT", "mva": 120.0, "scenario": "T2", "months": 12,
+        "nameplate": {
+            "manufacturer": "GE Vernova", "serial_no": "GV-120-9013",
+            "year_made": 2020, "commissioned_at": "2020-07-14",
+            "hv_kv": 154.0, "lv_kv": 34.5, "vector_group": "YNd11",
+            "cooling": "ONAF", "oil_volume_l": 38000.0,
+            "winding_material": "Cu", "insulation_type": "tuk",
+            "tap_changer_type": "OLTC", "tap_min": -9, "tap_max": 9,
+            "tap_step_percent": 1.25,
+            "notes": "RES bağlantısı; değişken üretim, sık yük değişimi.",
+        },
+    },
+    {
+        "id": "TR-09", "name": "Liman Besleme", "location": "Mersin",
+        "asset_class": "SPT", "mva": 8.0, "scenario": "D1", "months": 12,
+        "keep": 5, "lag": 26,
+        "nameplate": {
+            "manufacturer": "BEST A.Ş.", "serial_no": "BST-008-0132",
+            "year_made": 1996, "commissioned_at": "1996-05-19",
+            "hv_kv": 34.5, "lv_kv": 6.3, "vector_group": "Dyn11",
+            "cooling": "ONAN", "oil_volume_l": 6500.0,
+            "winding_material": "Al", "insulation_type": "kraft",
+            "tap_changer_type": "DETC", "tap_min": -2, "tap_max": 2,
+            "tap_step_percent": 2.5,
+            "notes": "SPT hattı üretimden kalktı; yedek parça temini zor.",
+        },
+    },
 ]
 
 
@@ -63,35 +174,52 @@ def _reset() -> None:
 def seed() -> None:
     _reset()
     total = 0
-    for idx, (tid, name, location, cls, mva, scenario, months,
-              keep, lag) in enumerate(FLEET):
-        database.upsert_transformer(tid, name, location,
-                                    asset_class=cls, mva=mva)
+
+    for idx, unit in enumerate(FLEET):
+        np_fields = unit.get("nameplate", {})
+        database.upsert_transformer(
+            unit["id"], unit["name"], unit["location"],
+            asset_class=unit["asset_class"], mva=unit["mva"],
+            **np_fields,
+        )
+
+        scenario = unit["scenario"]
+        months = unit["months"]
+        keep = unit.get("keep")
+        lag = unit.get("lag", 0)
 
         # Bu trafonun aylık gaz geçmişini üret (senaryosuna doğru kötüleşir).
-        df = make_aging_series(fault_class=scenario, months=months, seed=idx + 1)
+        df = make_aging_series(fault_class=scenario, months=months,
+                               seed=idx + 1)
         if keep is not None:
             df = df.head(keep)      # erken evre: seriyi baştan kes
             months = keep
 
         # İlk ölçüm 'months' ay önce, sonuncusu bugün olacak şekilde tarihle.
-        # 'lag' varsa tüm seri o kadar ay daha geriye kayar: son numunenin
-        # üstünden 'lag' ay geçmiş olur.
+        # 'lag' varsa tüm seri o kadar ay daha geriye kayar.
         start = datetime.now(timezone.utc) - timedelta(
             days=30 * (months - 1 + lag))
+
         for k, (_, row) in enumerate(df.iterrows()):
             gases = {g: float(row[g]) for g in GASES}
             result = diagnose(gases)               # ML + klasik + risk
             sampled_at = (start + timedelta(days=30 * k)).isoformat()
-            database.save_measurement(tid, gases, result, sampled_at=sampled_at)
+            database.save_measurement(unit["id"], gases, result,
+                                      sampled_at=sampled_at)
             total += 1
 
         last = diagnose({g: float(df.iloc[-1][g]) for g in GASES})
+        record = database.get_transformer(unit["id"]) or {}
+        age = (record.get("derived") or {}).get("age_years")
+
         flag = " ⚠ uzman incelemesi" if last["review"]["needed"] else ""
-        oncelik = assets.priority_score(last["risk"]["condition"], cls)
         gecikme = f" ⏰ {lag} ay geçti" if lag else ""
-        print(f"  {tid} {name:<22} {cls} {mva:>6.0f}MVA {scenario:<6} "
-              f"tanı={last['prediction']:<6} risk={last['risk']['level_tr']:<7} "
+        oncelik = assets.priority_score(last["risk"]["condition"],
+                                        unit["asset_class"])
+        print(f"  {unit['id']} {unit['name']:<22} {unit['asset_class']} "
+              f"{unit['mva']:>6.0f}MVA {str(age):>5} yaş  "
+              f"tanı={last['prediction']:<6} "
+              f"risk={last['risk']['level_tr']:<7} "
               f"öncelik={oncelik:>4.2f}{flag}{gecikme}")
 
     print(f"\nToplam {len(FLEET)} trafo, {total} ölçüm kaydedildi.")
