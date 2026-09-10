@@ -145,10 +145,19 @@ Testler: `cd backend; pytest -q` (18 test).
     silinmeden yeni sütunları alıyor. Demo filo 9 trafo; TR-06 ve TR-09
     kasten "numunesi gecikmiş" (ihmal edilen varlık senaryosu).
     Testler: `tests/test_assets.py` (toplam 43 test).
-  - ⏭️ **SIRADAKİ:** `synth.py`'yi gerçekçileştirip A senaryosunu
-    iyileştirmek (gürültü, sınıf örtüşmesi) — sentetik veri tercihini
-    savunmanın tek yolu. Not: sentetik üreteç şu an belirsiz vaka HİÇ
-    üretemiyor (Faz 6.5'te fark edildi), bu da alan kaymasının kanıtı.
+  - ✅ 6.7 Sentetik üreteç gerçekçileştirildi. `synth.py`'ye beş bileşen
+    eklendi (şiddet, başlangıç evresi, karışık arıza, ölçüm/etiket
+    gürültüsü), her biri AYRI ayarlanabilir ve tek tek ölçüldü.
+    Sonuç: yalnızca **başlangıç evresi + ölçüm gürültüsü** işe yarıyor
+    (`PRESET_FIELD_LIKE`); sıfır atış F1 **0.530 → 0.578** (3 tohum).
+    ⚠ En önemli ders: **şiddet** bileşeni dağılımı gerçeğe en çok
+    yaklaştıran şeydi ama aktarıma EN ÇOK ZARAR verdi (−0.096). Yani
+    "gerçek verinin histogramını taklit etmek" ile "karar problemini
+    taklit etmek" aynı şey değil.
+    `train.py --field-like` ile üretim modeli bu profille eğitilebilir
+    (varsayılan KAPALI; açılınca sentetik test doğruluğu düşer, gerçek
+    dünyaya aktarım artar — iki sayı farklı şeyleri ölçer).
+  - 🏁 **Faz 6 BİTTİ.**
 - ⏳ **Faz 7 (.NET) — kullanıcı .NET bilmiyor, çok temelden ve yavaş anlatılacak.**
 
 ### Görsel dil (2026-09-09'da yenilendi)
