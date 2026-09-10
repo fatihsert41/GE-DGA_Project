@@ -1,5 +1,29 @@
 import { FAULT_LABELS } from '../constants'
 
+/* Uzman incelemesi şeridi (Faz 6.5).
+ * Sistem sadece tahmin etmiyor; ne zaman kendi kararına güvenmediğini de
+ * söylüyor. Eşik gerçek veriyle ölçüldü: güven 0.90'ın altındaki
+ * tahminlerin doğruluğu %54, üstündekilerin %91. */
+function ReviewBanner({ review }) {
+  if (!review) return null
+  if (!review.needed && !review.severe) return null
+
+  const severeOnly = review.severe && !review.needed
+  return (
+    <div className={`review-band ${severeOnly ? 'severe' : 'unsure'}`}>
+      <span className="review-title">
+        {severeOnly ? 'Ciddi arıza sınıfı' : 'Uzman incelemesi öneriliyor'}
+      </span>
+      <ul>
+        {review.severe && (
+          <li>Yüksek enerjili ark veya {'>'}700 °C ısınma — doğrulanmalı.</li>
+        )}
+        {review.reasons.map((r) => <li key={r}>{r}</li>)}
+      </ul>
+    </div>
+  )
+}
+
 export default function DiagnosisResult({ result }) {
   if (!result) return null
   const risk = result.risk || {}
@@ -8,8 +32,11 @@ export default function DiagnosisResult({ result }) {
   return (
     <div className="panel">
       <h2>Tanı Sonucu</h2>
+      <ReviewBanner review={result.review} />
       <div className="result-head">
         <div>
+          {/* Aile önce: bakım kararı bu seviyede verilir, alt tip ikincil. */}
+          <div className="family-line">{result.prediction_family}</div>
           <div className="big-verdict">
             {FAULT_LABELS[result.prediction] || result.prediction}
           </div>

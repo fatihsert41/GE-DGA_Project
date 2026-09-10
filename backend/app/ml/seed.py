@@ -17,17 +17,24 @@ from ..core.gases import GASES
 from ..services.diagnosis import diagnose
 from .synth import make_aging_series
 
-# (id, ad, konum, hedef arıza senaryosu, ay sayısı)
+# (id, ad, konum, hedef arıza senaryosu, ay sayısı, kaç ay saklanacak)
 # "Normal" senaryosu = sağlıklı kalan trafo; diğerleri o arızaya doğru kötüleşir.
+#
+# Son sütun (keep) serinin YALNIZCA ilk N ayını kaydeder: "yeni bozulmaya
+# başlamış, imzası henüz oturmamış" trafoyu temsil eder. TR-09 bunun için
+# var — model orada "Normal" diyor ama güveni düşük, yani uzman incelemesi
+# uyarısı tetikleniyor. Gerçek bir filoda böyle belirsiz vakalar hep olur;
+# demo filosunda da olmalı ki sistemin belirsizliği nasıl ele aldığı görünsün.
 FLEET = [
-    ("TR-01", "Ana Merkez Trafosu", "İstanbul-Avrupa", "D2", 12),
-    ("TR-02", "Yük Merkezi 2",       "İstanbul-Anadolu", "Normal", 12),
-    ("TR-03", "OSB Besleme",         "Kocaeli",          "T3", 10),
-    ("TR-04", "Şehir Dağıtım",       "Bursa",            "T1", 12),
-    ("TR-05", "Sahil GIS",           "İzmir",            "Normal", 12),
-    ("TR-06", "Demiryolu Besleme",   "Ankara",           "PD", 8),
-    ("TR-07", "Sanayi Fider",        "Gebze",            "D1", 11),
-    ("TR-08", "Rüzgar Bağlantı",     "Çanakkale",        "T2", 12),
+    ("TR-01", "Ana Merkez Trafosu", "İstanbul-Avrupa",  "D2", 12, None),
+    ("TR-02", "Yük Merkezi 2",       "İstanbul-Anadolu", "Normal", 12, None),
+    ("TR-03", "OSB Besleme",         "Kocaeli",          "T3", 10, None),
+    ("TR-04", "Şehir Dağıtım",       "Bursa",            "T1", 12, None),
+    ("TR-05", "Sahil GIS",           "İzmir",            "Normal", 12, None),
+    ("TR-06", "Demiryolu Besleme",   "Ankara",           "PD", 8, None),
+    ("TR-07", "Sanayi Fider",        "Gebze",            "D1", 11, None),
+    ("TR-08", "Rüzgar Bağlantı",     "Çanakkale",        "T2", 12, None),
+    ("TR-09", "Liman Besleme",       "Mersin",           "D1", 12, 5),
 ]
 
 
@@ -42,11 +49,14 @@ def _reset() -> None:
 def seed() -> None:
     _reset()
     total = 0
-    for idx, (tid, name, location, scenario, months) in enumerate(FLEET):
+    for idx, (tid, name, location, scenario, months, keep) in enumerate(FLEET):
         database.upsert_transformer(tid, name, location)
 
         # Bu trafonun aylık gaz geçmişini üret (senaryosuna doğru kötüleşir).
         df = make_aging_series(fault_class=scenario, months=months, seed=idx + 1)
+        if keep is not None:
+            df = df.head(keep)      # erken evre: seriyi baştan kes
+            months = keep
 
         # İlk ölçüm 'months' ay önce, sonuncusu bugün olacak şekilde tarihle.
         start = datetime.now(timezone.utc) - timedelta(days=30 * (months - 1))
@@ -58,8 +68,10 @@ def seed() -> None:
             total += 1
 
         last = diagnose({g: float(df.iloc[-1][g]) for g in GASES})
+        flag = " ⚠ uzman incelemesi" if last["review"]["needed"] else ""
         print(f"  {tid} {name:<22} senaryo={scenario:<6} "
-              f"son tanı={last['prediction']:<6} risk={last['risk']['level_tr']}")
+              f"son tanı={last['prediction']:<6} güven=%{last['confidence']*100:>3.0f} "
+              f"risk={last['risk']['level_tr']}{flag}")
 
     print(f"\nToplam {len(FLEET)} trafo, {total} ölçüm kaydedildi.")
 

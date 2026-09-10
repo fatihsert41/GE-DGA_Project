@@ -35,7 +35,7 @@ import pandas as pd
 from sklearn.metrics import accuracy_score, f1_score
 from sklearn.model_selection import train_test_split
 
-from ..core.gases import FAULT_CLASSES
+from ..core.gases import FAULT_CLASSES, FAULT_FAMILY, SEVERE_FAULTS
 from .experiments import _apply_log, _features
 from .real_data import load_real_dataset, print_report
 from .train import ARTIFACT_DIR, _candidate_models
@@ -46,15 +46,9 @@ try:
 except Exception:  # pragma: no cover
     _HAS_SMOTE = False
 
-# Arıza ailesi: yapılacak iş bu seviyede belirlenir.
-FAMILY: Dict[str, str] = {
-    "Normal": "Normal",
-    "PD": "Deşarj", "D1": "Deşarj", "D2": "Deşarj",
-    "T1": "Termal", "T2": "Termal", "T3": "Termal",
-}
-
-# Acil müdahale gerektirenler: yüksek enerjili ark ve yüksek sıcaklık.
-SEVERE = {"D2", "T3"}
+# Tek doğruluk kaynağı core/gases.py; burada yalnızca kısa ad veriliyor.
+FAMILY = FAULT_FAMILY
+SEVERE = SEVERE_FAULTS
 
 _LABEL_TO_INT = {c: i for i, c in enumerate(FAULT_CLASSES)}
 
