@@ -8,6 +8,7 @@ using System.Text.Json.Serialization;
 using Microsoft.EntityFrameworkCore;
 using TransformerAI.Maintenance.Api.Data;
 using TransformerAI.Maintenance.Api.Models;
+using TransformerAI.Maintenance.Api.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -39,6 +40,25 @@ builder.Services.AddDbContext<MaintenanceDbContext>(options =>
 // değişiklikleri izler, paylaşılırsa istekler birbirine karışır.
 builder.Services.AddScoped<WorkOrderRepository>();
 
+// ML servisi istemcisi. AddHttpClient bir "tipli istemci" kaydeder:
+// MlServiceClient isteyen herkes, adresi ve zaman aşımı ayarlanmış bir
+// HttpClient'la birlikte hazır gelir.
+//
+// HttpClient'ı elle "new HttpClient()" ile yaratmak .NET'te klasik bir
+// hatadır: her örnek yeni bir soket açar ve yoğun yükte soketler tükenir.
+// Fabrika bağlantıları havuzlar ve ömürlerini yönetir.
+var mlBaseUrl = builder.Configuration["MlService:BaseUrl"]
+                ?? "http://localhost:8000";
+var mlTimeout = builder.Configuration.GetValue<int?>("MlService:TimeoutSeconds") ?? 10;
+
+builder.Services.AddHttpClient<MlServiceClient>(client =>
+{
+    client.BaseAddress = new Uri(mlBaseUrl);
+    // Zaman aşımı ŞART: karşı servis yanıt vermezse isteğimiz sonsuza
+    // kadar beklememeli, hızlıca "erişilemiyor" demeli.
+    client.Timeout = TimeSpan.FromSeconds(mlTimeout);
+});
+
 var app = builder.Build();
 
 // Uygulama açılırken şemayı uygula. Migration dosyaları koddadır;
@@ -63,13 +83,75 @@ app.MapGet("/", () => new
     name = "TransformerAI Bakım Planlama Servisi",
     version = "0.3.0",
     role = "İş emri, teknisyen atama ve bakım planlama",
-    mlService = "Python/FastAPI (risk ve tanı buradan okunur)",
+    mlService = mlBaseUrl,
     storage = "SQLite (maintenance.db) — ölçüm verisinden ayrı",
 })
 .WithName("ServiceInfo");
 
-app.MapGet("/health", () => new { status = "ok" })
-   .WithName("Health");
+// Sağlık kontrolü artık bağımlılığı da yokluyor: bu servis ayakta olsa
+// bile ML servisi kapalıysa iş emri ÖNERİSİ üretemeyiz. İzleme aracının
+// bunu görmesi gerekir.
+app.MapGet("/health", async (MlServiceClient ml) =>
+{
+    var mlUp = await ml.IsAvailableAsync();
+    return Results.Ok(new
+    {
+        status = "ok",
+        dependencies = new { mlService = mlUp ? "ok" : "unreachable" },
+    });
+})
+.WithName("Health");
+
+// ---------------------------------------------------------------------------
+// ML servisinden okunan veriler (salt okunur ayna)
+// ---------------------------------------------------------------------------
+
+// Filo görünümü. Bu servis veriyi SAKLAMAZ, her seferinde Python'dan okur —
+// tek doğruluk kaynağı orasıdır. Kopyalasaydık iki yerde iki farklı gerçek
+// olurdu (mikroservis mimarisinde en pahalı hatalardan biri).
+app.MapGet("/fleet", async (MlServiceClient ml, CancellationToken ct) =>
+{
+    var fleet = await ml.GetFleetAsync(ct);
+    return fleet is null
+        ? Results.Problem(
+            title: "ML servisine ulaşılamıyor",
+            detail: $"{mlBaseUrl} adresi yanıt vermiyor. Python servisi çalışıyor mu?",
+            statusCode: StatusCodes.Status503ServiceUnavailable)
+        : Results.Ok(fleet);
+})
+.WithName("Fleet");
+
+// Tek trafonun riski + o trafonun açık iş emirleri bir arada.
+// İKİ SERVİSİ BİRLEŞTİREN ilk uç nokta: risk Python'dan, iş emirleri
+// bizim veritabanımızdan geliyor.
+app.MapGet("/transformers/{id}/risk",
+    async (MlServiceClient ml, WorkOrderRepository repo, string id,
+           CancellationToken ct) =>
+{
+    var risk = await ml.GetTransformerAsync(id, ct);
+    if (risk is null)
+    {
+        return Results.NotFound(new
+        {
+            message = $"Trafo bulunamadı veya ML servisine ulaşılamıyor: {id}",
+        });
+    }
+
+    var orders = await repo.ListAsync(transformerId: id);
+
+    return Results.Ok(new
+    {
+        transformer = risk,
+        workOrders = new
+        {
+            total = orders.Count,
+            open = orders.Count(o => o.Status is WorkOrderStatus.Planned
+                                         or WorkOrderStatus.InProgress),
+            items = orders,
+        },
+    });
+})
+.WithName("TransformerRisk");
 
 // ---------------------------------------------------------------------------
 // İş emirleri

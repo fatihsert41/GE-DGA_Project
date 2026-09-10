@@ -211,7 +211,21 @@ Testler: `cd backend; pytest -q` (18 test).
     ORM soyutlaması sızdırır — veritabanının sınırlarını bilmek gerekir.
     Kalıcılık doğrulandı: servis kapatılıp açıldı, kayıtlar durdu.
     Komutlar: `dotnet ef migrations add <ad>`; araç: `dotnet tool install --global dotnet-ef`.
-  - ⏭️ **SIRADAKİ: 7.4** Python servisinden risk okuma (HttpClient + DI).
+  - ✅ 7.4 İki servis konuşuyor TAMAM. `Services/MlServiceClient.cs`
+    (tipli HttpClient), `Models/MlModels.cs` (Python cevabının C# karşılığı,
+    hepsi record). `appsettings.json` → `MlService:BaseUrl`.
+    Yeni uç noktalar: `GET /fleet` (Python'dan okur, saklamaz),
+    `GET /transformers/{id}/risk` (**risk Python'dan + iş emirleri bizim
+    DB'den** — iki kaynağı birleştiren ilk uç nokta),
+    `GET /health` artık bağımlılığı da yokluyor.
+    ⚠ Python `snake_case`, C# `PascalCase` yazar →
+    `JsonNamingPolicy.SnakeCaseLower` ile otomatik eşleniyor.
+    ⚠ `HttpClient`'ı elle `new` ile yaratmak soket tükenmesine yol açar;
+    `AddHttpClient` fabrikası kullanılıyor + zaman aşımı zorunlu.
+    **Dayanıklılık doğrulandı:** Python kapatıldığında /health
+    "unreachable" diyor, /fleet 503 + açıklayıcı mesaj dönüyor, ama
+    /workorders KENDİ verisiyle çalışmaya devam ediyor.
+  - ⏭️ **SIRADAKİ: 7.5** Otomatik iş emri önerisi (riskli trafolar için).
   ⚠ Kurallar: Python servisi DEĞİŞTİRİLMEZ, .NET onu dışarıdan tüketir.
   İş emirleri .NET'in KENDİ veritabanında durur (ortak DB mikroservis
   mimarisinin en yaygın hatası). Veritabanı 7.3'ten önce eklenmez.
