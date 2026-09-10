@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import api from '../api'
-import { fold, RISK_ORDER, RISK_TR } from '../constants'
+import { ASSET_CLASSES, ASSET_CLASS_TR, fold, RISK_ORDER, RISK_TR }
+  from '../constants'
 
 const fmtDate = (iso) =>
   iso ? new Date(iso).toLocaleDateString('tr-TR',
@@ -65,7 +66,14 @@ function TransformerCard({ t, onSelect }) {
       aria-label={`${t.id} ${t.name} detayını aç`}>
       <div className="tcard-head">
         <div>
-          <div className="tid">{t.id}</div>
+          <div className="tid">
+            {t.id}
+            <span className={`class-tag ${t.asset_class}`}
+              title={`${ASSET_CLASS_TR[t.asset_class] || t.asset_class}`
+                + (t.mva ? ` · ${t.mva} MVA` : '')}>
+              {t.asset_class}
+            </span>
+          </div>
           <div className="tname">{t.name}</div>
         </div>
         <span className={`badge sm ${t.risk_level}`}>{t.risk_level_tr}</span>
@@ -87,7 +95,18 @@ function TransformerCard({ t, onSelect }) {
         <span className="k">Konum</span><span>{t.location || '—'}</span>
         <span className="k">Son ölçüm</span><span>{fmtDate(t.last_sampled_at)}</span>
         <span className="k">Geçmiş</span><span>{t.measurement_count} ölçüm</span>
+        <span className="k">Öncelik</span>
+        <span title={`kondisyon ${t.risk_condition} × ağırlık ${t.asset_weight}`}>
+          <b>{t.priority?.toFixed(2)}</b>
+        </span>
       </div>
+
+      {t.sampling_overdue && (
+        <span className="overdue-chip">
+          Numune gecikti · {Math.round(t.days_since_sample / 30)} ay
+          {' '}(aralık {t.sampling_months} ay)
+        </span>
+      )}
       <span className="tcard-go">Detay →</span>
     </button>
   )
@@ -126,7 +145,8 @@ function AlarmList({ items, onSelect }) {
 }
 
 /** Filtre satırı: kartların hemen üstünde tek sıra. */
-function FilterBar({ query, onQuery, level, onLevel, counts, shown, total }) {
+function FilterBar({ query, onQuery, level, onLevel, cls, onClass,
+                    counts, classCounts, shown, total }) {
   const chips = [{ key: 'all', label: 'Tümü', n: total }].concat(
     RISK_ORDER.map((lvl) => ({ key: lvl, label: RISK_TR[lvl], n: counts[lvl] || 0 })))
 
@@ -147,6 +167,20 @@ function FilterBar({ query, onQuery, level, onLevel, counts, shown, total }) {
         ))}
       </div>
 
+      <div className="chips">
+        {['all', ...ASSET_CLASSES].map((c) => (
+          <button key={c} type="button"
+            className={`chip alt${cls === c ? ' active' : ''}`}
+            disabled={c !== 'all' && !(classCounts[c] > 0)}
+            onClick={() => onClass(c)}>
+            {c === 'all' ? 'Tüm sınıflar' : c}
+            <span className="chip-n">
+              {c === 'all' ? total : (classCounts[c] || 0)}
+            </span>
+          </button>
+        ))}
+      </div>
+
       <span className="shown-count">{shown} / {total}</span>
     </div>
   )
@@ -157,6 +191,7 @@ export default function FleetOverview({ onSelect }) {
   const [error, setError] = useState(null)
   const [query, setQuery] = useState('')
   const [level, setLevel] = useState('all')
+  const [cls, setCls] = useState('all')
 
   // Filo 8 varlık: filtreleme istemcide yapılır, API'ye tekrar gitmeye gerek yok.
   // useMemo, her tuş vuruşunda listeyi baştan süzmemek için sonucu önbelleğe alır.
@@ -165,12 +200,13 @@ export default function FleetOverview({ onSelect }) {
     const q = fold(query.trim())
     return data.transformers.filter((t) => {
       if (level !== 'all' && t.risk_level !== level) return false
+      if (cls !== 'all' && t.asset_class !== cls) return false
       if (!q) return true
       return [t.id, t.name, t.location, t.prediction]
         .filter(Boolean)
         .some((f) => fold(f).includes(q))
     })
-  }, [data, query, level])
+  }, [data, query, level, cls])
 
   useEffect(() => {
     api.fleetOverview()
@@ -200,6 +236,8 @@ export default function FleetOverview({ onSelect }) {
             hint="acil değerlendirme" tone={critical ? 'danger' : ''} />
           <StatTile label="Uzman incelemesi" value={summary.needs_review ?? 0}
             hint="model kararsız" />
+          <StatTile label="Numune gecikti" value={summary.sampling_overdue ?? 0}
+            hint="sınıfa göre aralık" tone={summary.sampling_overdue ? 'alert' : ''} />
         </div>
 
         <h3>Risk Dağılımı</h3>
@@ -214,7 +252,9 @@ export default function FleetOverview({ onSelect }) {
 
       <FilterBar query={query} onQuery={setQuery}
         level={level} onLevel={setLevel}
+        cls={cls} onClass={setCls}
         counts={summary.risk_distribution}
+        classCounts={summary.class_distribution || {}}
         shown={visible.length} total={transformers.length} />
 
       {visible.length === 0 ? (

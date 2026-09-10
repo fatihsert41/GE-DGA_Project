@@ -13,11 +13,25 @@ import sqlite3
 from datetime import datetime, timedelta, timezone
 
 from .. import database
+from ..core import assets
 from ..core.gases import GASES
 from ..services.diagnosis import diagnose
 from .synth import make_aging_series
 
-# (id, ad, konum, hedef arıza senaryosu, ay sayısı, kaç ay saklanacak)
+# (id, ad, konum, sınıf, MVA, senaryo, ay sayısı, kaç ay saklanacak, gecikme)
+#
+# Son sütun (gecikme) tüm seriyi geçmişe kaydırır: "bu trafodan uzun süredir
+# numune alınmamış" demektir. Gerçek filolarda ihmal edilen varlıklar olur ve
+# sorunlar tam oralarda saklanır — TR-06 ve TR-09 bunu temsil ediyor.
+#
+# Sınıflar GE Vernova'nın hattına göre: LPT (Large) ve MPT (Medium) üretimde,
+# SPT (Small) hattı kalktı ama saha üniteleri çalışmaya devam ediyor — TR-09
+# bilinçli olarak öyle bir eski ünite.
+#
+# Dağılım öncelik mantığını GÖRÜNÜR kılacak şekilde seçildi: TR-03 yüksek
+# riskli bir LPT (öncelik 3.0), TR-07 ise kritik riskli bir MPT (2.8). Yani
+# ham riske göre TR-07 önde olurdu; varlık ağırlığı devreye girince TR-03
+# öne geçiyor. Sahada da böyle davranılır.
 # "Normal" senaryosu = sağlıklı kalan trafo; diğerleri o arızaya doğru kötüleşir.
 #
 # Son sütun (keep) serinin YALNIZCA ilk N ayını kaydeder: "yeni bozulmaya
@@ -26,15 +40,15 @@ from .synth import make_aging_series
 # uyarısı tetikleniyor. Gerçek bir filoda böyle belirsiz vakalar hep olur;
 # demo filosunda da olmalı ki sistemin belirsizliği nasıl ele aldığı görünsün.
 FLEET = [
-    ("TR-01", "Ana Merkez Trafosu", "İstanbul-Avrupa",  "D2", 12, None),
-    ("TR-02", "Yük Merkezi 2",       "İstanbul-Anadolu", "Normal", 12, None),
-    ("TR-03", "OSB Besleme",         "Kocaeli",          "T3", 10, None),
-    ("TR-04", "Şehir Dağıtım",       "Bursa",            "T1", 12, None),
-    ("TR-05", "Sahil GIS",           "İzmir",            "Normal", 12, None),
-    ("TR-06", "Demiryolu Besleme",   "Ankara",           "PD", 8, None),
-    ("TR-07", "Sanayi Fider",        "Gebze",            "D1", 11, None),
-    ("TR-08", "Rüzgar Bağlantı",     "Çanakkale",        "T2", 12, None),
-    ("TR-09", "Liman Besleme",       "Mersin",           "D1", 12, 5),
+    ("TR-01", "Ana Merkez Trafosu", "İstanbul-Avrupa",  "LPT", 250.0, "D2", 12, None, 0),
+    ("TR-02", "Yük Merkezi 2",       "İstanbul-Anadolu", "LPT", 150.0, "Normal", 12, None, 0),
+    ("TR-03", "OSB Besleme",         "Kocaeli",          "LPT", 180.0, "T3", 10, None, 0),
+    ("TR-04", "Şehir Dağıtım",       "Bursa",            "MPT",  50.0, "T1", 12, None, 0),
+    ("TR-05", "Sahil GIS",           "İzmir",            "MPT",  80.0, "Normal", 12, None, 0),
+    ("TR-06", "Demiryolu Besleme",   "Ankara",           "MPT",  25.0, "PD", 8, None, 14),
+    ("TR-07", "Sanayi Fider",        "Gebze",            "MPT",  40.0, "D1", 11, None, 0),
+    ("TR-08", "Rüzgar Bağlantı",     "Çanakkale",        "LPT", 120.0, "T2", 12, None, 0),
+    ("TR-09", "Liman Besleme",       "Mersin",           "SPT",   8.0, "D1", 12, 5, 26),
 ]
 
 
@@ -49,8 +63,10 @@ def _reset() -> None:
 def seed() -> None:
     _reset()
     total = 0
-    for idx, (tid, name, location, scenario, months, keep) in enumerate(FLEET):
-        database.upsert_transformer(tid, name, location)
+    for idx, (tid, name, location, cls, mva, scenario, months,
+              keep, lag) in enumerate(FLEET):
+        database.upsert_transformer(tid, name, location,
+                                    asset_class=cls, mva=mva)
 
         # Bu trafonun aylık gaz geçmişini üret (senaryosuna doğru kötüleşir).
         df = make_aging_series(fault_class=scenario, months=months, seed=idx + 1)
@@ -59,7 +75,10 @@ def seed() -> None:
             months = keep
 
         # İlk ölçüm 'months' ay önce, sonuncusu bugün olacak şekilde tarihle.
-        start = datetime.now(timezone.utc) - timedelta(days=30 * (months - 1))
+        # 'lag' varsa tüm seri o kadar ay daha geriye kayar: son numunenin
+        # üstünden 'lag' ay geçmiş olur.
+        start = datetime.now(timezone.utc) - timedelta(
+            days=30 * (months - 1 + lag))
         for k, (_, row) in enumerate(df.iterrows()):
             gases = {g: float(row[g]) for g in GASES}
             result = diagnose(gases)               # ML + klasik + risk
@@ -69,9 +88,11 @@ def seed() -> None:
 
         last = diagnose({g: float(df.iloc[-1][g]) for g in GASES})
         flag = " ⚠ uzman incelemesi" if last["review"]["needed"] else ""
-        print(f"  {tid} {name:<22} senaryo={scenario:<6} "
-              f"son tanı={last['prediction']:<6} güven=%{last['confidence']*100:>3.0f} "
-              f"risk={last['risk']['level_tr']}{flag}")
+        oncelik = assets.priority_score(last["risk"]["condition"], cls)
+        gecikme = f" ⏰ {lag} ay geçti" if lag else ""
+        print(f"  {tid} {name:<22} {cls} {mva:>6.0f}MVA {scenario:<6} "
+              f"tanı={last['prediction']:<6} risk={last['risk']['level_tr']:<7} "
+              f"öncelik={oncelik:>4.2f}{flag}{gecikme}")
 
     print(f"\nToplam {len(FLEET)} trafo, {total} ölçüm kaydedildi.")
 

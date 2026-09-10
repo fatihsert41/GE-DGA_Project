@@ -48,3 +48,14 @@ export const fold = (str) =>
   (str || '')
     .toLocaleLowerCase('tr')
     .replace(/[ıİI]/g, 'i')
+
+// Varlık sınıfları — backend'deki core/assets.py ile aynı tutulmalı.
+// GE Vernova hattı: LPT ve MPT üretimde, SPT sonlandırıldı (saha üniteleri
+// izlenmeye devam ediyor).
+export const ASSET_CLASSES = ['LPT', 'MPT', 'SPT']
+
+export const ASSET_CLASS_TR = {
+  LPT: 'Büyük Güç Trafosu',
+  MPT: 'Orta Güç Trafosu',
+  SPT: 'Küçük Güç Trafosu (hat kapandı)',
+}
