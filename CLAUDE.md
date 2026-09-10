@@ -181,7 +181,19 @@ Testler: `cd backend; pytest -q` (18 test).
     sınıflandırma → D1/D2 → conformal. YAPMA: derin öğrenme, daha fazla
     özellik mühendisliği, sentetiği daha "gerçekçi" yapmak.
   - 🏁 **Faz 6 BİTTİ.**
-- ⏳ **Faz 7 (.NET) — kullanıcı .NET bilmiyor, çok temelden ve yavaş anlatılacak.**
+- 🔄 **Faz 7 — Bakım Planlama Servisi (.NET) — devam ediyor.**
+  **Öğrenme fazı: hız değil anlama önceliklidir. Her adımda TEK yeni kavram,
+  her adım sonunda ÇALIŞAN bir şey.** Yol haritası:
+  **`docs/FAZ7-DOTNET-YOL-HARITASI.md`** (7.1 iskelet → 7.9 belgeler).
+  - ✅ .NET 10.0.401 SDK kuruldu (kullanıcı .NET 7'den yükseltti).
+  - ✅ 7.1 İskelet TAMAM: `maintenance/` altında çözüm + Web API projesi
+    (`TransformerAI.Maintenance.Api`). Şablonun hava durumu kodu silindi,
+    yerine `/` ve `/health` yazıldı. `.gitignore`'a bin/ obj/ eklendi.
+    Servis portu **5080** (Python 8000, Vite 5173).
+  - ⏭️ **SIRADAKİ: 7.2** İş emri modeli (bellekte) — record, enum, LINQ.
+  ⚠ Kurallar: Python servisi DEĞİŞTİRİLMEZ, .NET onu dışarıdan tüketir.
+  İş emirleri .NET'in KENDİ veritabanında durur (ortak DB mikroservis
+  mimarisinin en yaygın hatası). Veritabanı 7.3'ten önce eklenmez.
 
 ### Görsel dil (2026-09-09'da yenilendi)
 "Endüstriyel kontrol odası": kağıt zemin (#f5f2ea), mürekkep metin, saç teli
