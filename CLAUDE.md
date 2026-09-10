@@ -190,7 +190,16 @@ Testler: `cd backend; pytest -q` (18 test).
     (`TransformerAI.Maintenance.Api`). Şablonun hava durumu kodu silindi,
     yerine `/` ve `/health` yazıldı. `.gitignore`'a bin/ obj/ eklendi.
     Servis portu **5080** (Python 8000, Vite 5173).
-  - ⏭️ **SIRADAKİ: 7.2** İş emri modeli (bellekte) — record, enum, LINQ.
+  - ✅ 7.2 İş emri modeli (bellekte) TAMAM.
+    `Models/WorkOrder.cs`: `WorkOrderStatus`/`WorkOrderKind` enum'ları,
+    `WorkOrder` **class** (durumu değişen varlık), `CreateWorkOrderRequest`
+    ve `UpdateStatusRequest` **record** (değişmeyen istek gövdesi = DTO).
+    `Data/WorkOrderStore.cs`: bellekte liste + LINQ süzme/sıralama.
+    Uç noktalar: GET/POST /workorders, GET /workorders/{id},
+    PATCH /workorders/{id}/status, GET /workorders/summary.
+    ⚠ Öğrenilen tuzak: **JSON'da enum varsayılan olarak SAYIDIR**;
+    `JsonStringEnumConverter` eklendi, artık {"status":"Planned"}.
+  - ⏭️ **SIRADAKİ: 7.3** EF Core + SQLite (async/await kavramı).
   ⚠ Kurallar: Python servisi DEĞİŞTİRİLMEZ, .NET onu dışarıdan tüketir.
   İş emirleri .NET'in KENDİ veritabanında durur (ortak DB mikroservis
   mimarisinin en yaygın hatası). Veritabanı 7.3'ten önce eklenmez.
