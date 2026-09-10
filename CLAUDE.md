@@ -67,6 +67,55 @@ Testler: `cd backend; pytest -q` (18 test).
 - `.venv`, `node_modules`, `*.db`, `model.joblib` git'e girmez (.gitignore).
 - ML katmanı Python'da kalır; CRUD/iş mantığı için .NET düşünülüyor (aşağıya bak).
 
+## YARIN BURADAN BAŞLA (10 Eylül 2026 sonu itibarıyla)
+
+```powershell
+cd C:\Users\Esma\Desktop\Python\GE-DGA_Project
+.\start.ps1                # üç servisi birden başlatır (~22 sn)
+.\start.ps1 -Check         # sadece durum kontrolü
+.\start.ps1 -Stop          # hepsini durdurur
+```
+
+Arayüz: http://localhost:5173 · API: http://localhost:8000/docs
+
+**Durum:** Her şey commit'li ve push'lu. Faz 0-7 bitti, Faz 8 devam ediyor
+(8.1-8.4 tamam). **145 test** (95 Python + 50 .NET).
+
+**BEKLEYEN KARAR — ilk iş bunu sor:** Faz 8.5 için iki seçenek var,
+kullanıcı henüz seçmedi:
+
+* **(A) Elektriksel testler** — TTR (sarım oranı) öncelikli. Künye zaten
+  beklenen oranı hesaplıyor (`core/nameplate.rated_turns_ratio`, kademe
+  için `turns_ratio_at_tap`); ölçüleni girip sapmayı değerlendirmek
+  kalıyor. Sargı direnci, yalıtım direnci/PI, tan δ da eklenebilir.
+  Kural tabanlı ve açıklanabilir. **Kullanıcının kendi fikri.**
+* **(B) Sağlık Endeksi** — üç boyutu (DGA riski, yağ kalitesi, kağıt DP)
+  tek 0-100 skora indirger. Mevcut öncelik skorunun
+  (`assets.priority_score` = kondisyon × varlık ağırlığı)
+  genelleştirilmesi olur. **Claude'un önerisi**, çünkü artık
+  birleştirilecek boyutlar var ve "hangi trafoya önce bakayım?" sorusunu
+  gerçekten cevaplar.
+
+**Sonra gelecek işler (sırasız):**
+* Kalibrasyon katmanı (`docs/FAZ6-IYILESTIRME-YOL-HARITASI.md` 1. sıra) —
+  ölçüldü ama uygulanmadı: hizmet modeli kendi alanında ECE 0.021 ile
+  zaten kalibre çıktı, bu yüzden aciliyeti düştü.
+* Zaman serisi özellikleri (gaz üretim hızı) — trend altyapısı hazır.
+* Faz 8.6-8.7: termal model (IEEE C57.91), bileşen izleme (buşing/OLTC).
+
+**Claude için teknik notlar:**
+* Arayüz görsel olarak DOĞRULANMADI (tarayıcı otomasyonu kurulu değil).
+  Ekran görünümüyle ilgili sorunları kullanıcı bildirir.
+* `bash` heredoc içinde ters bölü kaçışları bozuluyor; Python/C# dizelerine
+  `\n` yazarken satır indeksiyle düzenle ya da `chr(10)` kullan.
+  Bugün beş kez buna takıldık.
+* .NET servisi çalışırken `dotnet build` `.exe` kilidi yüzünden hata verir;
+  önce `taskkill //F //IM "TransformerAI.Maintenance.Api.exe"`.
+* Uvicorn `--reload` ile başlatılmalı, yoksa kod değişince eski kod
+  çalışmaya devam eder (bugün üç kez buna takıldık).
+
+---
+
 ## Nerede kaldık (güncel durum)
 - ✅ Faz 0–4 bitti: klasik motor, ML+karşılaştırma, SHAP, FastAPI, React dashboard.
 - 🔄 **Faz 5 — Filo Dashboard (devam ediyor):**

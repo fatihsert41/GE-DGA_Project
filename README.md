@@ -95,6 +95,16 @@ ortak veritabanı mikroservis mimarisinin en yaygın hatasıdır.
 
 Gereksinimler: **Python 3.12+**, **Node 18+**, **.NET 10 SDK**.
 
+Kurulum bir kez yapıldıysa üç servisi tek komutla başlatabilirsiniz:
+
+```powershell
+.\start.ps1          # üç servisi ayrı pencerelerde başlatır
+.\start.ps1 -Check   # durum kontrolü
+.\start.ps1 -Stop    # hepsini durdurur
+```
+
+İlk kurulum için aşağıdaki adımları izleyin.
+
 ### 1) Python ML servisi — Terminal 1
 
 ```powershell
