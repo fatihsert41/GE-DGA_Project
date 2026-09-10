@@ -117,6 +117,12 @@ Testler: `cd backend; pytest -q` (18 test).
     (duyarlılık %36 → %58). A (sıfır atış) 0.503 → 0.520, yani indikatörler
     sıfır atışa daha çok yarıyor ama sorunu çözmüyor.
     Ayrıntı: `docs/FAZ6-GERCEK-VERI-BULGULARI.md`.
+  - ✅ 6.4 Emniyet ölçütleri TAMAM (`ml/safety_eval.py`). Yedi sınıflı F1
+    yanıltıcı: "T1 yerine T2" ile "D2 yerine Normal" hatalarını aynı
+    ağırlıkta cezalandırıyor. Doğru ölçütlerle aynı model:
+    **arıza yakalama %97.4**, aile doğruluğu (Normal/Termal/Deşarj) **%93.8**,
+    ciddi arızalarda (D2/T3) 198 vakada **1** kaçırma. Seçici tahmin:
+    güven ≥0.9'da %84 kapsama ile %91.3 doğruluk, kalanı uzmana devir.
   - ⏭️ **SIRADAKİ seçenekler:** (a) `synth.py`'yi gerçekçileştirip A'yı
     iyileştirmek (gürültü, sınıf örtüşmesi) — sentetik veri tercihini
     savunmanın tek yolu; (b) sonuçları `/compare` ve arayüze taşımak
