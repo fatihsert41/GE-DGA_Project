@@ -98,6 +98,21 @@ function TransformerCard({ t, onSelect }) {
           <><span className="k">Yaş</span><span>{t.age_years} yıl</span></>)}
         <span className="k">Son ölçüm</span><span>{fmtDate(t.last_sampled_at)}</span>
         <span className="k">Geçmiş</span><span>{t.measurement_count} ölçüm</span>
+        {t.has_oil_test && (
+          <>
+            <span className="k">Yağ</span><span>{t.oil_overall}</span>
+            {t.dp_estimate != null && (
+              <>
+                <span className="k">Kağıt (DP)</span>
+                <span>
+                  {t.dp_estimate}
+                  <span className="muted"> · %{
+                    Math.round(t.life_consumed_pct)} tüketildi</span>
+                </span>
+              </>
+            )}
+          </>
+        )}
         <span className="k">Öncelik</span>
         <span title={`kondisyon ${t.risk_condition} × ağırlık ${t.asset_weight}`}>
           <b>{t.priority?.toFixed(2)}</b>

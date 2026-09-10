@@ -7,6 +7,7 @@ import api from '../api'
 import { axis, grid, tooltip, muted, SERIES } from '../theme'
 import { RISK_TR } from '../constants'
 import NameplatePanel from './NameplatePanel'
+import OilQualityPanel from './OilQualityPanel'
 
 /* Faz 5.4 — tek trafonun detayı.
  *
@@ -182,6 +183,8 @@ export default function TransformerDetail({ id, meta, onBack }) {
     <div className="tabs detail-tabs">
       <button type="button" className={tab === 'measurements' ? 'active' : ''}
         onClick={() => setTab('measurements')}>Ölçümler ve Trend</button>
+      <button type="button" className={tab === 'oil' ? 'active' : ''}
+        onClick={() => setTab('oil')}>Yağ Kalitesi</button>
       <button type="button" className={tab === 'nameplate' ? 'active' : ''}
         onClick={() => setTab('nameplate')}>Künye</button>
     </div>
@@ -194,6 +197,17 @@ export default function TransformerDetail({ id, meta, onBack }) {
       <div>
         <div className="panel">{header}{tabs}</div>
         <div style={{ marginTop: 16 }}><NameplatePanel id={id} /></div>
+      </div>
+    )
+  }
+
+  // Yağ kalitesi de DGA ölçümünden bağımsızdır: DGA'sı olmayan bir trafonun
+  // yağ testi olabilir (ya da tam tersi).
+  if (tab === 'oil') {
+    return (
+      <div>
+        <div className="panel">{header}{tabs}</div>
+        <div style={{ marginTop: 16 }}><OilQualityPanel id={id} /></div>
       </div>
     )
   }

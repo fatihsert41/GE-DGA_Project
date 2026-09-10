@@ -6,7 +6,7 @@
 > sonucu **bakım iş emrine** dönüştüren polyglot bir sistem.
 
 **Üç servis:** Python (ML) · .NET (bakım planlama) · React (arayüz).
-**123 test** (73 Python + 50 .NET).
+**145 test** (95 Python + 50 .NET).
 
 ---
 
@@ -22,6 +22,7 @@
 | **C — Trend** | Geçmiş ölçümlerden "~N ay içinde kritik olacak" öngörüsü | `GET /trend/{id}` |
 | **D — Belirsizlik** | Model emin değilse **söyler** ve vaka uzmana gider | `review` alanı, her tanıda |
 | **E — Eyleme dönüşüm** | Risk → iş emri → teknisyen ataması | .NET servisi |
+| **F — Kalan ömür** | Furan → DP → kağıdın tüketilen ömrü (DGA'nın göremediği) | `GET /transformers/{id}/oil-tests` |
 
 ---
 
@@ -136,7 +137,7 @@ Vite iki servise birden yönlendirir: `/api` → :8000, `/maint` → :5080.
 ## Testler
 
 ```powershell
-cd backend      ; pytest -q            # 73 test
+cd backend      ; pytest -q            # 95 test
 cd maintenance  ; dotnet test          # 50 test
 ```
 
@@ -152,6 +153,10 @@ sınıflarda tutulduğu için doğrudan test edilebiliyor.
 | **Filo** | 9 trafo, önceliğe göre sıralı; risk dağılımı, alarm listesi, arama/filtre. Karta tıklayınca: gaz geçmişi + 6 aylık öngörü + gaz bazında trend tablosu |
 | **Numune Analizi** | Elle gaz girişi → tanı, SHAP grafiği, Duval üçgeni, yöntem karşılaştırması, gerçeklik kontrolü paneli |
 | **Bakım Planlama** | İş emirleri, sistemin ürettiği öneriler, teknisyen yük tablosu, atama |
+
+Trafo detayı üç sekmeden oluşur: **Ölçümler ve Trend** (DGA) · **Yağ
+Kalitesi** (nem, BDV, asitlik, arayüzey gerilimi + kağıt yaşlanması) ·
+**Künye** (nameplate, türetilmiş değerlerle).
 
 ---
 
