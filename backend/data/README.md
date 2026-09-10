@@ -5,24 +5,41 @@ açık erişimli veri setlerinin çoğu yeniden dağıtıma izin vermez veya at�
 zorunluluğu getirir. Veriyi herkes kendi indirir; kod ise veriden bağımsız
 çalışacak şekilde yazıldı.
 
-## Seçilen veri seti
+## Kullanılan veri seti
 
-**IEEE DataPort — DGA dataset**
-<https://ieee-dataport.org/documents/dga-dataset>
+**IEEE DataPort** ilk tercihti ama abonelik gerektiriyor (erişilemedi).
+Yerine, aynı kaynakların (IEC TC 10 + Çin şebeke verisi + literatür)
+derlendiği açık GitHub deposu kullanıldı — ve bu daha büyük çıktı:
 
-Üç dosya içerir:
+<https://github.com/alan-456/transformer-fault-dataset>
 
-| Dosya | Satır | Ne işe yarar |
-|---|---|---|
-| `DGA_train.xlsx` | 584 | Sınıf-dengeli eğitim seti |
-| `DGA_test_unseen.xlsx` | 70 | Görülmemiş gerçek dünya test seti |
-| `IEC_TC_10_data.xlsx` | 49 | IEC TC 10 karşılaştırma (benchmark) seti |
+| Dosya (bizdeki ad) | Kaynak dosya | Satır (temiz) | Rol |
+|---|---|---|---|
+| `dga_china_2321.xlsx` | `data.xlsx` | 2321 → **1972** | Ana gerçek veri; 7 sınıfın hepsi |
+| `dga_bench_589.xlsx` | `dataset_(589).xlsx` | 589 → **455** | Bağımsız ikinci test (Normal yok) |
 
-İndirdikten sonra üç dosyayı **bu klasöre** koy. Dosya adlarının aynı
-olması şart değil — yükleyici sütun adlarını kendi eşler.
+İndirme (backend/ klasöründen):
 
-> Erişim IEEE DataPort aboneliği gerektirir. Üniversitelerin çoğunda kurumsal
-> IEEE erişimi vardır; kampüs ağından veya öğrenci hesabınla dene.
+```powershell
+curl.exe -sL -o data/dga_china_2321.xlsx "https://raw.githubusercontent.com/alan-456/transformer-fault-dataset/main/data.xlsx"
+curl.exe -sL -o data/dga_bench_589.xlsx  "https://raw.githubusercontent.com/alan-456/transformer-fault-dataset/main/dataset_(589).xlsx"
+```
+
+> ⚠ Deponun **lisansı yok**. Sonuçlar yayımlanabilir, veri yeniden
+> dağıtılamaz — bu yüzden dosyalar `.gitignore` içinde. Sunumda kaynak
+> belirtilmeli.
+
+Etiketler **Çincedir** (`正常`, `局部放电`, `高温过热` …) ve
+`app/ml/real_data.py::_LABEL_ALIASES` içinde bizim yedi sınıfımıza eşlenir.
+
+## Veri hijyeni
+
+Yükleyici iki sızıntı kaynağını otomatik temizler:
+
+* **Tekrar eden ölçümler** — `data.xlsx` içinde 349 birebir kopya vardı.
+  Temizlenmezse aynı satır hem eğitime hem teste düşer, doğruluk şişer.
+* **İki dosya arasındaki kesişim** — 589'luk setin %22'si ana veriyle
+  ortaktı; `evaluate_real.py` bunu otomatik çıkarır (582 → 455).
 
 ## Veri şeması ve bizim şemamızla farkı
 

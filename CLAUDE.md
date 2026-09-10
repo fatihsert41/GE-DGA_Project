@@ -102,9 +102,14 @@ Testler: `cd backend; pytest -q` (18 test).
       `artifacts/real_data_report.json`.
     - `data/README.md` + `.gitignore`: veri dosyaları repoya GİRMEZ (lisans).
     - `tests/test_real_data.py` (toplam 25 test).
-  - ⏭️ **SIRADAKİ: 6.2** — kullanıcı IEEE DataPort'tan üç dosyayı indirip
-    `backend/data/` içine koyacak; sonra `python -m app.ml.evaluate_real`
-    çalıştırılıp gerçek sonuçlar yorumlanacak.
+  - ✅ 6.2 Gerçek veriyle değerlendirme TAMAM. IEEE DataPort aboneliği
+    alınamadı; yerine açık GitHub derlemesi kullanıldı (2321 satır, 7 sınıf,
+    Çince etiketler) — IEEE setinden 4 kat büyük. Bulgular:
+    **`docs/FAZ6-GERCEK-VERI-BULGULARI.md`**. Özet: sentetik test F1 0.96 →
+    gerçek veride sıfır atış **F1 0.50**; gerçekle eğitim 0.757; karma eğitim
+    saf gerçeği hiç geçmiyor; klasik konsensüs bağımsız sette (Normal yok)
+    sentetik-eğitimli ML'in hepsini geçiyor (0.650 vs 0.492).
+    Yükleyiciye Çince etiket desteği + tekrar/kesişim temizliği eklendi.
   - ⏳ 6.3 Sonuçları `/compare` ve frontend'e taşı (veri kaynağı rozeti).
 - ⏳ **Faz 7 (.NET) — kullanıcı .NET bilmiyor, çok temelden ve yavaş anlatılacak.**
 

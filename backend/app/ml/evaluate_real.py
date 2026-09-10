@@ -32,6 +32,7 @@ from typing import Dict, List, Optional, Tuple
 
 import pandas as pd
 from sklearn.metrics import accuracy_score, confusion_matrix, f1_score
+from sklearn.model_selection import train_test_split
 
 from ..core.classify import consensus
 from ..core.gases import FAULT_CLASSES
@@ -45,7 +46,8 @@ from .train import ARTIFACT_DIR, _candidate_models
 _GUESS = {
     "train": ["*train*"],
     "test": ["*test*", "*unseen*"],
-    "bench": ["*iec*", "*tc*10*", "*bench*"],
+    "bench": ["*iec*", "*tc*10*", "*bench*", "*589*"],
+    "real": ["*data*", "*dga*", "*real*"],
 }
 
 
@@ -102,18 +104,17 @@ def _classical_predict(df: pd.DataFrame) -> List[str]:
     return out
 
 
-def evaluate(train_path: Optional[Path], test_path: Path,
-             bench_path: Optional[Path] = None,
+def evaluate(real_train: Optional[pd.DataFrame], real_test: pd.DataFrame,
+             bench: Optional[pd.DataFrame] = None,
+             meta: Optional[Dict[str, object]] = None,
              n_synth: int = 4000, seed: int = 42) -> Dict[str, object]:
-    # --- Gerçek veri ---
-    real_test, rep_test = load_real_dataset(test_path)
-    print_report(rep_test)
-    X_test, y_test = _xy(real_test)
+    """Dört senaryoyu aynı gerçek test setinde ölçer.
 
-    real_train, rep_train = (None, None)
-    if train_path is not None:
-        real_train, rep_train = load_real_dataset(train_path)
-        print_report(rep_train)
+    Veri yükleme/bölme işi ÇAĞIRANA aittir (bkz. main): böylece hem hazır
+    bölünmüş veri setleri hem de tek dosyalık setler aynı fonksiyonu kullanır.
+    """
+    meta = meta or {}
+    X_test, y_test = _xy(real_test)
 
     # --- Sentetik veri, aynı çekirdek özellik setinde ---
     synth = make_dataset(n=n_synth, seed=seed)
@@ -174,8 +175,9 @@ def evaluate(train_path: Optional[Path], test_path: Path,
         "generated_at": time.strftime("%Y-%m-%d %H:%M:%S"),
         "feature_set": CORE_FEATURE_NAMES,
         "n_synthetic": n_synth,
-        "test_file": rep_test,
-        "train_file": rep_train,
+        "n_real_train": (len(real_train) if real_train is not None else 0),
+        "n_real_test": len(real_test),
+        "data": meta,
         "results": sorted(rows, key=lambda r: -r["f1_macro"]),
         "best": best,
         "confusion_matrix": (
@@ -184,10 +186,8 @@ def evaluate(train_path: Optional[Path], test_path: Path,
         "classes": FAULT_CLASSES,
     }
 
-    # IEC TC 10 karşılaştırma seti varsa onu da ayrıca ölç.
-    if bench_path is not None:
-        bench, rep_bench = load_real_dataset(bench_path)
-        print_report(rep_bench)
+    # Bağımsız ikinci test seti varsa onu da ayrıca ölç.
+    if bench is not None and len(bench):
         X_b, y_b = _xy(bench)
         bench_rows = [
             {"scenario": "A_sentetik_egitim", "model": name, **_score(y_b, pred)}
@@ -195,7 +195,7 @@ def evaluate(train_path: Optional[Path], test_path: Path,
         ]
         bench_rows.append({"scenario": "D_klasik", "model": "Classical Consensus",
                            **_score(y_b, _classical_predict(bench))})
-        report["benchmark"] = {"file": rep_bench,
+        report["benchmark"] = {"n": len(bench),
                                "results": sorted(bench_rows,
                                                  key=lambda r: -r["f1_macro"])}
 
@@ -215,29 +215,93 @@ def _print_table(rows: List[Dict[str, object]], title: str) -> None:
               f"{r['accuracy']:>10.4f}{r['f1_macro']:>10.4f}")
 
 
+def _dedupe_against(df: pd.DataFrame, other: pd.DataFrame) -> Tuple[pd.DataFrame, int]:
+    """``other`` içinde de bulunan ölçümleri ``df``den çıkarır.
+
+    Derleme veri setleri aynı vakaları paylaşabilir. Eğitimde görülen bir
+    satır "bağımsız" test setinde de varsa sonuç şişer — bu veri sızıntısıdır.
+    """
+    key = CORE_GASES
+    seen = set(map(tuple, other[key].round(4).to_numpy()))
+    mask = [tuple(r) not in seen for r in df[key].round(4).to_numpy()]
+    return df[mask].reset_index(drop=True), int(len(df) - sum(mask))
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--train", type=Path, default=None)
-    ap.add_argument("--test", type=Path, default=None)
-    ap.add_argument("--bench", type=Path, default=None)
+    ap.add_argument("--real", type=Path, default=None,
+                    help="Tek dosyalık gerçek veri; katmanlı olarak bölünür.")
+    ap.add_argument("--train", type=Path, default=None,
+                    help="Hazır bölünmüş veri setinin eğitim dosyası.")
+    ap.add_argument("--test", type=Path, default=None,
+                    help="Hazır bölünmüş veri setinin test dosyası.")
+    ap.add_argument("--bench", type=Path, default=None,
+                    help="Bağımsız ikinci test seti (kesişimi otomatik atılır).")
+    ap.add_argument("--test-size", type=float, default=0.3)
     ap.add_argument("--n-synth", type=int, default=4000)
+    ap.add_argument("--seed", type=int, default=42)
     args = ap.parse_args()
 
-    test = args.test or _guess_file("test")
-    if test is None:
-        print("Gerçek test verisi bulunamadı.\n"
-              f"Dosyaları {DATA_DIR} klasörüne koy "
-              "(açıklama: backend/data/README.md) ya da --test ile yol ver.")
-        raise SystemExit(1)
+    meta: Dict[str, object] = {}
+    real_train = real_test = None
 
-    report = evaluate(args.train or _guess_file("train"), test,
-                      args.bench or _guess_file("bench"),
-                      n_synth=args.n_synth)
+    if args.real is not None or (args.train is None and args.test is None
+                                 and _guess_file("real") is not None):
+        # --- Tek dosya: katmanlı böl ---
+        path = args.real or _guess_file("real")
+        df, rep = load_real_dataset(path)
+        print_report(rep)
+        meta["source"] = rep
+        real_train, real_test = train_test_split(
+            df, test_size=args.test_size, random_state=args.seed,
+            stratify=df["label"])
+        real_train = real_train.reset_index(drop=True)
+        real_test = real_test.reset_index(drop=True)
+        meta["split"] = {"mode": "stratified", "test_size": args.test_size,
+                         "n_train": len(real_train), "n_test": len(real_test)}
+        print(f"  katmanlı bölme: {len(real_train)} eğitim / "
+              f"{len(real_test)} test")
+    else:
+        # --- Hazır bölünmüş veri seti ---
+        test_path = args.test or _guess_file("test")
+        if test_path is None:
+            print("Gerçek veri bulunamadı. "
+                  f"Dosyaları {DATA_DIR} klasörüne koy "
+                  "(açıklama: backend/data/README.md) ya da --real / --test ver.")
+            raise SystemExit(1)
+        real_test, rep_test = load_real_dataset(test_path)
+        print_report(rep_test)
+        meta["test_file"] = rep_test
+
+        train_path = args.train or _guess_file("train")
+        if train_path is not None:
+            real_train, rep_train = load_real_dataset(train_path)
+            print_report(rep_train)
+            meta["train_file"] = rep_train
+
+    # --- Bağımsız ikinci test seti ---
+    bench = None
+    bench_path = args.bench or _guess_file("bench")
+    if bench_path is not None:
+        bench, rep_bench = load_real_dataset(bench_path)
+        print_report(rep_bench)
+        n_before = len(bench)
+        for part in (real_train, real_test):
+            if part is not None:
+                bench, removed = _dedupe_against(bench, part)
+        meta["bench_file"] = rep_bench
+        meta["bench_overlap_removed"] = n_before - len(bench)
+        print(f"  kesişim temizliği: {n_before} -> {len(bench)} "
+              f"({n_before - len(bench)} satır ana veriyle ortaktı)")
+
+    report = evaluate(real_train, real_test, bench, meta=meta,
+                      n_synth=args.n_synth, seed=args.seed)
 
     _print_table(report["results"], "GERÇEK TEST SETİ")
     if "benchmark" in report:
-        _print_table(report["benchmark"]["results"], "IEC TC 10 KARŞILAŞTIRMA SETİ")
-    print(f"\nRapor: {ARTIFACT_DIR / 'real_data_report.json'}")
+        _print_table(report["benchmark"]["results"],
+                     f"BAĞIMSIZ İKİNCİ TEST SETİ (n={report['benchmark']['n']})")
+    print(f"Rapor: {ARTIFACT_DIR / 'real_data_report.json'}")
 
 
 if __name__ == "__main__":
