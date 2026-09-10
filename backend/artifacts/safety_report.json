@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-10 10:08:58",
+  "generated_at": "2026-09-10 16:22:16",
   "n_train": 1380,
   "n_test": 592,
   "seven_class": {
@@ -73,5 +73,52 @@
       "accuracy": 0.9131,
       "f1_macro": 0.8335
     }
-  ]
+  ],
+  "action_impact": {
+    "n": 592,
+    "delayed": 36,
+    "delayed_rate": 0.0608,
+    "delayed_same_family": 22,
+    "over_urgent": 34,
+    "over_urgent_rate": 0.0574,
+    "wrong_but_action_same": 18,
+    "top_delaying_errors": [
+      {
+        "true": "D2",
+        "pred": "D1",
+        "count": 15,
+        "same_family": true
+      },
+      {
+        "true": "T1",
+        "pred": "Normal",
+        "count": 8,
+        "same_family": false
+      },
+      {
+        "true": "T3",
+        "pred": "T1",
+        "count": 5,
+        "same_family": true
+      },
+      {
+        "true": "T3",
+        "pred": "D1",
+        "count": 3,
+        "same_family": false
+      },
+      {
+        "true": "T3",
+        "pred": "T2",
+        "count": 2,
+        "same_family": true
+      },
+      {
+        "true": "T3",
+        "pred": "Normal",
+        "count": 1,
+        "same_family": false
+      }
+    ]
+  }
 }

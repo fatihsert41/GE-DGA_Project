@@ -32,6 +32,27 @@ def _load() -> Optional[dict]:
     return _bundle
 
 
+def model_info() -> Dict[str, object]:
+    """Modelin kimliği ve eşik ölçümü — her tanıya iliştirilir.
+
+    Dış inceleme P0-4: eşiğin hangi modelde ölçüldüğü, eşiğin kendisi kadar
+    önemli. Bu bilgi taşınmadığı için başka bir modelde ölçülen 0.90 değeri
+    buraya sessizce taşınmıştı.
+    """
+    art = _load()
+    if art is None:
+        return {"available": False}
+    return {
+        "available": True,
+        "model_id": art.get("model_id"),
+        "model_name": art.get("model_name"),
+        "data_profile": art.get("data_profile"),
+        "trained_at": art.get("trained_at"),
+        "n_features": len(art.get("feature_names") or []),
+        "threshold": art.get("threshold"),
+    }
+
+
 def is_ready() -> bool:
     return _load() is not None
 

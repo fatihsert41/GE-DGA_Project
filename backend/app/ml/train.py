@@ -31,6 +31,7 @@ from sklearn.svm import SVC
 
 from ..core.classify import consensus
 from ..core.gases import FAULT_CLASSES
+from .calibration import measure as measure_threshold
 from .features import FEATURE_NAMES, build_features
 from .synth import make_dataset, make_field_like_dataset
 
@@ -149,6 +150,18 @@ def train(n_samples: int = 4000, seed: int = 42,
 
     # Detailed report for the winning model.
     best_pred = [CLASSES[int(i)] for i in best_model.predict(X_test)]
+
+    # --- Güven eşiğini BU modelde ölç (P0-4) -----------------------------
+    # Eşik daha önce başka bir modelde (gerçek veriyle eğitilmiş XGBoost)
+    # ölçülüp buraya taşınmıştı. Artık hizmet verecek modelin kendi
+    # ayrılmış test kümesinde ölçülüyor ve kökeniyle saklanıyor.
+    proba = best_model.predict_proba(X_test)
+    confidence = proba.max(axis=1)
+    threshold_info = measure_threshold(
+        y_test_str, best_pred, confidence,
+        model_name=best_name,
+        domain="synthetic",
+        dataset=("field_like" if field_like else "textbook"))
     report = classification_report(
         y_test_str, best_pred, labels=CLASSES, output_dict=True,
         zero_division=0)
@@ -160,6 +173,13 @@ def train(n_samples: int = 4000, seed: int = 42,
             "model_name": best_name,
             "feature_names": FEATURE_NAMES,
             "classes": CLASSES,
+            # Model kimliği ve eşik ölçümü MODELİN YANINDA saklanıyor.
+            # Ayrı dosyada tutulsaydı model değişip ölçüm eskiyebilirdi.
+            "model_id": f"{best_name}-{'field_like' if field_like else 'textbook'}"
+                        f"-{time.strftime('%Y%m%d')}",
+            "trained_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "data_profile": "field_like" if field_like else "textbook",
+            "threshold": threshold_info,
         },
         ARTIFACT_DIR / "model.joblib",
     )
@@ -174,6 +194,7 @@ def train(n_samples: int = 4000, seed: int = 42,
         "classes": CLASSES,
         "confusion_matrix": cm,
         "classification_report": report,
+        "threshold": threshold_info,
     }
     with open(ARTIFACT_DIR / "metrics.json", "w") as fh:
         json.dump(metrics, fh, indent=2)
@@ -193,6 +214,15 @@ if __name__ == "__main__":
     m = train(n_samples=args.n, field_like=args.field_like)
     print(f"Veri profili: {m['data_profile']}")
     print(f"Best model: {m['best_model']}")
+    t = m["threshold"]
+    print("")
+    print(f"Güven eşiği (BU modelde ölçüldü): {t['threshold']}")
+    print(f"  hedef sağlandı mı : {t['target_met']}")
+    print(f"  eşik üstü doğruluk: {t['accuracy_above']}  "
+          f"(kapsama %{t['coverage'] * 100:.0f})")
+    print(f"  eşik altı doğruluk: {t['accuracy_below']}")
+    print(f"  ECE               : {t['ece']}  "
+          f"({'kalibre' if t['calibrated'] else 'FAZLA İDDİALI'})")
     for row in m["leaderboard"]:
         f1 = row["f1_macro"]
         f1s = f"{f1:.4f}" if isinstance(f1, float) else " n/a "
