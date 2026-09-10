@@ -21,6 +21,7 @@ from ..core import assets
 from ..core.gases import GASES
 from ..services.diagnosis import diagnose
 from .synth import make_aging_series
+from .synth_oil import make_oil_test
 
 # Demo filosu. Sözlük kullanılıyor çünkü alan sayısı arttıkça konumsal
 # tuple okunmaz hale geliyordu ("bu 12 neydi?"). Sözlükte her değer
@@ -167,6 +168,7 @@ def _reset() -> None:
     """Tabloları oluştur ve eski demo kayıtları temizle (temiz başlangıç)."""
     database.init_db()
     with sqlite3.connect(database.DB_PATH) as conn:
+        conn.execute("DELETE FROM oil_tests")
         conn.execute("DELETE FROM measurements")
         conn.execute("DELETE FROM transformers")
 
@@ -212,6 +214,28 @@ def seed() -> None:
         record = database.get_transformer(unit["id"]) or {}
         age = (record.get("derived") or {}).get("age_years")
 
+        # --- Yağ kalitesi testleri (Faz 8.3) --------------------------
+        # DGA'dan daha SEYREK alınır: laboratuvar testi pahalıdır ve
+        # kağıt bozunması yavaş bir süreçtir. Yılda bir makul.
+        np_fields = unit.get("nameplate", {})
+        n_oil = max(1, min(4, int((age or 5) // 6)))
+        for k in range(n_oil):
+            # Geçmişe doğru: en eski test en düşük yaşta alınmış.
+            years_ago = (n_oil - 1 - k) * 3
+            test_age = max(0.5, (age or 5) - years_ago)
+            values = make_oil_test(
+                age_years=test_age,
+                fault_class=scenario,
+                insulation_type=str(np_fields.get("insulation_type", "kraft")),
+                hv_kv=np_fields.get("hv_kv"),
+                seed=idx * 100 + k,
+            )
+            sampled = (datetime.now(timezone.utc)
+                       - timedelta(days=int(years_ago * 365.25)))
+            database.save_oil_test(unit["id"], values,
+                                   sampled_at=sampled.isoformat(),
+                                   lab="Demo Laboratuvarı")
+
         flag = " ⚠ uzman incelemesi" if last["review"]["needed"] else ""
         gecikme = f" ⏰ {lag} ay geçti" if lag else ""
         oncelik = assets.priority_score(last["risk"]["condition"],
@@ -222,7 +246,18 @@ def seed() -> None:
               f"risk={last['risk']['level_tr']:<7} "
               f"öncelik={oncelik:>4.2f}{flag}{gecikme}")
 
-    print(f"\nToplam {len(FLEET)} trafo, {total} ölçüm kaydedildi.")
+    from ..services import oil as oil_service
+    fleet_oil = oil_service.fleet_summary()
+
+    print("")
+    print(f"Toplam {len(FLEET)} trafo, {total} DGA olcumu kaydedildi.")
+    print(f"Yag kalitesi: {fleet_oil['tested']} trafo test edildi, "
+          f"durum dagilimi {dict(fleet_oil['condition_counts'])}")
+    print("En yasli kagitlar:")
+    for r in fleet_oil["most_aged_paper"]:
+        print(f"  {r['transformer_id']}  DP={r['dp_estimate']}  "
+              f"({r['paper_band']}, omrunun "
+              f"%{r['life_consumed_pct']:.0f}'i tuketilmis)")
 
 
 if __name__ == "__main__":

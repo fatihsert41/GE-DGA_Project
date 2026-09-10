@@ -73,3 +73,27 @@ class TransformerCreate(BaseModel):
     asset_class: str = "MPT"
     mva: Optional[float] = Field(None, gt=0)
     nameplate: Optional[NameplateIn] = None
+
+
+class OilTestIn(BaseModel):
+    """Yağ kalitesi testi girişi — tüm ölçümler opsiyonel.
+
+    Laboratuvarlar her zaman tüm parametreleri ölçmez; furan analizi
+    ayrıca istenir ve pahalıdır. Zorunlu tutmak, elindeki kısmi sonucu
+    girmek isteyen kullanıcıyı engellerdi. En az bir değer olması yeterli
+    (uç nokta kontrol ediyor).
+    """
+    water_ppm: Optional[float] = Field(None, ge=0, description="Nem (ppm)")
+    bdv_kv: Optional[float] = Field(None, ge=0,
+                                    description="Delinme gerilimi (kV)")
+    acidity_mgkoh_g: Optional[float] = Field(None, ge=0,
+                                             description="Asitlik (mg KOH/g)")
+    ift_mn_m: Optional[float] = Field(None, ge=0,
+                                      description="Arayüzey gerilimi (mN/m)")
+    furan_2fal_mgl: Optional[float] = Field(
+        None, ge=0, description="2-FAL furan (mg/L) — kağıt yaşlanması")
+    color_astm: Optional[float] = Field(None, ge=0, le=8,
+                                        description="Renk (ASTM D1500)")
+    sampled_at: Optional[str] = Field(None, description="ISO tarih")
+    lab: Optional[str] = Field(None, max_length=100)
+    notes: Optional[str] = Field(None, max_length=500)
