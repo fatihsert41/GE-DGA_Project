@@ -178,6 +178,66 @@ A tarafı (0.52) ise hâlâ açık bir problem ve çaresi farklı: sentetik
 üretecin gerçekçileştirilmesi (gürültü, sınıf örtüşmesi, gerçekçi
 dağılımlar). Bu ayrı bir deney.
 
+## Faz 6.4 — Doğru terazi: emniyet ölçütleri
+
+> Üretim: `cd backend; python -m app.ml.safety_eval --real data/dga_china_2321.xlsx`
+> Ham çıktı: `backend/artifacts/safety_report.json`
+
+"F1 = 0.78" bir bakım mühendisine hiçbir şey söylemez, üstelik **yanıltıcıdır**.
+Yedi sınıflı F1, iki taban tabana zıt hatayı aynı ağırlıkta cezalandırır:
+
+* **T1 yerine T2 demek** → ikisi de "termal arıza var, incele". Sonuç aynı.
+* **D2 yerine Normal demek** → ark var, "sorun yok" dedik. Felaket.
+
+Aynı model, emniyet ölçütleriyle:
+
+| Ölçüt | Sonuç |
+|---|---|
+| Yedi sınıflı tam isabet (referans) | doğruluk 0.851 · F1 0.780 |
+| **Arıza yakalama duyarlılığı** | **%97.4** (380 arızanın 10'u kaçtı) |
+| Yanlış alarm | %5.2 (212 normalin 11'i) |
+| **Arıza ailesi** (Normal/Termal/Deşarj) | **doğruluk 0.938** |
+| **Ciddi arızalar** (D2 ark, T3 >700 °C) | 198 vakanın **1**'ine "Normal" dendi |
+| Ciddi arızada doğru aile | %96.5 |
+
+Yani model **"%78 güvenli" değil**. Arızayı %97.4 yakalıyor, ne tür arıza
+olduğunu %93.8 doğru sınıflandırıyor; 0.78 rakamı yalnızca "T1 mi T2 mi,
+D1 mi D2 mi" gibi **aynı eylemi gerektiren** ayrımlardaki kararsızlıktan
+düşüyor.
+
+### Seçici tahmin — emniyet sistemlerinin çalışma biçimi
+
+Model her vakada karar vermek zorunda değil. Güveni düşükse **susup uzmana
+devredebilir**:
+
+| Güven eşiği | Kapsama | Karar verilen | Doğruluk |
+|---|---|---|---|
+| yok (0.0) | %100 | 592 | 0.851 |
+| 0.7 | %93 | 548 | 0.876 |
+| 0.8 | %89 | 526 | 0.899 |
+| **0.9** | **%84** | 495 | **0.913** |
+
+Vakaların %84'ünde %91.3 isabetle otomatik karar, kalan %16'da "uzman
+baksın" demek; her vakada %85 isabetten **operasyonel olarak çok daha
+güvenli** bir sistemdir. Kaçırılan hata, fark edilmeyen hatadır; devredilen
+vaka ise zaten insan gözüne gidiyor.
+
+### "Oran zamanla artar mı?"
+
+Kısmen. Artıracak şeyler:
+* **Daha çok etiketli gerçek vaka** — 1380 eğitim örneği az; birkaç bin
+  vakayla D1↔D2 ayrımı belirgin düzelir.
+* **CO/CO2 içeren ölçümler** — T1'in ana göstergesi; bu veri setinde yok.
+* **Zaman serisi** — tek numune yerine trafonun geçmişi. Projede `/trend`
+  zaten var; tanıya da beslenebilir.
+
+Artırmayacak şeyler:
+* Daha karmaşık model. Ablasyon bunu gösterdi: özellik mühendisliği +0.02
+  verdi, tavan veriden geliyor.
+* **Etiket gürültüsü bir tavan koyar.** D1/D2 sınırı fiziksel olarak
+  sürekli; etiketi koyan uzmanlar bile bazı vakalarda ayrılıyor. Hiçbir
+  model "doğru cevabın kendisi belirsiz" olan veriyi %100 bilemez.
+
 ## Sonuç ve öneri
 
 1. Demo/filo tarafı sentetik veriyle çalışmaya devam etmeli — orada amaç
@@ -188,7 +248,10 @@ dağılımlar). Bu ayrı bir deney.
 3. Özellik mühendisliği (klasik indikatörler + dengeleme + log) B'yi
    0.757 → 0.780'e taşıdı; kazanç ağırlıklı olarak T1'de. Bu yol büyük
    ölçüde tüketildi.
-4. Sonraki adım için en yüksek getirili iki iş:
+4. **Doğru terazi emniyet ölçütleridir** (Faz 6.4): arıza yakalama %97.4,
+   aile doğruluğu %93.8, ciddi arızalarda 198'de 1 kaçırma. Sistem
+   yedi sınıflı F1'in ima ettiğinden çok daha güvenli.
+5. Sonraki adım için en yüksek getirili iki iş:
    **(a)** CO/CO2 içeren gerçek veri bulmak — T1'in ana göstergesi;
    **(b)** `synth.py`'yi gerçekçileştirmek — sıfır atış (A) senaryosunu
    iyileştirmenin tek gerçek yolu bu.

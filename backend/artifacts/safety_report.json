@@ -1,0 +1,77 @@
+{
+  "generated_at": "2026-09-10 10:08:58",
+  "n_train": 1380,
+  "n_test": 592,
+  "seven_class": {
+    "accuracy": 0.8514,
+    "f1_macro": 0.7802
+  },
+  "fault_detection": {
+    "n_faults": 380,
+    "missed": 10,
+    "miss_rate": 0.0263,
+    "recall": 0.9737,
+    "n_normal": 212,
+    "false_alarms": 11,
+    "false_alarm_rate": 0.0519,
+    "missed_cases": [
+      "D1",
+      "T1",
+      "T3"
+    ]
+  },
+  "family": {
+    "accuracy": 0.9375,
+    "f1_macro": 0.9373
+  },
+  "severe": {
+    "n": 198,
+    "declared_normal": 1,
+    "family_correct": 191,
+    "family_recall": 0.9646
+  },
+  "selective": [
+    {
+      "threshold": 0.0,
+      "coverage": 1.0,
+      "n": 592,
+      "accuracy": 0.8514,
+      "f1_macro": 0.7802
+    },
+    {
+      "threshold": 0.5,
+      "coverage": 0.976,
+      "n": 578,
+      "accuracy": 0.8599,
+      "f1_macro": 0.7918
+    },
+    {
+      "threshold": 0.6,
+      "coverage": 0.954,
+      "n": 565,
+      "accuracy": 0.869,
+      "f1_macro": 0.7992
+    },
+    {
+      "threshold": 0.7,
+      "coverage": 0.926,
+      "n": 548,
+      "accuracy": 0.8759,
+      "f1_macro": 0.8045
+    },
+    {
+      "threshold": 0.8,
+      "coverage": 0.889,
+      "n": 526,
+      "accuracy": 0.8992,
+      "f1_macro": 0.8321
+    },
+    {
+      "threshold": 0.9,
+      "coverage": 0.836,
+      "n": 495,
+      "accuracy": 0.9131,
+      "f1_macro": 0.8335
+    }
+  ]
+}
