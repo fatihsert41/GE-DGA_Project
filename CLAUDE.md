@@ -276,7 +276,14 @@ Testler: `cd backend; pytest -q` (18 test).
     Komut (maintenance/ klasöründen): `dotnet test`.
     xUnit ↔ pytest: `[Fact]` ↔ `def test_`, `[Theory]+[InlineData]` ↔
     `@pytest.mark.parametrize`.
-  - ⏭️ **SIRADAKİ: 7.9** Çalıştırma belgeleri (üç servisi birlikte ayağa kaldırma).
+  - ✅ 7.9 Belgeler TAMAM. `README.md` baştan yazıldı: üç servisli mimari
+    şeması, üç terminallik hızlı başlangıç, iki servisin uç nokta tabloları,
+    gerçek veri bulguları, tasarım kararları, bilinen sınırlılıklar.
+    ⚠ README'de `python -m app.ml.train --field-like` bayrağı vurgulandı.
+    `docs/ROADMAP.md` başına tarihsel not: plandan sapılan 4 karar ve
+    nedenleri (açık veri → sentetik+doğrulama, Tailwind → elle CSS,
+    3 sütun → 5 sütun, tek servis → polyglot).
+  - 🏁 **Faz 7 BİTTİ.** Üç servis, 81 test (48 Python + 33 .NET).
   ⚠ Kurallar: Python servisi DEĞİŞTİRİLMEZ, .NET onu dışarıdan tüketir.
   İş emirleri .NET'in KENDİ veritabanında durur (ortak DB mikroservis
   mimarisinin en yaygın hatası). Veritabanı 7.3'ten önce eklenmez.

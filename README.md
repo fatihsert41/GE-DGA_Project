@@ -1,152 +1,278 @@
-# TransformerAI — DGA Tabanlı Trafo Arıza Tahmin ve Sağlık İzleme Sistemi
+# TransformerAI — DGA Tabanlı Trafo Arıza Tahmini ve Bakım Planlama
 
 > **GE Vernova Staj Projesi.** Güç trafolarının yalıtım yağındaki çözünmüş
 > gazlardan (DGA) arıza tipini tahmin eden, kararını **açıklayan**, klasik
-> endüstri yöntemleriyle **karşılaştıran** ve trafonun sağlık **trendini**
-> öngören tam kapsamlı bir web uygulaması.
+> endüstri yöntemleriyle **karşılaştıran**, sağlık **trendini** öngören ve
+> sonucu **bakım iş emrine** dönüştüren polyglot bir sistem.
 
-Bu proje **tamamen açık standartlara ve sentetik (üretilmiş) veriye** dayanır;
-hiçbir gizli/kurumsal saha verisi kullanmaz. Sentetik veri IEC 60599 ve Duval
-üçgeni arıza imzalarına göre üretilir ve üreten kuralla otomatik etiketlenir.
-
----
-
-## 🎯 Projeyi Özgün Kılan 3 Sütun
-
-| Sütun | Ne yapar | Nerede |
-|-------|----------|--------|
-| **A — Açıklanabilir AI (SHAP)** | Model "D2 (ark)" derken hangi gazın bu kararı sürüklediğini sayısal olarak gösterir | `POST /explain` |
-| **B — Çoklu Yöntem Karşılaştırma** | Duval, Rogers, IEC, Key Gas **vs** RandomForest, XGBoost, SVM, NeuralNet aynı test setinde yarışır | `GET /compare/leaderboard`, `POST /compare` |
-| **C — Zaman Serisi Trend Tahmini** | Bir trafonun geçmiş ölçümlerinden "~N ay içinde kritik olacak" öngörüsü | `POST /trend`, `GET /trend/demo/{sınıf}` |
-
-**Örnek çıktı (D2 / ark vakası):** ML tahmini `D2`, güven `1.00`, SHAP en etkili
-gazlar `C2H2` (asetilen) ve `C2H4` (etilen) — fiziksel olarak birebir doğru.
+**Üç servis:** Python (ML) · .NET (bakım planlama) · React (arayüz).
+**81 test** (48 Python + 33 .NET).
 
 ---
 
-## 🧪 Arıza Sınıfları (IEC 60599)
+## Projeyi özgün kılan ne?
 
-`Normal` · `PD` (kısmi deşarj) · `D1` (düşük enerjili deşarj) · `D2` (ark) ·
-`T1` (<300 °C) · `T2` (300–700 °C) · `T3` (>700 °C)
+Çoğu öğrenci projesi "model %96 doğru" der ve orada biter. Bu proje
+**kendi sınırlarını ölçtü** ve ölçümü ürüne taşıdı.
 
-Dashboard'da 4 gruba sadeleştirilebilir: **Normal / Termal / Deşarj / Ark**.
-
----
-
-## 🏗️ Mimari
-
-```
-┌─────────────────┐      HTTP/JSON      ┌──────────────────────┐
-│   React (SPA)   │ ◄─────────────────► │   FastAPI Backend    │
-│  Veri giriş     │                     │  /predict  /explain  │
-│  Dashboard      │                     │  /compare  /trend    │
-│  Grafikler      │                     │  /transformers       │
-└─────────────────┘                     └───────────┬──────────┘
-                          ┌──────────────┬──────────┼───────────┐
-                          ▼              ▼          ▼           ▼
-                    ┌──────────┐  ┌───────────┐ ┌────────┐ ┌─────────┐
-                    │ Klasik   │  │ ML Model  │ │  SHAP  │ │ SQLite  │
-                    │ motor    │  │ (RF/XGB)  │ │Explainer│ │   DB    │
-                    │Duval/IEC │  │           │ │        │ │         │
-                    └──────────┘  └───────────┘ └────────┘ └─────────┘
-```
-
-### Backend dizin yapısı
-```
-backend/app/
-├── core/          # Klasik DGA motoru (saf Python, ML'siz)
-│   ├── gases.py       # 7 gaz, sınıflar, IEEE eşikleri, oranlar
-│   ├── duval.py       # Duval Üçgeni 1
-│   ├── rogers.py      # Rogers oran yöntemi
-│   ├── iec_ratio.py   # IEC 60599 oran yöntemi
-│   ├── key_gas.py     # Key Gas yöntemi
-│   ├── risk.py        # IEEE C57.104 risk/kondisyon değerlendirmesi
-│   └── classify.py    # Yöntemleri birleştiren konsensüs
-├── ml/            # Makine öğrenmesi katmanı
-│   ├── synth.py       # Standart-temelli sentetik veri üreteci
-│   ├── features.py    # Öznitelik mühendisliği (gaz + oranlar)
-│   ├── train.py       # Çoklu model eğitimi + karşılaştırma
-│   └── predictor.py   # Model yükleme, tahmin, SHAP açıklama
-├── services/      # trend.py (trend), diagnosis.py (birleşik tanı)
-├── routers/       # FastAPI uç noktaları
-├── database.py    # SQLite kalıcılık
-├── schemas.py     # Pydantic modelleri
-└── main.py        # FastAPI uygulaması
-```
+| | Ne yapar | Nerede |
+|---|---|---|
+| **A — Açıklanabilirlik** | Model "D2 (ark)" derken hangi gazın kararı sürüklediğini SHAP ile gösterir | `POST /explain` |
+| **B — Karşılaştırma** | Duval, Rogers, IEC, Key Gas **vs** RandomForest, XGBoost, SVM, NeuralNet — aynı test setinde | `GET /compare/leaderboard` |
+| **C — Trend** | Geçmiş ölçümlerden "~N ay içinde kritik olacak" öngörüsü | `GET /trend/{id}` |
+| **D — Belirsizlik** | Model emin değilse **söyler** ve vaka uzmana gider | `review` alanı, her tanıda |
+| **E — Eyleme dönüşüm** | Risk → iş emri → teknisyen ataması | .NET servisi |
 
 ---
 
-## 🚀 Kurulum ve Çalıştırma
+## En önemli bulgu: dürüst ölçüm
 
-### Backend
-```bash
+Sentetik veriyle eğitilen model **gerçek trafo ölçümlerinde** sınandı
+(2321 kayıt, açık kaynak derleme):
+
+| | Sonuç |
+|---|---|
+| Sentetik test doğruluğu | %90.4 |
+| **Gerçek veride F1** (5 katlı CV) | **0.772 ± 0.010** |
+| **Arıza yakalama duyarlılığı** | **%97.4** |
+| **Arıza ailesi doğruluğu** (Normal/Termal/Deşarj) | **%94.6** |
+| Ciddi arızalarda (ark, >700 °C) kaçırma | 198 vakada **1** |
+
+Yedi sınıflı F1'in düşük görünmesi yanıltıcıdır: hataların **%58'i aynı
+aile içinde** (T1↔T2 gibi) ve bakım kararını değiştirmez. Karar değiştiren
+gerçek hata oranı **%6.3**.
+
+📄 Ayrıntı: [`docs/FAZ6-GERCEK-VERI-BULGULARI.md`](docs/FAZ6-GERCEK-VERI-BULGULARI.md)
+· [`docs/FAZ6-IYILESTIRME-YOL-HARITASI.md`](docs/FAZ6-IYILESTIRME-YOL-HARITASI.md)
+
+---
+
+## Mimari
+
+```
+                        ┌──────────────────────────────┐
+                        │      React (Vite) :5173      │
+                        │  Filo · Analiz · Bakım       │
+                        └───┬──────────────────────┬───┘
+                 /api       │                      │   /maint
+                            ▼                      ▼
+        ┌───────────────────────────┐   ┌──────────────────────────┐
+        │   Python / FastAPI :8000  │◄──┤  .NET / ASP.NET  :5080   │
+        │   ── ML SERVİSİ ──        │   │  ── BAKIM PLANLAMA ──    │
+        │                           │   │                          │
+        │  • klasik DGA motoru      │   │  • iş emri               │
+        │  • ML tahmini + SHAP      │   │  • otomatik öneri        │
+        │  • risk, trend, öncelik   │   │  • teknisyen ataması     │
+        │                           │   │                          │
+        │  SQLite: ölçümler         │   │  SQLite: iş emirleri     │
+        └───────────────────────────┘   └──────────────────────────┘
+```
+
+**Neden iki dil?** Her servis kendi işine en uygun dilde. ML Python'da
+(scikit-learn, SHAP orada); iş mantığı, veri bütünlüğü ve kurumsal iş akışı
+.NET'te. Servisler HTTP/JSON ile konuşur ve **ayrı veritabanları** kullanır —
+ortak veritabanı mikroservis mimarisinin en yaygın hatasıdır.
+
+**Dayanıklılık:** ML servisi kapalıyken bakım servisi çalışmaya devam eder
+(`/health` bağımlılığı `unreachable` olarak bildirir, iş emirleri açılır).
+
+---
+
+## Hızlı başlangıç
+
+Gereksinimler: **Python 3.12+**, **Node 18+**, **.NET 10 SDK**.
+
+### 1) Python ML servisi — Terminal 1
+
+```powershell
 cd backend
-python -m venv .venv && source .venv/bin/activate    # opsiyonel
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 
-# 1) Modeli eğit (model.joblib + metrics.json üretir)
-python -m app.ml.train
-
-# 2) API'yi başlat
-uvicorn app.main:app --reload
+python -m app.ml.train --field-like   # model.joblib + metrics.json
+python -m app.ml.seed                 # demo filo: 9 trafo, 94 ölçüm
+uvicorn app.main:app --reload         # http://localhost:8000/docs
 ```
-Swagger dokümantasyonu: **http://localhost:8000/docs**
 
-### Testler
-```bash
-cd backend
-pytest -q          # 18 birim testi
+> ⚠ `--field-like` bayrağı önemlidir: sentetik veriyi saha benzeri üretir
+> (başlangıç evresindeki arızalar dahil). Bayraksız eğitirsen sentetik test
+> doğruluğu yükselir ama gerçek dünyaya aktarım düşer.
+
+### 2) .NET bakım servisi — Terminal 2
+
+```powershell
+cd maintenance/TransformerAI.Maintenance.Api
+dotnet run --urls http://localhost:5080
+```
+
+Veritabanı ve demo teknisyenler ilk açılışta otomatik oluşur (EF Core
+migration + `HasData`).
+
+### 3) React arayüzü — Terminal 3
+
+```powershell
+cd frontend
+npm install
+npm run dev                           # http://localhost:5173
+```
+
+Vite iki servise birden yönlendirir: `/api` → :8000, `/maint` → :5080.
+
+---
+
+## Testler
+
+```powershell
+cd backend      ; pytest -q            # 48 test
+cd maintenance  ; dotnet test          # 33 test
+```
+
+.NET testleri veritabanı ve HTTP kullanmaz (195 ms): iş kuralları saf
+sınıflarda tutulduğu için doğrudan test edilebiliyor.
+
+---
+
+## Ekranlar
+
+| Sekme | İçerik |
+|---|---|
+| **Filo** | 9 trafo, önceliğe göre sıralı; risk dağılımı, alarm listesi, arama/filtre. Karta tıklayınca: gaz geçmişi + 6 aylık öngörü + gaz bazında trend tablosu |
+| **Numune Analizi** | Elle gaz girişi → tanı, SHAP grafiği, Duval üçgeni, yöntem karşılaştırması, gerçeklik kontrolü paneli |
+| **Bakım Planlama** | İş emirleri, sistemin ürettiği öneriler, teknisyen yük tablosu, atama |
+
+---
+
+## Öne çıkan tasarım kararları
+
+**Varlık sınıfları ve öncelik.** Trafolar GE Vernova hattına göre **LPT**
+(≥100 MVA), **MPT** (10–100) ve **SPT** (üretimi durdu, saha üniteleri
+izlenmeye devam ediyor) olarak ayrılır. Endüstride risk = olasılık × sonuç;
+gaz analizi olasılığı verir, **sonucu varlık sınıfı verir**:
+
+```
+Öncelik = IEEE kondisyonu × varlık ağırlığı   (LPT 1.0 / MPT 0.7 / SPT 0.45)
+```
+
+Sonuç: yüksek riskli bir LPT (3.00), kritik riskli bir MPT'nin (2.80)
+önüne geçer.
+
+**Belirsizlik ürüne girdi.** Güven eşiği (0.90) keyfi değil, gerçek veride
+ölçüldü: bu eşiğin altındaki tahminlerin doğruluğu %54, üstündekilerin %91.
+Eşik altındaki vakalar arayüzde işaretlenir ve iş emri önerisi üretir.
+
+**Ölçülüp elenen kural.** İlk tasarımda "ML ve klasik yöntemler ayrışıyorsa
+uzman baksın" kuralı vardı. Ölçünce elendi: %45 tetikleniyor ama
+tetiklendiğinde model **daha** doğru (%92 vs %80) — yani modelin değil
+klasik motorun zayıflığını gösteriyordu.
+
+---
+
+## Dizin yapısı
+
+```
+backend/app/            Python — ML servisi
+├── core/               klasik DGA motoru (Duval, Rogers, IEC, Key Gas, risk)
+│   └── assets.py       varlık sınıfları (LPT/MPT/SPT) ve öncelik skoru
+├── ml/                 sentetik veri, eğitim, SHAP, gerçek veri değerlendirme
+│   ├── synth.py        standart-temelli üreteç (+ saha benzeri profil)
+│   ├── real_data.py    açık veri seti yükleyici (Çince etiket desteği dahil)
+│   ├── evaluate_real.py  A/B/C/D senaryolu gerçek veri sınaması
+│   ├── experiments.py  ablasyon deneyleri
+│   ├── safety_eval.py  emniyet ölçütleri
+│   └── diagnostics.py  öğrenme eğrisi + çapraz doğrulama
+├── services/           tanı orkestrasyonu, trend, filo
+└── routers/            /predict /explain /compare /trend /fleet /transformers
+
+maintenance/            .NET — bakım planlama servisi
+├── TransformerAI.Maintenance.Api/
+│   ├── Models/         WorkOrder, Technician, ML cevap tipleri
+│   ├── Data/           DbContext, repository'ler, migration'lar
+│   ├── Services/       MlServiceClient, WorkOrderPlanner, AssignmentService
+│   └── Program.cs      Minimal API uç noktaları
+└── TransformerAI.Maintenance.Tests/   xUnit
+
+frontend/src/           React (Vite)
+├── components/         FleetOverview, TransformerDetail, MaintenancePanel, ...
+└── theme.js            grafik renkleri (tek kaynak)
 ```
 
 ---
 
-## 📡 API Uç Noktaları
+## API uç noktaları
+
+### Python — ML servisi (:8000)
 
 | Metot | Yol | Açıklama |
-|-------|-----|----------|
-| `GET`  | `/` , `/health` | Servis durumu, model eğitilmiş mi |
-| `POST` | `/predict` | Tam tanı: ML + klasik + risk (+ opsiyonel kayıt) |
-| `POST` | `/explain` | SHAP gaz katkıları (Sütun A) |
+|---|---|---|
+| `POST` | `/predict` | Tam tanı: ML + klasik + risk + belirsizlik değerlendirmesi |
+| `POST` | `/explain` | SHAP gaz katkıları |
 | `POST` | `/compare` | Tek okuma için tüm yöntemler yan yana |
-| `GET`  | `/compare/leaderboard` | ML vs klasik doğruluk tablosu (Sütun B) |
-| `POST` | `/trend` | Verilen ölçüm geçmişinden trend (Sütun C) |
-| `GET`  | `/trend/demo/{sınıf}` | Demo için sentetik yaşlanma serisi |
-| `GET`  | `/transformers/{id}/measurements` | Trafo ölçüm geçmişi |
+| `GET` | `/compare/leaderboard` | ML vs klasik doğruluk tablosu |
+| `GET` | `/compare/reality-check` | Sentetik test vs gerçek veri performansı |
+| `GET` | `/fleet/overview` | Filo: her trafonun son tanısı, risk, öncelik |
+| `GET` | `/trend/{id}` | Trafonun trendi + kritik olma süresi |
 
-Örnek istek:
-```bash
-curl -X POST localhost:8000/predict -H "Content-Type: application/json" -d '{
-  "gases": {"H2":280,"CH4":120,"C2H6":40,"C2H4":220,"C2H2":240,"CO":500,"CO2":3200}
-}'
-```
+### .NET — Bakım servisi (:5080)
+
+| Metot | Yol | Açıklama |
+|---|---|---|
+| `GET` | `/health` | Servis + ML bağımlılığı durumu |
+| `GET` | `/fleet` | ML servisinden okunan filo (ayna, saklanmaz) |
+| `GET` | `/transformers/{id}/risk` | Risk (Python) + iş emirleri (bu servis) |
+| `GET`/`POST` | `/workorders` | İş emri listele / oluştur |
+| `GET` | `/workorders/suggestions` | Sistemin önerdiği iş emirleri |
+| `POST` | `/workorders/suggestions/apply` | Önerileri uygula (idempotent) |
+| `PATCH` | `/workorders/{id}/status` | Durum güncelle |
+| `POST` | `/workorders/{id}/assign` | Teknisyen ata (boş gövde = otomatik) |
+| `GET` | `/technicians` | Teknisyenler ve anlık yükleri |
 
 ---
 
-## 📚 Referans Standartlar
+## Veri politikası
+
+**Gizli/kurumsal veri yoktur.** Uygulamanın çalıştırdığı veri
+`backend/app/ml/synth.py` içinde IEC 60599 / Duval imzalarına göre üretilir
+ve üreten kuralla etiketlenir.
+
+Faz 6'daki doğrulama için kullanılan gerçek veri seti açık kaynaklıdır ve
+**repoya dahil edilmemiştir** (lisans belirsizliği); indirme talimatı
+[`backend/data/README.md`](backend/data/README.md) dosyasındadır.
+
+---
+
+## Referans standartlar
 
 - **IEC 60599:2015** — çözünmüş gaz oran yorumlama
 - **IEEE C57.104-2008** — gaz konsantrasyon eşikleri (Condition 1–4)
 - **M. Duval (2002)** — Duval Üçgeni arıza bölgeleri
+- **US DOE** — LPT tanımı (≥100 MVA)
 
 ---
 
-## 🗺️ Yol Haritası
+## Yol haritası
 
-- [x] **Faz 0–1** — İskelet + klasik DGA motoru + testler
-- [x] **Faz 2** — Sentetik veri + çoklu model eğitimi + karşılaştırma
-- [x] **Faz 3** — FastAPI backend (predict/explain/compare/trend) + SQLite
-- [ ] **Faz 4** — React dashboard (veri giriş, SHAP grafiği, Duval üçgeni, trend)
-- [ ] **Faz 5** — Cila, örnek veri, demo hazırlığı
-- [ ] **Faz 6** — Rapor + sunum
-
-Detaylı yol haritası: [`docs/ROADMAP.md`](docs/ROADMAP.md)
+- [x] **Faz 0–1** — İskelet, klasik DGA motoru, testler
+- [x] **Faz 2** — Sentetik veri, çoklu model eğitimi, karşılaştırma
+- [x] **Faz 3** — FastAPI backend + SQLite
+- [x] **Faz 4** — React dashboard (SHAP, Duval, trend)
+- [x] **Faz 5** — Filo yönetimi (genel bakış, detay, alarm, filtre)
+- [x] **Faz 6** — Gerçek veri doğrulaması, emniyet ölçütleri, belirsizlik
+- [x] **Faz 7** — .NET bakım planlama servisi (polyglot mimari)
+- [ ] **Faz 8+** — RUL, PostgreSQL, kimlik doğrulama, Docker, CI/CD
 
 ---
 
-## ⚠️ Sınırlılıklar (rapora yazılacak)
+## Bilinen sınırlılıklar
 
-- Veri **sentetiktir**; gerçek saha verisiyle yeniden eğitim önerilir.
-- Klasik yöntemler tanım gereği bazı gaz desenlerinde "N/A" döndürür; bu
-  bir hata değil, yöntemin doğasıdır.
-- Trend modülü doğrusal regresyona dayanır; daha uzun geçmişte doğrusal
-  olmayan modeller (ör. üstel) daha iyi olabilir.
+- Uygulamanın verisi **sentetiktir**; gerçek saha verisiyle yeniden eğitim
+  önerilir. Sentetik → gerçek aktarım farkı ölçülmüş ve belgelenmiştir.
+- Açık veri setlerinde **CO ve CO₂ yoktur**; T1 (düşük sıcaklık aşırı ısınma)
+  sınıfının ana göstergesi kağıt bozunmasıdır ve bu iki gazla görülür.
+  T1'deki görece zayıflık doğrudan bu kısıtın sonucudur.
+- Trend modülü doğrusal regresyona dayanır; uzun geçmişte doğrusal olmayan
+  modeller daha iyi olabilir.
+- Model güven değerleri **fazla iddialıdır** (ECE 0.096); kalibrasyon
+  katmanı sonraki adım olarak belgelenmiştir.
+- İş emri numaraları tek servis örneği varsayar; yatay ölçeklemede
+  veritabanı dizisi (sequence) gerekir.
