@@ -40,6 +40,14 @@ export const api = {
   updateNameplate: (id, fields) =>
     client.put(`/transformers/${id}/nameplate`, fields).then((r) => r.data),
 
+  // --- Yağ kalitesi ve kağıt yaşlanması (Faz 8.3-8.4) ---------------------
+  oilSchema: () => client.get('/oil/schema').then((r) => r.data),
+  oilFleet: () => client.get('/oil/fleet').then((r) => r.data),
+  oilTests: (id) =>
+    client.get(`/transformers/${id}/oil-tests`).then((r) => r.data),
+  createOilTest: (id, payload) =>
+    client.post(`/transformers/${id}/oil-tests`, payload).then((r) => r.data),
+
   // --- Bakım planlama servisi (.NET) ---------------------------------------
   maintenance: {
     health: () => maint.get('/health').then((r) => r.data),

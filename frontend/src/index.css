@@ -636,3 +636,40 @@ button.tcard:hover .tcard-go { color: var(--accent); }
 .np-view h3 { margin-top: 0; }
 .np-rowhint { font-size: 0.72rem; color: var(--muted); }
 .np-view .mono { font-family: var(--mono); }
+
+/* ============================================================
+   Yağ kalitesi ve kağıt yaşlanması (Faz 8.4)
+   ============================================================ */
+
+.paper-head {
+  display: grid; gap: 20px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  margin-bottom: 16px;
+}
+.kpi-value.danger { color: var(--critical); }
+
+/* Tüketilen ömür çubuğu. Risk rampasının renklerini kullanır: kağıt
+   bozunması da sıralı bir şiddettir, ikinci bir "kötülük" dili gerekmez. */
+.life-bar {
+  height: 14px; background: var(--surface-2); border-radius: 7px;
+  overflow: hidden; margin: 4px 0 6px;
+}
+.life-bar span { display: block; height: 100%; }
+.life-bar .low { background: var(--low); }
+.life-bar .medium { background: var(--medium); }
+.life-bar .high { background: var(--high); }
+.life-bar .critical { background: var(--critical); }
+
+.life-legend {
+  display: flex; justify-content: space-between;
+  font-family: var(--mono); font-size: 0.76rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Güvenilirlik uyarısı sonucun YANINDA durur: sayıyı gösterip kısıtını
+   gizlemek, sayıyı olduğundan kesin göstermek olurdu. */
+.paper-warning {
+  margin-top: 14px; padding: 12px 16px; border-radius: 8px;
+  background: var(--surface-2); border-left: 3px solid var(--medium);
+  font-size: 0.84rem; line-height: 1.5;
+}
