@@ -27,6 +27,7 @@ from __future__ import annotations
 import argparse
 import json
 import time
+from collections import Counter
 from pathlib import Path
 from typing import Dict, List, Tuple
 
@@ -49,6 +50,27 @@ except Exception:  # pragma: no cover
 # Tek doğruluk kaynağı core/gases.py; burada yalnızca kısa ad veriliyor.
 FAMILY = FAULT_FAMILY
 SEVERE = SEVERE_FAULTS
+
+
+def action_tier(fault_class: str) -> int:
+    """Bir arıza sınıfının gerektirdiği aciliyet katmanı (küçük = acil).
+
+    .NET planlayıcısının kurallarının sadeleştirilmiş hâli:
+      1 = acil       (D2 ark / T3 >700 °C -> 3 gün içinde inceleme)
+      2 = planlı     (diğer arızalar -> 7-14 gün)
+      3 = aksiyon yok (Normal)
+
+    NEDEN GEREKLİ? "Hataların %58'i aynı aile içinde, dolayısıyla zararsız"
+    demiştik. YANLIŞ: D2 ve D1 aynı ailede (Deşarj) ama D2 ciddi arıza
+    sayılıp 3 güne, D1 ise 7-14 güne düşüyor. Aile aynı, KARAR FARKLI.
+    Doğru ölçüt aile doğruluğu değil, gerekli bakımın geciktirildiği
+    vaka oranıdır.
+    """
+    if fault_class in SEVERE:
+        return 1
+    if fault_class == "Normal":
+        return 3
+    return 2
 
 _LABEL_TO_INT = {c: i for i, c in enumerate(FAULT_CLASSES)}
 
@@ -161,12 +183,52 @@ def evaluate(real_path: Path, seed: int = 42, test_size: float = 0.3
                                    max(1, len(severe)), 4),
         },
         "selective": _selective(y_true, y_pred, conf),
+        # --- ANA ÖLÇÜT (dış inceleme sonrası) ---------------------------
+        "action_impact": _action_impact(y_true, y_pred),
     }
 
     ARTIFACT_DIR.mkdir(parents=True, exist_ok=True)
     with open(ARTIFACT_DIR / "safety_report.json", "w", encoding="utf-8") as fh:
         json.dump(report, fh, indent=2, ensure_ascii=False)
     return report
+
+
+def _action_impact(y_true: List[str], y_pred: List[str]) -> Dict[str, object]:
+    """Tahmin hatası bakım kararını nasıl etkiledi?
+
+    Üç sonuç mümkün:
+      * **geciktirildi** — gerçek durum tahminden ACİL; iş geç planlanır.
+        Emniyet açısından tehlikeli olan budur.
+      * **gereksiz aciliyet** — tahmin gerçekten acil; boşa kaynak.
+      * **etkisiz** — aciliyet katmanı aynı; bakım kararı değişmez.
+    """
+    n = len(y_true)
+    pairs = list(zip(y_true, y_pred))
+
+    delayed = [(t, p) for t, p in pairs if action_tier(t) < action_tier(p)]
+    over = [(t, p) for t, p in pairs if action_tier(t) > action_tier(p)]
+    wrong_but_harmless = [(t, p) for t, p in pairs
+                          if t != p and action_tier(t) == action_tier(p)]
+
+    # Geciktirilen vakaların kaçı AYNI AİLEDE? Bunlar daha önce "zararsız"
+    # sayılanlar; sayının görünür olması gerekiyor.
+    delayed_same_family = [(t, p) for t, p in delayed
+                           if FAMILY[t] == FAMILY[p]]
+
+    return {
+        "n": n,
+        "delayed": len(delayed),
+        "delayed_rate": round(len(delayed) / max(n, 1), 4),
+        "delayed_same_family": len(delayed_same_family),
+        "over_urgent": len(over),
+        "over_urgent_rate": round(len(over) / max(n, 1), 4),
+        "wrong_but_action_same": len(wrong_but_harmless),
+        "top_delaying_errors": [
+            {"true": t, "pred": p, "count": c,
+             "same_family": FAMILY[t] == FAMILY[p]}
+            for (t, p), c in Counter(delayed).most_common(6)
+        ],
+    }
 
 
 def _print(report: Dict[str, object]) -> None:
@@ -202,7 +264,22 @@ def _print(report: Dict[str, object]) -> None:
     print(f"   doğru aileye atanan: {sv['family_correct']}/{sv['n']} "
           f"(%{100 * sv['family_recall']:.1f})")
 
-    print(f"\n4) SEÇİCİ TAHMİN — emin değilse uzmana devret")
+    ai = report["action_impact"]
+    print("")
+    print("4) BAKIM KARARINA ETKI  <-- ANA OLCUT")
+    print(f"   gerekli bakim GECIKTI : {ai['delayed']} vaka "
+          f"(%{100 * ai['delayed_rate']:.1f})")
+    print(f"     bunlarin {ai['delayed_same_family']}'i AYNI AILEDE "
+          "- onceden 'zararsiz' sayilanlar")
+    print(f"   gereksiz aciliyet     : {ai['over_urgent']} vaka "
+          f"(%{100 * ai['over_urgent_rate']:.1f})  (bosa kaynak)")
+    print(f"   hatali ama karar ayni : {ai['wrong_but_action_same']} vaka")
+    print("   gecikmeye yol acan hatalar:")
+    for e in ai["top_delaying_errors"]:
+        tag = "AYNI AILE" if e["same_family"] else "aile disi"
+        print(f"     {e['true']:>6} -> {e['pred']:<6} {e['count']:>3} kez  ({tag})")
+    print("")
+    print("5) SECICI TAHMIN - emin degilse uzmana devret")
     print(f"   {'eşik':>6}{'kapsama':>10}{'karar':>8}{'doğruluk':>11}"
           f"{'F1':>9}")
     for r in report["selective"]:

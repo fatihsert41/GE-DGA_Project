@@ -12,14 +12,37 @@ from ..core import risk
 from ..core.classify import consensus
 from ..core.gases import (FAULT_FAMILY, FAULT_GROUP, FAULT_LABELS_TR,
                           SEVERE_FAULTS)
-from ..ml import predictor
+from ..ml import calibration, predictor
 
-# Bu eşiğin altında model "emin değilim" sayılır ve vaka uzmana devredilir.
-# Değer keyfi değil: gerçek veri üzerinde ölçüldü (Faz 6.4, safety_eval.py).
-# Güven >= 0.90 olan vakalarda doğruluk 0.851'den 0.913'e çıkıyor; bunun
-# bedeli vakaların ~%16'sını insana devretmek. Kaçırılan hata fark edilmeyen
-# hatadır; devredilen vaka ise zaten uzman gözüne gidiyor.
+# --- Güven eşiği: ÇALIŞMA NOKTASI vs ÖLÇÜM (düzeltme P0-4) ---------------
+#
+# Sistem bu eşiğin altında "emin değilim" der ve vakayı uzmana devreder.
+#
+# ⚠ Bu değerin kökeni Faz 6.4'te YANLIŞ kaydedilmişti: 0.90, gerçek veriyle
+# eğitilmiş bir XGBoost modelinde ölçülmüştü ama hizmet veren model sentetik
+# veriyle eğitilmiş bir RandomForest. Dış inceleme bunu haklı olarak P0
+# saydı. Artık eşik hizmet veren modelin KENDİ test kümesinde ölçülüyor
+# (ml/calibration.py) ve sonuç modelin yanında saklanıyor.
+#
+# ÖLÇÜM SONUCU (RandomForest, field_like sentetik, 1000 örnek):
+#   ECE 0.021 -> model kendi alanında İYİ KALİBRE
+#   %90 isabet için yeterli eşik: 0.50 (kapsama %98)
+#
+# ÇALIŞMA NOKTASI ise bilinçli olarak daha yüksek: 0.90.
+# Neden ölçülenden yüksek? Çünkü ölçüm SENTETİK alanda yapıldı ve Faz 6'da
+# bu modelin gerçek veriye aktarımının zayıf olduğunu ölçtük (F1 0.96 -> 0.58).
+# Kendi dağılımında dürüst olmak, farklı bir dağılımda dürüst olmayı
+# garanti etmez. Aradaki fark bir EMNİYET PAYIDIR ve saklanmıyor, cevapta
+# gerekçesiyle birlikte bildiriliyor.
+#
+# 0.90'da sentetik alanda: kapsama %63, üstünde doğruluk %98.9, altında %76.
 CONFIDENCE_THRESHOLD = 0.90
+
+_SAFETY_MARGIN_REASON = (
+    "Çalışma eşiği ölçülen eşikten yüksek tutuluyor: ölçüm sentetik alanda "
+    "yapıldı ve bu modelin gerçek veriye aktarımı zayıf (Faz 6). Aradaki "
+    "fark bilinçli bir emniyet payıdır."
+)
 
 
 def _review(prediction: str, confidence: float) -> Dict[str, object]:
@@ -40,18 +63,35 @@ def _review(prediction: str, confidence: float) -> Dict[str, object]:
     Ciddi arıza (D2/T3) ayrı bir kavramdır: belirsizlik değil ACİLİYET
     bildirir, bu yüzden ``severe`` alanında ayrı taşınır.
     """
+    info = predictor.model_info()
+    measurement = (info.get("threshold") or {}) if info.get("available") else {}
+
     reasons = []
     if confidence < CONFIDENCE_THRESHOLD:
         reasons.append(
             f"Model kararsız (güven %{confidence * 100:.0f}, "
-            f"eşik %{CONFIDENCE_THRESHOLD * 100:.0f}). "
-            f"Bu güven aralığındaki tahminlerin doğruluğu belirgin düşük.")
+            f"eşik %{CONFIDENCE_THRESHOLD * 100:.0f}).")
 
     return {
         "needed": bool(reasons),
         "reasons": reasons,
         "confidence_threshold": CONFIDENCE_THRESHOLD,
         "severe": prediction in SEVERE_FAULTS,
+        # KÖKEN: eşik nereden geliyor, hangi modelde ölçüldü, kalibre mi?
+        # Bu blok olmadan "eşik 0.90" cümlesi denetlenemez bir iddiadır.
+        "threshold_basis": {
+            "operating": CONFIDENCE_THRESHOLD,
+            "measured": measurement.get("threshold"),
+            "measured_on": measurement.get("measured_on"),
+            "ece": measurement.get("ece"),
+            "calibrated": measurement.get("calibrated"),
+            "explanation": calibration.summary_line(measurement or None),
+            "safety_margin": (
+                _SAFETY_MARGIN_REASON
+                if measurement.get("threshold") is not None
+                and float(measurement["threshold"]) < CONFIDENCE_THRESHOLD
+                else None),
+        },
     }
 
 
@@ -91,4 +131,7 @@ def diagnose(gases: Dict[str, float]) -> Dict[str, object]:
         "agreement": agreement,
         "risk": risk_info,
         "review": _review(prediction, float(confidence or 0.0)),
+        # Hangi model bu tanıyı üretti? Model değiştiğinde eski kayıtların
+        # hangi sürümle üretildiği bilinmeli.
+        "model_info": predictor.model_info(),
     }

@@ -6,7 +6,7 @@
 > sonucu **bakım iş emrine** dönüştüren polyglot bir sistem.
 
 **Üç servis:** Python (ML) · .NET (bakım planlama) · React (arayüz).
-**81 test** (48 Python + 33 .NET).
+**109 test** (73 Python + 36 .NET).
 
 ---
 
@@ -38,9 +38,21 @@ Sentetik veriyle eğitilen model **gerçek trafo ölçümlerinde** sınandı
 | **Arıza ailesi doğruluğu** (Normal/Termal/Deşarj) | **%94.6** |
 | Ciddi arızalarda (ark, >700 °C) kaçırma | 198 vakada **1** |
 
-Yedi sınıflı F1'in düşük görünmesi yanıltıcıdır: hataların **%58'i aynı
-aile içinde** (T1↔T2 gibi) ve bakım kararını değiştirmez. Karar değiştiren
-gerçek hata oranı **%6.3**.
+Yedi sınıflı F1'in düşük görünmesi yanıltıcıdır — ama **"aynı aile =
+zararsız hata" demek de yanlıştır.** Dış inceleme bu savı çürüttü ve
+ölçtük: doğru ölçüt aile doğruluğu değil, **gerekli bakımın geciktirildiği
+vaka oranı**:
+
+| Ölçüt | Sonuç |
+|---|---|
+| **Gerekli bakım gecikti** | **%6.1** (36 vaka) |
+| ↳ bunların aynı ailede olanı | **22** — "zararsız" sanılanlar |
+| Gereksiz aciliyet (boşa kaynak) | %5.7 (34 vaka) |
+| Hatalı ama bakım kararı aynı | 18 vaka |
+
+En sık gecikme **D2 → D1** (15 kez): ikisi de "Deşarj" ailesinde ama D2
+ciddi arıza sayılıp 3 gün içinde inceleme ister, D1 ise 7-14 güne kayar.
+**Aile aynı, karar farklı.**
 
 📄 Ayrıntı: [`docs/FAZ6-GERCEK-VERI-BULGULARI.md`](docs/FAZ6-GERCEK-VERI-BULGULARI.md)
 · [`docs/FAZ6-IYILESTIRME-YOL-HARITASI.md`](docs/FAZ6-IYILESTIRME-YOL-HARITASI.md)
@@ -124,8 +136,8 @@ Vite iki servise birden yönlendirir: `/api` → :8000, `/maint` → :5080.
 ## Testler
 
 ```powershell
-cd backend      ; pytest -q            # 48 test
-cd maintenance  ; dotnet test          # 33 test
+cd backend      ; pytest -q            # 73 test
+cd maintenance  ; dotnet test          # 36 test
 ```
 
 .NET testleri veritabanı ve HTTP kullanmaz (195 ms): iş kuralları saf
@@ -157,9 +169,24 @@ gaz analizi olasılığı verir, **sonucu varlık sınıfı verir**:
 Sonuç: yüksek riskli bir LPT (3.00), kritik riskli bir MPT'nin (2.80)
 önüne geçer.
 
-**Belirsizlik ürüne girdi.** Güven eşiği (0.90) keyfi değil, gerçek veride
-ölçüldü: bu eşiğin altındaki tahminlerin doğruluğu %54, üstündekilerin %91.
-Eşik altındaki vakalar arayüzde işaretlenir ve iş emri önerisi üretir.
+**Belirsizlik ürüne girdi — ve eşiğin kökeni açık.** Sistem güveni düşük
+tahminleri işaretler ve iş emri önerisi üretir. Eşiğin dayanağı her tanı
+cevabında `review.threshold_basis` alanında taşınır:
+
+| | Değer |
+|---|---|
+| Ölçülen eşik (hizmet veren modelde) | **0.50** — %98 kapsama, %91 isabet |
+| Kalibrasyon (ECE) | **0.021** — model kendi alanında dürüst |
+| **Çalışma noktası** | **0.90** — bilinçli emniyet payı |
+
+Çalışma noktası ölçülenden yüksek, çünkü ölçüm **sentetik** alanda yapıldı
+ve bu modelin gerçek veriye aktarımının zayıf olduğu ölçüldü (F1 0.96 →
+0.58). Kendi dağılımında dürüst olmak, farklı bir dağılımda dürüst olmayı
+garanti etmez. Aradaki fark saklanmıyor, gerekçesiyle bildiriliyor.
+
+> Bu şeffaflık bir dış inceleme sonrası eklendi: eşik daha önce **başka bir
+> modelde** ölçülüp buraya taşınmıştı. Bkz.
+> [`docs/DIS-INCELEME-DOGRULAMA.md`](docs/DIS-INCELEME-DOGRULAMA.md)
 
 **Ölçülüp elenen kural.** İlk tasarımda "ML ve klasik yöntemler ayrışıyorsa
 uzman baksın" kuralı vardı. Ölçünce elendi: %45 tetikleniyor ama

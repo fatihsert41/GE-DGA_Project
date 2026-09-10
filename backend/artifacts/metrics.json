@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-10 10:51:57",
+  "generated_at": "2026-09-10 16:17:45",
   "data_profile": "field_like",
   "n_samples": 4000,
   "n_test": 1000,
@@ -10,28 +10,28 @@
       "type": "ML",
       "accuracy": 0.904,
       "f1_macro": 0.8956,
-      "train_seconds": 1.25
+      "train_seconds": 1.27
     },
     {
       "model": "XGBoost",
       "type": "ML",
       "accuracy": 0.901,
       "f1_macro": 0.8932,
-      "train_seconds": 2.95
+      "train_seconds": 4.0
     },
     {
       "model": "NeuralNet",
       "type": "ML",
       "accuracy": 0.887,
       "f1_macro": 0.878,
-      "train_seconds": 13.36
+      "train_seconds": 12.92
     },
     {
       "model": "SVM",
       "type": "ML",
       "accuracy": 0.882,
       "f1_macro": 0.8713,
-      "train_seconds": 1.54
+      "train_seconds": 1.64
     },
     {
       "model": "Classical Consensus",
@@ -171,5 +171,149 @@
       "f1-score": 0.9037319529000297,
       "support": 1000.0
     }
+  },
+  "threshold": {
+    "measured_on": {
+      "model": "RandomForest",
+      "domain": "synthetic",
+      "dataset": "field_like",
+      "n_test": 1000
+    },
+    "threshold": 0.5,
+    "target_met": true,
+    "coverage": 0.977,
+    "accuracy_above": 0.9099,
+    "accuracy_below": 0.6522,
+    "ece": 0.0214,
+    "calibrated": true,
+    "bins": [
+      {
+        "lower": 0.0,
+        "upper": 0.5,
+        "n": 23,
+        "mean_confidence": 0.4425,
+        "accuracy": 0.6522,
+        "gap": 0.2097
+      },
+      {
+        "lower": 0.5,
+        "upper": 0.7,
+        "n": 121,
+        "mean_confidence": 0.6202,
+        "accuracy": 0.6694,
+        "gap": 0.0493
+      },
+      {
+        "lower": 0.7,
+        "upper": 0.8,
+        "n": 90,
+        "mean_confidence": 0.7471,
+        "accuracy": 0.7444,
+        "gap": -0.0027
+      },
+      {
+        "lower": 0.8,
+        "upper": 0.9,
+        "n": 137,
+        "mean_confidence": 0.8536,
+        "accuracy": 0.8686,
+        "gap": 0.015
+      },
+      {
+        "lower": 0.9,
+        "upper": 0.99,
+        "n": 321,
+        "mean_confidence": 0.9552,
+        "accuracy": 0.9782,
+        "gap": 0.0229
+      },
+      {
+        "lower": 0.99,
+        "upper": 1.01,
+        "n": 308,
+        "mean_confidence": 0.9968,
+        "accuracy": 1.0,
+        "gap": 0.0032
+      }
+    ],
+    "curve": [
+      {
+        "threshold": 0.5,
+        "coverage": 0.977,
+        "n": 977,
+        "accuracy": 0.9099,
+        "accuracy_below": 0.6522
+      },
+      {
+        "threshold": 0.55,
+        "coverage": 0.961,
+        "n": 961,
+        "accuracy": 0.9168,
+        "accuracy_below": 0.5897
+      },
+      {
+        "threshold": 0.6,
+        "coverage": 0.932,
+        "n": 932,
+        "accuracy": 0.9238,
+        "accuracy_below": 0.6324
+      },
+      {
+        "threshold": 0.65,
+        "coverage": 0.907,
+        "n": 907,
+        "accuracy": 0.9305,
+        "accuracy_below": 0.6452
+      },
+      {
+        "threshold": 0.7,
+        "coverage": 0.856,
+        "n": 856,
+        "accuracy": 0.9439,
+        "accuracy_below": 0.6667
+      },
+      {
+        "threshold": 0.75,
+        "coverage": 0.805,
+        "n": 805,
+        "accuracy": 0.9602,
+        "accuracy_below": 0.6718
+      },
+      {
+        "threshold": 0.8,
+        "coverage": 0.766,
+        "n": 766,
+        "accuracy": 0.9674,
+        "accuracy_below": 0.6966
+      },
+      {
+        "threshold": 0.85,
+        "coverage": 0.709,
+        "n": 709,
+        "accuracy": 0.976,
+        "accuracy_below": 0.7285
+      },
+      {
+        "threshold": 0.9,
+        "coverage": 0.629,
+        "n": 629,
+        "accuracy": 0.9889,
+        "accuracy_below": 0.7601
+      },
+      {
+        "threshold": 0.95,
+        "coverage": 0.517,
+        "n": 517,
+        "accuracy": 0.9961,
+        "accuracy_below": 0.8054
+      },
+      {
+        "threshold": 1.0,
+        "coverage": 0.143,
+        "n": 143,
+        "accuracy": 1.0,
+        "accuracy_below": 0.888
+      }
+    ]
   }
 }
