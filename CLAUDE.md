@@ -264,7 +264,19 @@ Testler: `cd backend; pytest -q` (18 test).
     ve arayüz "atanmadı" yazıyordu — ilişkiyi kurmak yetmiyor, o sorguda
     İSTEMEK gerekiyor. Ayrıca `Technician.WorkOrders` üzerine `[JsonIgnore]`
     şart: yoksa iş emri→teknisyen→iş emri sonsuz serileştirme döngüsü.
-  - ⏭️ **SIRADAKİ: 7.8** Testler (xUnit).
+  - ✅ 7.8 Testler TAMAM. Çözüme ikinci proje: `TransformerAI.Maintenance.Tests`
+    (xUnit). **33 test, 195 ms** — hiçbiri veritabanı veya HTTP kullanmıyor,
+    çünkü `WorkOrderPlanner` ve `AssignmentService` saf tasarlanmıştı.
+    `TestData.cs` adlandırılmış argümanlarla sahte veri üretir; test sadece
+    ÖNEMSEDİĞİ alanı belirtir, gerisi gürültü olmaz.
+    Kapsanan: beş öneri kuralı, idempotens (kapanmış emir engellemez,
+    farklı tür engellemez), öncelik sıralaması, ölçümsüz trafo;
+    bölge/uzmanlık puanlaması, kapasite, pasif teknisyen, yük dengeleme,
+    determinizm.
+    Komut (maintenance/ klasöründen): `dotnet test`.
+    xUnit ↔ pytest: `[Fact]` ↔ `def test_`, `[Theory]+[InlineData]` ↔
+    `@pytest.mark.parametrize`.
+  - ⏭️ **SIRADAKİ: 7.9** Çalıştırma belgeleri (üç servisi birlikte ayağa kaldırma).
   ⚠ Kurallar: Python servisi DEĞİŞTİRİLMEZ, .NET onu dışarıdan tüketir.
   İş emirleri .NET'in KENDİ veritabanında durur (ortak DB mikroservis
   mimarisinin en yaygın hatası). Veritabanı 7.3'ten önce eklenmez.

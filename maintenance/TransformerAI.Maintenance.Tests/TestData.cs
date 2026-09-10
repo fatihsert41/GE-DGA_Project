@@ -1,0 +1,93 @@
+using TransformerAI.Maintenance.Api.Models;
+
+namespace TransformerAI.Maintenance.Tests;
+
+/// <summary>
+/// Testler için sahte veri üreten yardımcılar.
+/// </summary>
+/// <remarks>
+/// <c>TransformerRisk</c> 21 alanlı bir record. Her testte hepsini yazmak
+/// testi okunmaz yapardı; burada makul varsayılanlar veriliyor ve test
+/// yalnızca ÖNEMSEDİĞİ alanı belirtiyor:
+///
+/// <code>Risk("TR-01", riskLevel: "critical", severe: true)</code>
+///
+/// Bu, testin niyetini görünür kılar: "kritik ve ciddi olduğunda ne olur?"
+/// Diğer alanlar gürültü olarak kalmaz.
+///
+/// C#'ta bu, adlandırılmış argüman (named argument) özelliğiyle yapılır —
+/// Python'daki anahtar kelimeli argümanların karşılığı.
+/// </remarks>
+public static class TestData
+{
+    public static TransformerRisk Risk(
+        string id,
+        string? location = "İstanbul-Avrupa",
+        string? assetClass = "MPT",
+        string? prediction = "Normal",
+        string? predictionFamily = "Normal",
+        double confidence = 0.99,
+        bool needsReview = false,
+        bool severe = false,
+        string? riskLevel = "low",
+        int? riskCondition = 1,
+        double priority = 1.0,
+        bool samplingOverdue = false,
+        int? daysSinceSample = 30,
+        int samplingMonths = 12,
+        bool hasData = true)
+        => new(
+            Id: id,
+            Name: $"Trafo {id}",
+            Location: location,
+            AssetClass: assetClass,
+            AssetClassName: assetClass,
+            Mva: 50,
+            Prediction: prediction,
+            PredictionLabel: prediction,
+            PredictionFamily: predictionFamily,
+            Confidence: confidence,
+            NeedsReview: needsReview,
+            Severe: severe,
+            RiskLevel: riskLevel,
+            RiskLevelTr: riskLevel,
+            RiskCondition: riskCondition,
+            Priority: priority,
+            SamplingOverdue: samplingOverdue,
+            DaysSinceSample: daysSinceSample,
+            SamplingMonths: samplingMonths,
+            MeasurementCount: 12,
+            HasData: hasData);
+
+    public static FleetOverview Fleet(params TransformerRisk[] transformers)
+        => new(
+            new FleetSummary(transformers.Length, transformers.Length,
+                             120, 0, 0, 0),
+            transformers.ToList());
+
+    public static WorkOrder Order(string transformerId, WorkOrderKind kind,
+                                  WorkOrderStatus status = WorkOrderStatus.Planned)
+        => new()
+        {
+            Id = $"WO-{transformerId}-{kind}",
+            TransformerId = transformerId,
+            Kind = kind,
+            Title = "test",
+            Status = status,
+        };
+
+    public static Technician Tech(string id, string region, Specialty specialty,
+                                  int maxOpen = 3, bool active = true)
+        => new()
+        {
+            Id = id,
+            Name = $"Teknisyen {id}",
+            Region = region,
+            Specialty = specialty,
+            MaxOpenOrders = maxOpen,
+            IsActive = active,
+        };
+
+    public static TechnicianWorkload Load(Technician t, int open)
+        => new(t, open, open < t.MaxOpenOrders);
+}
