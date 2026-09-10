@@ -86,3 +86,31 @@ def test_xlsx_is_readable_and_feeds_core_features(tmp_path):
     assert list(feats.columns) == CORE_FEATURE_NAMES
     assert len(feats) == 2
     assert not feats.isnull().any().any()
+
+
+def test_chinese_labels_are_mapped(tmp_path):
+    """Çince etiketli veri setleri (Çin şebeke verisi) tanınmalı."""
+    path = _write(tmp_path, [
+        {"H2": 20, "CH4": 10, "C2H6": 8, "C2H4": 6, "C2H2": 0.3,
+         "故障类型": "正常"},
+        {"H2": 1458, "CH4": 9, "C2H6": 1812, "C2H4": 0.1, "C2H2": 0.1,
+         "故障类型": "局部放电"},
+        {"H2": 120, "CH4": 200, "C2H6": 70, "C2H4": 520, "C2H2": 4,
+         "故障类型": "高温过热"},
+    ])
+    df, report = load_real_dataset(path)
+    assert df["label"].tolist() == ["Normal", "PD", "T3"]
+    assert report["column_mapping"]["故障类型"] == "label"
+
+
+def test_duplicate_measurements_are_removed(tmp_path):
+    """Birebir aynı ölçüm atılır: eğitim/test bölmesinde sızıntı yapardı."""
+    row = {"H2": 60, "CH4": 12, "C2H6": 9, "C2H4": 7, "C2H2": 2, "label": "D1"}
+    path = _write(tmp_path, [row, dict(row), dict(row),
+                             {**row, "H2": 61}])
+    df, report = load_real_dataset(path)
+    assert len(df) == 2
+    assert report["dropped"]["tekrar_eden"] == 2
+
+    kept, _ = load_real_dataset(path, drop_duplicates=False)
+    assert len(kept) == 4          # kapatılabilir olmalı

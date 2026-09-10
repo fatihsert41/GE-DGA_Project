@@ -1,0 +1,298 @@
+{
+  "generated_at": "2026-09-10 09:25:11",
+  "feature_set": [
+    "H2",
+    "CH4",
+    "C2H6",
+    "C2H4",
+    "C2H2",
+    "C2H2/C2H4",
+    "CH4/H2",
+    "C2H4/C2H6",
+    "C2H6/CH4"
+  ],
+  "n_synthetic": 4000,
+  "n_real_train": 1380,
+  "n_real_test": 592,
+  "data": {
+    "source": {
+      "file": "dga_china_2321.xlsx",
+      "rows_in": 2321,
+      "rows_out": 1972,
+      "column_mapping": {
+        "H2": "H2",
+        "CH4": "CH4",
+        "C2H6": "C2H6",
+        "C2H4": "C2H4",
+        "C2H2": "C2H2",
+        "故障类型": "label"
+      },
+      "dropped": {
+        "etiket_cevrilemedi": 0,
+        "gaz_sayisal_degil": 0,
+        "negatif_deger": 0,
+        "tamami_sifir": 0,
+        "tekrar_eden": 349
+      },
+      "duplicates_found": 349,
+      "class_counts": {
+        "Normal": 707,
+        "T3": 436,
+        "D1": 274,
+        "D2": 223,
+        "PD": 112,
+        "T2": 111,
+        "T1": 109
+      },
+      "missing_classes": []
+    },
+    "split": {
+      "mode": "stratified",
+      "test_size": 0.3,
+      "n_train": 1380,
+      "n_test": 592
+    },
+    "bench_file": {
+      "file": "dga_bench_589.xlsx",
+      "rows_in": 589,
+      "rows_out": 582,
+      "column_mapping": {
+        "H2": "H2",
+        "CH4": "CH4",
+        "C2H6": "C2H6",
+        "C2H4": "C2H4",
+        "C2H2": "C2H2",
+        "故障类型": "label"
+      },
+      "dropped": {
+        "etiket_cevrilemedi": 0,
+        "gaz_sayisal_degil": 0,
+        "negatif_deger": 0,
+        "tamami_sifir": 0,
+        "tekrar_eden": 7
+      },
+      "duplicates_found": 7,
+      "class_counts": {
+        "D2": 145,
+        "T1": 111,
+        "T3": 104,
+        "D1": 89,
+        "PD": 73,
+        "T2": 60
+      },
+      "missing_classes": [
+        "Normal"
+      ]
+    },
+    "bench_overlap_removed": 127
+  },
+  "results": [
+    {
+      "scenario": "B_gercek_egitim",
+      "model": "XGBoost",
+      "note": "aynı dağılım: pratik üst sınır",
+      "accuracy": 0.8446,
+      "f1_macro": 0.757
+    },
+    {
+      "scenario": "B_gercek_egitim",
+      "model": "RandomForest",
+      "note": "aynı dağılım: pratik üst sınır",
+      "accuracy": 0.8243,
+      "f1_macro": 0.7324
+    },
+    {
+      "scenario": "C_karma_egitim",
+      "model": "XGBoost",
+      "note": "sentetik + gerçek birlikte",
+      "accuracy": 0.7973,
+      "f1_macro": 0.7129
+    },
+    {
+      "scenario": "C_karma_egitim",
+      "model": "RandomForest",
+      "note": "sentetik + gerçek birlikte",
+      "accuracy": 0.7838,
+      "f1_macro": 0.6967
+    },
+    {
+      "scenario": "B_gercek_egitim",
+      "model": "NeuralNet",
+      "note": "aynı dağılım: pratik üst sınır",
+      "accuracy": 0.7652,
+      "f1_macro": 0.6334
+    },
+    {
+      "scenario": "C_karma_egitim",
+      "model": "NeuralNet",
+      "note": "sentetik + gerçek birlikte",
+      "accuracy": 0.7078,
+      "f1_macro": 0.6065
+    },
+    {
+      "scenario": "A_sentetik_egitim",
+      "model": "NeuralNet",
+      "note": "sıfır atış: gerçek veriyi hiç görmedi",
+      "accuracy": 0.6199,
+      "f1_macro": 0.5032
+    },
+    {
+      "scenario": "A_sentetik_egitim",
+      "model": "XGBoost",
+      "note": "sıfır atış: gerçek veriyi hiç görmedi",
+      "accuracy": 0.5726,
+      "f1_macro": 0.4675
+    },
+    {
+      "scenario": "C_karma_egitim",
+      "model": "SVM",
+      "note": "sentetik + gerçek birlikte",
+      "accuracy": 0.5845,
+      "f1_macro": 0.4583
+    },
+    {
+      "scenario": "A_sentetik_egitim",
+      "model": "RandomForest",
+      "note": "sıfır atış: gerçek veriyi hiç görmedi",
+      "accuracy": 0.5608,
+      "f1_macro": 0.4493
+    },
+    {
+      "scenario": "A_sentetik_egitim",
+      "model": "SVM",
+      "note": "sıfır atış: gerçek veriyi hiç görmedi",
+      "accuracy": 0.5389,
+      "f1_macro": 0.4301
+    },
+    {
+      "scenario": "D_klasik",
+      "model": "Classical Consensus",
+      "note": "eğitimsiz; CO/CO2=0 olduğu için key_gas kısmen devre dışı",
+      "accuracy": 0.3294,
+      "f1_macro": 0.37
+    },
+    {
+      "scenario": "B_gercek_egitim",
+      "model": "SVM",
+      "note": "aynı dağılım: pratik üst sınır",
+      "accuracy": 0.5693,
+      "f1_macro": 0.3535
+    }
+  ],
+  "best": {
+    "scenario": "B_gercek_egitim",
+    "model": "XGBoost",
+    "note": "aynı dağılım: pratik üst sınır",
+    "accuracy": 0.8446,
+    "f1_macro": 0.757
+  },
+  "confusion_matrix": [
+    [
+      202,
+      1,
+      0,
+      2,
+      1,
+      2,
+      4
+    ],
+    [
+      1,
+      30,
+      1,
+      0,
+      1,
+      1,
+      0
+    ],
+    [
+      1,
+      1,
+      66,
+      13,
+      1,
+      0,
+      0
+    ],
+    [
+      0,
+      0,
+      17,
+      47,
+      1,
+      0,
+      2
+    ],
+    [
+      8,
+      1,
+      0,
+      0,
+      12,
+      6,
+      6
+    ],
+    [
+      0,
+      0,
+      1,
+      2,
+      5,
+      20,
+      5
+    ],
+    [
+      1,
+      0,
+      2,
+      1,
+      1,
+      3,
+      123
+    ]
+  ],
+  "classes": [
+    "Normal",
+    "PD",
+    "D1",
+    "D2",
+    "T1",
+    "T2",
+    "T3"
+  ],
+  "benchmark": {
+    "n": 455,
+    "results": [
+      {
+        "scenario": "D_klasik",
+        "model": "Classical Consensus",
+        "accuracy": 0.6791,
+        "f1_macro": 0.6496
+      },
+      {
+        "scenario": "A_sentetik_egitim",
+        "model": "XGBoost",
+        "accuracy": 0.5429,
+        "f1_macro": 0.4918
+      },
+      {
+        "scenario": "A_sentetik_egitim",
+        "model": "NeuralNet",
+        "accuracy": 0.4945,
+        "f1_macro": 0.4493
+      },
+      {
+        "scenario": "A_sentetik_egitim",
+        "model": "RandomForest",
+        "accuracy": 0.4659,
+        "f1_macro": 0.4426
+      },
+      {
+        "scenario": "A_sentetik_egitim",
+        "model": "SVM",
+        "accuracy": 0.433,
+        "f1_macro": 0.394
+      }
+    ]
+  }
+}

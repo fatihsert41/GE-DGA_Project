@@ -43,6 +43,7 @@ _COLUMN_ALIASES: Dict[str, str] = {
     "label": "label", "class": "label", "fault": "label",
     "faulttype": "label", "faultclass": "label", "type": "label",
     "target": "label", "y": "label", "code": "label",
+    "故障类型": "label",        # Çince: "arıza türü"
 }
 
 # --- Etiket eşlemesi ------------------------------------------------------
@@ -57,6 +58,18 @@ _LABEL_ALIASES: Dict[str, str] = {
     "t1": "T1", "thermalfaultbelow300": "T1", "lowtemperatureoverheating": "T1",
     "t2": "T2", "thermalfault300700": "T2", "mediumtemperatureoverheating": "T2",
     "t3": "T3", "thermalfaultabove700": "T3", "hightemperatureoverheating": "T3",
+
+    # Çince etiketler: Çin şebeke verisi bu terimlerle yayımlanıyor.
+    "正常": "Normal",          # normal
+    "局部放电": "PD",           # kısmi deşarj
+    "低能放电": "D1",           # düşük enerjili deşarj
+    "火花放电": "D1",           # kıvılcım deşarjı
+    "高能放电": "D2",           # yüksek enerjili deşarj
+    "电弧放电": "D2",           # ark deşarjı
+    "低温过热": "T1",           # düşük sıcaklıkta aşırı ısınma (<300 °C)
+    "中温过热": "T2",           # orta sıcaklıkta aşırı ısınma (300-700 °C)
+    "中低温过热": "T2",         # düşük-orta sıcaklık
+    "高温过热": "T3",           # yüksek sıcaklıkta aşırı ısınma (>700 °C)
 }
 
 # Sayısal etiketler için VARSAYILAN sıra. Veri seti bunu belgelemiyorsa
@@ -66,8 +79,14 @@ DEFAULT_INT_ORDER: List[str] = list(FAULT_CLASSES)  # 0=Normal,1=PD,...,6=T3
 
 
 def _simplify(name: object) -> str:
-    """'C2H4 (ppm)' -> 'c2h4ppm'. Eşleme tablosunun aradığı biçim."""
-    return re.sub(r"[^a-z0-9]", "", str(name).lower())
+    r"""'C2H4 (ppm)' -> 'c2h4ppm'. Eşleme tablosunun aradığı biçim.
+
+    Boşluk, noktalama ve alt çizgi atılır; harf/rakam kalır. ``\W`` yerine
+    ``[\W_]`` kullanılıyor çünkü ``\w`` alt çizgiyi de harf sayar.
+    Unicode korunur: Çince etiketli veri setleri var (``局部放电`` gibi),
+    ASCII'ye indirgeseydik hepsi boş dizeye dönerdi.
+    """
+    return re.sub(r"[\W_]", "", str(name).lower(), flags=re.UNICODE)
 
 
 def load_table(path: Path) -> pd.DataFrame:
@@ -110,7 +129,8 @@ def map_label(value: object, int_order: List[str]) -> Optional[str]:
 
 
 def load_real_dataset(path: Path,
-                      int_order: Optional[List[str]] = None
+                      int_order: Optional[List[str]] = None,
+                      drop_duplicates: bool = True
                       ) -> Tuple[pd.DataFrame, Dict[str, object]]:
     """Bir gerçek veri seti dosyasını yükler ve temizler.
 
@@ -152,6 +172,14 @@ def load_real_dataset(path: Path,
     all_zero = int((out[CORE_GASES].sum(axis=1) == 0).sum())
     out = out[out[CORE_GASES].sum(axis=1) > 0]
 
+    # Birebir aynı ölçümler: derleme veri setlerinde aynı vaka birden çok
+    # kaynaktan girdiği için sık görülür. Temizlenmezse rastgele bölmede
+    # aynı satır hem eğitime hem teste düşer; model ezberler ve doğruluk
+    # yapay olarak şişer (veri sızıntısı).
+    duplicates = int(out.duplicated(subset=CORE_GASES).sum())
+    if drop_duplicates:
+        out = out.drop_duplicates(subset=CORE_GASES)
+
     out = out.reset_index(drop=True)
     report = {
         "file": path.name,
@@ -163,7 +191,9 @@ def load_real_dataset(path: Path,
             "gaz_sayisal_degil": nan_gas,
             "negatif_deger": negative,
             "tamami_sifir": all_zero,
+            "tekrar_eden": duplicates if drop_duplicates else 0,
         },
+        "duplicates_found": duplicates,
         "class_counts": out["label"].value_counts().to_dict(),
         "missing_classes": [c for c in FAULT_CLASSES
                             if c not in set(out["label"])],
