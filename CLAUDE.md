@@ -166,6 +166,20 @@ Testler: `cd backend; pytest -q` (18 test).
     incelemeye düştü (filoda 2 vaka).
     ⚠ Model yeniden eğitilirse `--field-like` KULLANILMALI, yoksa demo
     eski davranışa döner.
+  - ✅ 6.9 İyileştirme yol haritası — teşhise dayalı analiz
+    (`ml/diagnostics.py`, **`docs/FAZ6-IYILESTIRME-YOL-HARITASI.md`**):
+    * 5 katlı CV: F1 **0.772 ± 0.010** (yani 0.78 şans değil, gerçek),
+      aile doğruluğu 0.946 ± 0.009.
+    * Öğrenme eğrisi HÂLÂ YÜKSELİYOR (son adım +0.019, doyma yok) →
+      en yüksek getirili yatırım **daha çok gerçek veri**, model değil.
+    * Kalibrasyon: ECE 0.096, model FAZLA İDDİALI ("%96 eminim" dediğinde
+      gerçekte %76 tutturuyor) → sıradaki en iyi getiri/emek: kalibrasyon.
+    * Hata yapısı: hataların %58'i aynı aile içi (bakım kararı değişmiyor);
+      karar değiştiren gerçek hata oranı %14.9 değil **%6.3**.
+      Tüm hataların %32'si D1↔D2 (fiziksel olarak sürekli sınır).
+    Öneri sırası: kalibrasyon → zaman serisi özellikleri → hiyerarşik
+    sınıflandırma → D1/D2 → conformal. YAPMA: derin öğrenme, daha fazla
+    özellik mühendisliği, sentetiği daha "gerçekçi" yapmak.
   - 🏁 **Faz 6 BİTTİ.**
 - ⏳ **Faz 7 (.NET) — kullanıcı .NET bilmiyor, çok temelden ve yavaş anlatılacak.**
 
