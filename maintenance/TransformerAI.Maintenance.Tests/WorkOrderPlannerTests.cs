@@ -171,11 +171,64 @@ public class WorkOrderPlannerTests
         // Ölçümü yoksa tanıya dayalı kural çalıştırılamaz; ama numune
         // alma zaten tam da bu yüzden gerekiyor olabilir.
         var fleet = Fleet(Risk("TR-YENI", hasData: false, severe: true,
-                               riskLevel: "critical", samplingOverdue: true));
+                               riskLevel: "critical", samplingOverdue: true,
+                               samplingStatus: "overdue"));
 
         var result = _planner.Suggest(fleet, [], Today);
 
         var s = Assert.Single(result);
         Assert.Equal(WorkOrderKind.Sampling, s.Kind);
+    }
+
+    // --- Dış inceleme P0-3: hiç numune alınmamış varlık --------------------
+
+    [Fact]
+    public void HicNumuneAlinmamisVarlik_TemelCizgiOnerisiUretir()
+    {
+        // Bu davranış YOKTU: sampling_overdue false döndüğü için varlık
+        // tamamen plan dışında kalıyordu. 15 yaşında hiç ölçülmemiş bir
+        // LPT hiçbir uyarı üretmiyordu.
+        var fleet = Fleet(Risk("TR-YENI", hasData: false,
+                               samplingStatus: "never_sampled",
+                               samplingOverdue: true, priority: 0));
+
+        var result = _planner.Suggest(fleet, [], Today);
+
+        var s = Assert.Single(result);
+        Assert.Equal("never-sampled", s.Rule);
+        Assert.Equal(WorkOrderKind.Sampling, s.Kind);
+        Assert.Contains("Temel çizgi", s.Title);
+    }
+
+    [Fact]
+    public void HicNumuneAlinmamisVarlik_ListenIn_DibindeKalmaz()
+    {
+        // Önceliği 0 olsaydı en alta düşerdi. Bilinmeyen risk, düşük risk
+        // değildir; makul bir orta değer atanıyor.
+        var fleet = Fleet(
+            Risk("TR-YENI", hasData: false, samplingStatus: "never_sampled",
+                 samplingOverdue: true, priority: 0),
+            Risk("TR-DUSUK", riskLevel: "low", riskCondition: 1,
+                 samplingOverdue: true, samplingStatus: "overdue",
+                 priority: 0.9));
+
+        var result = _planner.Suggest(fleet, [], Today);
+
+        Assert.Equal("TR-YENI", result[0].TransformerId);
+    }
+
+    [Fact]
+    public void HicNumuneAlinmamis_GecikmisNumuneden_DahaAcil()
+    {
+        var never = _planner.Suggest(
+            Fleet(Risk("A", hasData: false, samplingStatus: "never_sampled",
+                       samplingOverdue: true, priority: 2.0)), [], Today)[0];
+        var overdue = _planner.Suggest(
+            Fleet(Risk("B", samplingStatus: "overdue", samplingOverdue: true,
+                       riskLevel: "low", riskCondition: 1, priority: 2.0)),
+            [], Today)[0];
+
+        Assert.True(never.DueDate < overdue.DueDate);
+        Assert.True(never.Priority > overdue.Priority);
     }
 }

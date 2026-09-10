@@ -47,6 +47,17 @@ def _to_card(row: Dict) -> Dict:
     # Numune aralığı sınıfa göre değişir: LPT 6 ay, MPT 12, SPT 24.
     interval_days = int(cls["sampling_months"]) * 30
 
+    # ÜÇ AYRI DURUM. Önceden yalnızca iki vardı ve "veri yok" ile "güncel"
+    # aynı sayılıyordu: hiç numune alınmamış bir trafo sampling_overdue=False
+    # döndürüyor, yani hiçbir uyarı üretmiyordu. Oysa hiç numune alınmamış
+    # varlık, numune alma açısından EN ACİL olandır.
+    if days is None:
+        sampling_status = "never_sampled"
+    elif days > interval_days:
+        sampling_status = "overdue"
+    else:
+        sampling_status = "current"
+
     return {
         "asset_class": cls["code"],
         "asset_class_name": cls["name_tr"],
@@ -68,7 +79,9 @@ def _to_card(row: Dict) -> Dict:
         "asset_weight": cls["weight"],
         "sampling_months": cls["sampling_months"],
         "days_since_sample": days,
-        "sampling_overdue": bool(days is not None and days > interval_days),
+        "sampling_status": sampling_status,
+        # never_sampled da bir gecikmedir: temel çizgi numunesi alınmamış.
+        "sampling_overdue": sampling_status in ("overdue", "never_sampled"),
         "id": row["transformer_id"],
         "name": row["transformer_name"],
         "location": row["location"],
@@ -147,6 +160,8 @@ def build_overview(rows: List[Dict]) -> Dict:
             "needs_review": sum(1 for c in measured if c["needs_review"]),
             "class_distribution": class_distribution,
             "sampling_overdue": sum(1 for c in cards if c["sampling_overdue"]),
+            "never_sampled": sum(1 for c in cards
+                                 if c["sampling_status"] == "never_sampled"),
         },
         "transformers": cards,
     }

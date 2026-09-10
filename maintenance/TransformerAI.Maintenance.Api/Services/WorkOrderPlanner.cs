@@ -38,6 +38,11 @@ public class WorkOrderPlanner
     private const int DueDaysHigh = 14;
     private const int DueDaysRoutine = 30;
 
+    // Ölçümü olmayan varlığın önceliği hesaplanamaz (kondisyon yok).
+    // Sıfır bırakmak onu listenin dibine atardı; makul bir orta değer
+    // veriyoruz ki görünür kalsın. Gerçek öncelik ilk ölçümde belirlenir.
+    private const double AssumedPriorityUnknown = 1.5;
+
     /// <summary>
     /// Filo durumundan öneri listesi üretir.
     /// </summary>
@@ -121,17 +126,38 @@ public class WorkOrderPlanner
             Add(output, openPairs, new Suggestion(
                 t.Id, WorkOrderKind.Inspection,
                 "Doğrulama incelemesi — model kararsız",
-                $"Model güveni %{t.Confidence * 100:0}, eşiğin altında. "
+                $"Model güveni %{(t.Confidence ?? 0) * 100:0}, eşiğin altında. "
                     + $"Tanı: {t.PredictionLabel}.",
                 t.Priority, today.AddDays(DueDaysRoutine), "low-confidence"));
         }
     }
 
-    /// <summary>Numune alma aralığı geçmiş mi?</summary>
+    /// <summary>Numune alma: hiç alınmamış mı, yoksa aralık mı geçmiş?</summary>
+    /// <remarks>
+    /// İki ayrı durum, iki ayrı kural. Önceden "hiç numune alınmamış" durumu
+    /// hiçbir öneri üretmiyordu: <c>sampling_overdue</c> false dönüyordu ve
+    /// varlık plan dışında kalıyordu. Oysa temel çizgi numunesi olmayan bir
+    /// trafo hakkında HİÇBİR ŞEY bilmiyoruz — bu, gecikmiş numuneden daha
+    /// acildir.
+    /// </remarks>
     private static void AddSamplingRule(TransformerRisk t, DateOnly today,
                                         HashSet<(string, WorkOrderKind)> openPairs,
                                         List<Suggestion> output)
     {
+        if (t.SamplingStatus == "never_sampled")
+        {
+            Add(output, openPairs, new Suggestion(
+                t.Id, WorkOrderKind.Sampling,
+                "Temel çizgi numunesi al — hiç ölçüm yok",
+                "Bu varlıktan hiç yağ numunesi alınmamış; tanı ve trend "
+                    + "üretilemiyor. Temel çizgi ölçümü gerekiyor.",
+                // Tam öncelik: risk bilinmediği için yarıya indirmiyoruz.
+                // Bilinmeyen risk, düşük risk değildir.
+                t.Priority > 0 ? t.Priority : AssumedPriorityUnknown,
+                today.AddDays(DueDaysHigh), "never-sampled"));
+            return;
+        }
+
         if (!t.SamplingOverdue)
         {
             return;

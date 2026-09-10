@@ -143,6 +143,33 @@ def upsert_transformer(tid: str, name: str, location: str = "",
         )
 
 
+def ensure_transformer(tid: str, name: Optional[str] = None) -> bool:
+    """Trafo kaydı YOKSA oluşturur; VARSA hiçbir alanına dokunmaz.
+
+    Neden ayrı bir fonksiyon? ``upsert_transformer`` adı gereği "varsa
+    güncelle" demek ve verilmeyen alanları varsayılana düşürüyor. Ölçüm
+    kaydetme yolunda bu yıkıcı: tek bir /predict çağrısı trafonun konumunu
+    siliyor, varlık sınıfını MPT'ye düşürüyor ve gücünü boşaltıyordu.
+    Öncelik skoru varlık sınıfına bağlı olduğu için kritik bir trafonun
+    önceliği sessizce 4.00'ten 2.80'e iniyordu.
+
+    Ölçüm eklemek varlık kaydını DÜZENLEMEK değildir. İki işi ayırmak
+    gerekiyordu.
+
+    Returns:
+        Yeni kayıt oluşturulduysa True, kayıt zaten varsa False.
+    """
+    with _connect() as conn:
+        cur = conn.execute(
+            """INSERT INTO transformers (id, name, location, asset_class,
+                                         created_at)
+               VALUES (?, ?, '', ?, ?)
+               ON CONFLICT(id) DO NOTHING""",
+            (tid, name or tid, assets.DEFAULT_CLASS, _now()),
+        )
+        return cur.rowcount > 0
+
+
 def update_nameplate(tid: str, fields: Dict[str, object]) -> Optional[Dict]:
     """Var olan bir trafonun künyesini günceller.
 

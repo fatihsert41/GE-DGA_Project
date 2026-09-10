@@ -33,6 +33,7 @@ public static class TestData
         int? riskCondition = 1,
         double priority = 1.0,
         bool samplingOverdue = false,
+        string? samplingStatus = "current",
         int? daysSinceSample = 30,
         int samplingMonths = 12,
         bool hasData = true)
@@ -54,6 +55,7 @@ public static class TestData
             RiskCondition: riskCondition,
             Priority: priority,
             SamplingOverdue: samplingOverdue,
+            SamplingStatus: samplingStatus,
             DaysSinceSample: daysSinceSample,
             SamplingMonths: samplingMonths,
             MeasurementCount: 12,
