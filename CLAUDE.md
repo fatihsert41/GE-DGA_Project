@@ -237,7 +237,22 @@ Testler: `cd backend; pytest -q` (18 test).
     sebebi önermek ile uygulamanın farklı yetkiler istemesi.
     **İdempotent:** açık emri olan (trafo, tür) çifti atlanır; ikinci
     çağrıda 0 kayıt üretti. Doğrulandı: 5 öneri → 5 emir → tekrar 0.
-  - ⏭️ **SIRADAKİ: 7.6** Teknisyen ve planlama (ilişkiler, foreign key).
+  - ✅ 7.6 Teknisyen ve atama TAMAM. `Models/Technician.cs` (varlık +
+    `Specialty` enum + `WorkOrders` navigation property),
+    `WorkOrder.AssignedTo` serbest metni KALDIRILDI → `TechnicianId`
+    yabancı anahtarı + `Technician` navigation. İlişki `DbContext`'te
+    one-to-many; `OnDelete(SetNull)` — teknisyen silinirse iş emirleri
+    SİLİNMEZ, ataması boşalır (bakım geçmişi korunur).
+    Demo teknisyenler `HasData` ile migration'ın içinde (6 kişi, 4 bölge).
+    `Services/AssignmentService.cs` saf seçim mantığı: bölge eşleşmesi +10,
+    uzmanlık +5, genel +1; eşitlikte yükü az olan kazanır.
+    `Data/TechnicianRepository.cs`: yük hesabı TEK sorguda (N+1 tuzağından
+    kaçınmak için GroupBy), `Include` ile ilişkili veri.
+    Uç noktalar: `GET /technicians`, `POST /workorders/{id}/assign`
+    (gövde boşsa otomatik seçer, `technicianId` verilirse insanın kararı
+    üstündür — kapasiteyi aşarsa `warning` alanıyla GÖRÜNÜR kılınır).
+    Migration: `TeknisyenVeAtama` (veri kaybı uyarısı verdi: AssignedTo silindi).
+  - ⏭️ **SIRADAKİ: 7.7** React arayüzünde bakım/planlama ekranı.
   ⚠ Kurallar: Python servisi DEĞİŞTİRİLMEZ, .NET onu dışarıdan tüketir.
   İş emirleri .NET'in KENDİ veritabanında durur (ortak DB mikroservis
   mimarisinin en yaygın hatası). Veritabanı 7.3'ten önce eklenmez.

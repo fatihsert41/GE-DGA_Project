@@ -43,6 +43,9 @@ public class MaintenanceDbContext : DbContext
     /// </remarks>
     public DbSet<WorkOrder> WorkOrders => Set<WorkOrder>();
 
+    /// <summary>technicians tablosu.</summary>
+    public DbSet<Technician> Technicians => Set<Technician>();
+
     /// <summary>Tablo/sütun ayrıntılarını burada tanımlıyoruz.</summary>
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -57,7 +60,6 @@ public class MaintenanceDbContext : DbContext
         wo.Property(o => o.TransformerId).HasMaxLength(20).IsRequired();
         wo.Property(o => o.Title).HasMaxLength(200).IsRequired();
         wo.Property(o => o.Reason).HasMaxLength(500);
-        wo.Property(o => o.AssignedTo).HasMaxLength(100);
 
         // Enum'ları veritabanına METİN olarak yaz.
         // Varsayılan davranış sayıdır (0,1,2) ve kırılgandır: enum'a ortadan
@@ -70,5 +72,50 @@ public class MaintenanceDbContext : DbContext
         // düşünmemiştik; 9 trafoda fark etmez ama alışkanlık doğru olsun.
         wo.HasIndex(o => o.TransformerId);
         wo.HasIndex(o => o.Status);
+
+        // --- Teknisyen ---------------------------------------------------
+        var tech = modelBuilder.Entity<Technician>();
+        tech.ToTable("technicians");
+        tech.HasKey(t => t.Id);
+        tech.Property(t => t.Id).HasMaxLength(20);
+        tech.Property(t => t.Name).HasMaxLength(100).IsRequired();
+        tech.Property(t => t.Region).HasMaxLength(50).IsRequired();
+        tech.Property(t => t.Specialty).HasConversion<string>().HasMaxLength(20);
+
+        // --- İlişki: bir teknisyenin ÇOK iş emri olur (one-to-many) ------
+        tech.HasMany(t => t.WorkOrders)      // teknisyenin iş emirleri
+            .WithOne(o => o.Technician)      // her iş emrinin bir teknisyeni
+            .HasForeignKey(o => o.TechnicianId)
+            // Teknisyen silinirse iş emirleri SİLİNMEZ, ataması boşalır.
+            // Varsayılan davranış silmek olsaydı bir personel kaydını
+            // kaldırmak bakım geçmişini yok ederdi — kabul edilemez.
+            .OnDelete(DeleteBehavior.SetNull);
+
+        wo.HasIndex(o => o.TechnicianId);
+
+        // --- Demo teknisyenleri ------------------------------------------
+        // HasData: başlangıç verisi migration'ın İÇİNE yazılır. Ayrı bir
+        // "seed" betiği çalıştırmaya gerek kalmaz; veritabanı nerede
+        // kurulursa kurulsun bu kayıtlar hazır gelir.
+        // (Python tarafında bunu ml/seed.py ile elle yapıyorduk.)
+        tech.HasData(
+            new Technician { Id = "TK-01", Name = "Ahmet Yılmaz",
+                Region = "Marmara", Specialty = Specialty.Electrical,
+                MaxOpenOrders = 3, IsActive = true },
+            new Technician { Id = "TK-02", Name = "Elif Demir",
+                Region = "Marmara", Specialty = Specialty.Thermal,
+                MaxOpenOrders = 3, IsActive = true },
+            new Technician { Id = "TK-03", Name = "Mehmet Kaya",
+                Region = "Marmara", Specialty = Specialty.Sampling,
+                MaxOpenOrders = 5, IsActive = true },
+            new Technician { Id = "TK-04", Name = "Zeynep Şahin",
+                Region = "Ege", Specialty = Specialty.General,
+                MaxOpenOrders = 4, IsActive = true },
+            new Technician { Id = "TK-05", Name = "Burak Aydın",
+                Region = "İç Anadolu", Specialty = Specialty.General,
+                MaxOpenOrders = 4, IsActive = true },
+            new Technician { Id = "TK-06", Name = "Selin Öztürk",
+                Region = "Akdeniz", Specialty = Specialty.Sampling,
+                MaxOpenOrders = 4, IsActive = true });
     }
 }

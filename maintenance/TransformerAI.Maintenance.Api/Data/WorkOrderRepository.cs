@@ -106,11 +106,6 @@ public class WorkOrderRepository
 
         order.Status = request.Status;
 
-        if (request.AssignedTo is not null)
-        {
-            order.AssignedTo = request.AssignedTo;
-        }
-
         order.CompletedAt = request.Status == WorkOrderStatus.Done
             ? DateTime.UtcNow
             : null;
