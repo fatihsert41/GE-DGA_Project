@@ -1,3 +1,17 @@
+> ⚠️ **Bu belge projenin BAŞLANGIÇTAKİ planıdır (tarihsel kayıt).**
+> Uygulama sırasında bazı kararlar ölçüme dayanarak değişti:
+>
+> | Plandaki | Gerçekleşen | Neden |
+> |---|---|---|
+> | Açık veri setiyle eğitim | **Sentetik veriyle eğitim**, gerçek veriyle *doğrulama* | Erişilebilir etiketli set bulunamadı; sentetik veri IEC 60599 imzalarından üretildi ve sınırı ölçüldü ([bulgular](FAZ6-GERCEK-VERI-BULGULARI.md)) |
+> | TailwindCSS | **Elle yazılmış CSS** ("endüstriyel kontrol odası" dili) | Tasarım dili özgün olsun istendi |
+> | 3 sütun (XAI, karşılaştırma, trend) | **5 sütun** — belirsizlik ve eyleme dönüşüm eklendi | Gerçek veri, modelin belirsizliğini ölçmeyi gerektirdi |
+> | Tek servis | **Polyglot: Python + .NET** | Bakım planlama iş mantığı için ayrı servis ([Faz 7](FAZ7-DOTNET-YOL-HARITASI.md)) |
+>
+> Güncel durum için ana [`README.md`](../README.md) dosyasına bakın.
+
+---
+
 # TransformerAI — DGA Tabanlı Trafo Arıza Tahmin ve Sağlık İzleme Sistemi
 ### Full-Stack + Yapay Zeka Staj Projesi Yol Haritası
 
