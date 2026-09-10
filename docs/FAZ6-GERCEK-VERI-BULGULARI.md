@@ -300,6 +300,36 @@ açıldığında **sentetik test doğruluğu düşer** (üretilen veri artık da
 ama gerçek dünyaya aktarım iyileşir. İki sayı farklı şeyleri ölçer,
 karıştırılmamalıdır.
 
+### Üretim modeli saha benzeri profile geçirildi
+
+`python -m app.ml.train --field-like` çalıştırıldı ve demo filo yeniden
+tanılandı. Sonuçlar:
+
+| | Önce (ders kitabı) | Sonra (saha benzeri) |
+|---|---|---|
+| Sentetik test doğruluğu | 0.967 | **0.904** |
+| Sentetik test F1 | 0.963 | 0.896 |
+| Gerçek veriye aktarım (F1) | 0.530 | **0.578** |
+
+Sentetik test notunun düşmesi beklenen ve istenen bir sonuçtur: sınav
+zorlaştı, çünkü üretilen veride artık gri bölge var.
+
+**Demo filoda somut kazanç — TR-09:**
+
+| | Önce | Sonra |
+|---|---|---|
+| Tanı | Normal | **D1** (doğru) |
+| Güven | %54 | %85 |
+| Uzman incelemesi | evet | evet |
+
+TR-09 erken evre bir deşarj arızası geliştiriyor. Eski model ona "Normal"
+diyordu (yanlış) ve sadece güveni düşük olduğu için işaretlenmişti. Yeni
+model **doğru sınıfı buluyor** ve yine de incelemeye gönderiyor. Başlangıç
+evresi örnekleriyle eğitilmenin doğrudan karşılığı budur.
+
+Ayrıca TR-08 (T2, güven %74) artık incelemeye düşüyor — sınırda bir vaka
+olduğu için doğru davranış. Filoda uzman incelemesi 1'den 2'ye çıktı.
+
 ## Sonuç ve öneri
 
 1. Demo/filo tarafı sentetik veriyle çalışmaya devam etmeli — orada amaç
