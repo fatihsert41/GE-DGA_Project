@@ -73,6 +73,28 @@ public class Technician
 
     public bool IsActive { get; set; } = true;
 
+    // --- Kimlik doğrulama (Faz 9.0b) ---------------------------------
+    // PIN'in KENDİSİ hiçbir zaman saklanmaz; yalnızca özeti ve tuzu.
+    // Ayrıntılı gerekçe: Services/PinHasher.cs
+
+    /// <summary>PIN özeti (PBKDF2). Düz metin PIN asla saklanmaz.</summary>
+    public string PinHash { get; set; } = string.Empty;
+
+    /// <summary>Kişiye özel tuz — aynı PIN farklı özet üretsin diye.</summary>
+    public string PinSalt { get; set; } = string.Empty;
+
+    /// <summary>Arka arkaya yanlış PIN denemesi sayısı.</summary>
+    /// <remarks>
+    /// Özetleme tek başına yetmez. 4 haneli PIN'in 10.000 olasılığı var;
+    /// sınırsız deneme hakkı olsa bir betik saniyeler içinde bulur.
+    /// Deneme sınırlaması, kısa PIN'i kabul edilebilir kılan ikinci
+    /// yarıdır. Başarılı girişte SIFIRLANIR.
+    /// </remarks>
+    public int FailedAttempts { get; set; }
+
+    /// <summary>Bu ana kadar giriş kapalı (null ise kapalı değil).</summary>
+    public DateTime? LockedUntil { get; set; }
+
     /// <summary>Bu teknisyene atanmış iş emirleri.</summary>
     /// <remarks>
     /// <b>Navigation property (gezinme özelliği).</b> Veritabanında böyle bir

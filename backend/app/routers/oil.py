@@ -5,7 +5,9 @@ sıklık, farklı yorum. Aynı uç noktaya sıkıştırmak ikisini de bulandır�
 """
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
+
+from ..auth import Identity, require_identity
 
 from .. import database
 from ..core import oil_quality
@@ -66,7 +68,9 @@ def list_oil_tests(transformer_id: str) -> dict:
 
 
 @router.post("/transformers/{transformer_id}/oil-tests")
-def create_oil_test(transformer_id: str, test: OilTestIn) -> dict:
+def create_oil_test(
+        transformer_id: str, test: OilTestIn,
+        identity: Identity = Depends(require_identity)) -> dict:
     """Yeni bir yağ kalitesi testi kaydeder ve hemen değerlendirir."""
     if database.get_transformer(transformer_id) is None:
         raise HTTPException(status_code=404,
@@ -82,7 +86,9 @@ def create_oil_test(transformer_id: str, test: OilTestIn) -> dict:
 
     test_id = database.save_oil_test(
         transformer_id, values,
-        sampled_at=test.sampled_at, lab=test.lab, notes=test.notes)
+        sampled_at=test.sampled_at, lab=test.lab, notes=test.notes,
+        recorded_by={"employee_no": identity.employee_no,
+                     "name": identity.name})
 
     saved = next(t for t in database.get_oil_tests(transformer_id)
                  if t["id"] == test_id)

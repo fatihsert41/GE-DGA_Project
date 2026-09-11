@@ -57,6 +57,10 @@ var mlTimeout = builder.Configuration.GetValue<int?>("MlService:TimeoutSeconds")
 builder.Services.AddSingleton<WorkOrderPlanner>();
 builder.Services.AddSingleton<AssignmentService>();
 builder.Services.AddScoped<TechnicianRepository>();
+// TokenIssuer Singleton: gizli anahtar bir kez okunur, istekler
+// arasında değişmez. AuthService Scoped, çünkü DbContext kullanıyor.
+builder.Services.AddSingleton<TokenIssuer>();
+builder.Services.AddScoped<AuthService>();
 
 builder.Services.AddHttpClient<MlServiceClient>(client =>
 {
@@ -74,6 +78,49 @@ using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<MaintenanceDbContext>();
     db.Database.Migrate();
+
+    // --- Demo PIN'leri (Faz 9.0b) ------------------------------------------
+    //
+    // Neden migration'ın HasData'sında değil? Çünkü PIN özeti RASTGELE tuz
+    // içerir; migration ise deterministik olmalıdır (aynı dosya her yerde
+    // aynı sonucu üretmeli). Sabit bir özet gömseydik, tuzun tüm amacı
+    // ortadan kalkardı — herkes aynı tuzu kullanırdı.
+    //
+    // ⚠ DEMO KURALI: PIN = sicil numarasının SON DÖRT HANESİ.
+    // Gerçek bir sistemde PIN kullanıcıya kapalı zarfla verilir ve ilk
+    // girişte değiştirtilir. Burada tahmin edilebilir olması bilinçli:
+    // bu bir güvenlik gösterimi değil, izlenebilirlik altyapısıdır.
+    var pinless = db.Technicians.Where(t => t.PinHash == "").ToList();
+    foreach (var person in pinless)
+    {
+        var demoPin = person.EmployeeNo.Length >= 4
+            ? person.EmployeeNo[^4..]
+            : person.EmployeeNo.PadLeft(4, '0');
+        var (hash, salt) = PinHasher.Hash(demoPin);
+        person.PinHash = hash;
+        person.PinSalt = salt;
+    }
+    var issuer = scope.ServiceProvider.GetRequiredService<TokenIssuer>();
+    if (issuer.IsDevelopmentSecret)
+    {
+        Console.WriteLine(
+            "[UYARI] Belirtec imzasi GELISTIRME anahtariyla yapiliyor; bu " +
+            "anahtar kaynak kodda ve GIZLI DEGILDIR.");
+        Console.WriteLine(
+            "        Gercek kurulumda TRANSFORMERAI_AUTH_SECRET ortam " +
+            "degiskenini ayarlayin (Python tarafinda da ayni deger).");
+    }
+
+    if (pinless.Count > 0)
+    {
+        db.SaveChanges();
+        Console.WriteLine(
+            $"[DEMO] {pinless.Count} personele PIN atandi. " +
+            "PIN = sicil numarasinin son 4 hanesi.");
+        foreach (var person in pinless)
+            Console.WriteLine($"  {person.EmployeeNo}  {person.Name,-16} " +
+                              $"rol={person.Role}  PIN={person.EmployeeNo[^4..]}");
+    }
 }
 
 if (app.Environment.IsDevelopment())
@@ -491,4 +538,75 @@ app.MapPatch("/workorders/{id}/status",
 })
 .WithName("UpdateWorkOrderStatus");
 
+
+// ---------------------------------------------------------------------------
+// Kimlik doğrulama (Faz 9.0b)
+// ---------------------------------------------------------------------------
+//
+// ⚠ BU KATMANIN SINIRLARI — arayüzde de yazılı olmalı:
+//
+//   VAR: PIN özetleme (PBKDF2 + kişiye özel tuz), deneme sınırlaması ve
+//        kilitleme, süreli ve iptal edilebilir oturum belirteci,
+//        sabit süreli karşılaştırma, kullanıcı sayımına karşı tek mesaj.
+//
+//   YOK: HTTPS/TLS (demo localhost'ta çalışıyor — gerçek kurulumda ŞART,
+//        aksi halde belirteç ağda açık gider), çok faktörlü doğrulama,
+//        parola politikası/sıfırlama, CSRF sertleştirmesi.
+//
+// 4-6 haneli bir PIN güçlü bir parola değildir. Özetleme + kilitlemeyle
+// birlikte banka kartı seviyesinde koruma verir: sicilini bilen birine
+// karşı korur, sistemi elinde tutan birine karşı değil.
+
+app.MapPost("/auth/login", async (AuthService auth, LoginRequest request,
+                                  CancellationToken ct) =>
+{
+    var (ok, error) = await auth.LoginAsync(request.EmployeeNo, request.Pin,
+                                            DateTime.UtcNow, ct);
+    // 401: kimlik doğrulanamadı. Kilitlenme de 401 döner (403 değil),
+    // çünkü kullanıcı hâlâ kimliğini kanıtlayamamış durumda.
+    return ok is not null ? Results.Ok(ok) : Results.Json(error, statusCode: 401);
+})
+.WithSummary("Sicil numarası ve PIN ile giriş.");
+
+app.MapPost("/auth/logout", async (AuthService auth, HttpRequest http,
+                                   CancellationToken ct) =>
+{
+    var token = ReadToken(http);
+    var done = await auth.LogoutAsync(token, ct);
+    return Results.Ok(new { ok = done });
+})
+.WithSummary("Oturumu kapatır; belirteç anında geçersiz olur.");
+
+app.MapGet("/auth/me", async (AuthService auth, HttpRequest http,
+                              CancellationToken ct) =>
+{
+    var person = await auth.ResolveAsync(ReadToken(http), DateTime.UtcNow, ct);
+    if (person is null)
+        return Results.Json(new { message = "Oturum geçersiz veya süresi dolmuş." },
+                            statusCode: 401);
+
+    return Results.Ok(new
+    {
+        person.Id,
+        person.EmployeeNo,
+        person.Name,
+        person.Region,
+        role = person.Role.ToString(),
+        specialty = person.Specialty.ToString(),
+    });
+})
+.WithSummary("Belirtecin sahibini döndürür (oturum kontrolü).");
+
 app.Run();
+
+// Belirteç "Authorization: Bearer <token>" başlığından okunur.
+// Standart biçim; ileride gerçek bir kimlik sağlayıcıya geçilirse
+// istemci tarafında değişiklik gerekmez.
+static string? ReadToken(HttpRequest http)
+{
+    var header = http.Headers.Authorization.ToString();
+    if (string.IsNullOrWhiteSpace(header)) return null;
+    return header.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)
+        ? header["Bearer ".Length..].Trim()
+        : header.Trim();
+}

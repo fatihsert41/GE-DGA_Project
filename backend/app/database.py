@@ -100,6 +100,21 @@ def init_db() -> None:
             """
         )
 
+        # Kimlik sütunları (Faz 9.0c). Her kayıt "kim girdi" bilgisini
+        # TAŞIR ve bu bilgi ANLIK GÖRÜNTÜDÜR: sicil no yanında ad da
+        # saklanır. Neden? Personel işten ayrılsa, soyadı değişse ya da
+        # kaydı kaldırılsa bile üç yıl önceki ölçümün kim tarafından
+        # yapıldığı okunabilir kalmalı. Bu, "kayıt silinmez, geçersiz
+        # işaretlenir" kararıyla aynı ilkenin devamı: geçmiş, bugünün
+        # durumuna göre yeniden yazılmaz.
+        for table in ("oil_tests", "electrical_tests", "measurements"):
+            _ensure_column(conn, table, "recorded_by_id", "TEXT")
+            _ensure_column(conn, table, "recorded_by_name", "TEXT")
+        for table in ("oil_tests", "electrical_tests"):
+            _ensure_column(conn, table, "voided_by_id", "TEXT")
+            _ensure_column(conn, table, "voided_by_name", "TEXT")
+
+
 
 # Yağ kalitesi testi sütunları. DGA ölçümünden AYRI bir tablo:
 # farklı laboratuvar testleri, farklı sıklık, farklı birimler. Aynı tabloya
@@ -399,13 +414,17 @@ def get_measurements(transformer_id: str) -> List[Dict]:
 def save_oil_test(transformer_id: str, values: Dict[str, object],
                   sampled_at: Optional[str] = None,
                   lab: Optional[str] = None,
-                  notes: Optional[str] = None) -> int:
+                  notes: Optional[str] = None,
+                  recorded_by: Optional[Dict[str, str]] = None) -> int:
     """Bir yağ kalitesi testi kaydeder ve id'sini döndürür."""
+    rec = recorded_by or {}
     known = {k: values.get(k) for k in OIL_TEST_FIELDS}
     columns = ["transformer_id", "sampled_at", *OIL_TEST_FIELDS,
-               "lab", "notes", "created_at"]
+               "lab", "notes", "created_at",
+               "recorded_by_id", "recorded_by_name"]
     row = [transformer_id, _normalize_ts(sampled_at) or _now(),
-           *[known[k] for k in OIL_TEST_FIELDS], lab, notes, _now()]
+           *[known[k] for k in OIL_TEST_FIELDS], lab, notes, _now(),
+           rec.get("employee_no"), rec.get("name")]
 
     with _connect() as conn:
         cur = conn.execute(
@@ -527,14 +546,24 @@ def latest_measurements() -> List[Dict]:
 def save_electrical_test(transformer_id: str, values: Dict[str, object],
                          tested_at: Optional[str] = None,
                          tested_by: Optional[str] = None,
-                         notes: Optional[str] = None) -> int:
-    """Bir elektriksel test kaydeder ve id'sini döndürür."""
+                         notes: Optional[str] = None,
+                         recorded_by: Optional[Dict[str, str]] = None) -> int:
+    """Bir elektriksel test kaydeder ve id'sini döndürür.
+
+    ``recorded_by``: {"employee_no": ..., "name": ...} — kaydı sisteme
+    giren kişi. ``tested_by`` ondan FARKLI olabilir: testi sahada başkası
+    yapmış, kaydı ofiste bir başkası girmiş olabilir. İkisini ayrı tutmak
+    gerçek iş akışına uygundur.
+    """
+    rec = recorded_by or {}
     known = {k: values.get(k) for k in ELECTRICAL_TEST_FIELDS}
     columns = ["transformer_id", "tested_at", *ELECTRICAL_TEST_FIELDS,
-               "tested_by", "notes", "created_at"]
+               "tested_by", "notes", "created_at",
+               "recorded_by_id", "recorded_by_name"]
     row = [transformer_id, _normalize_ts(tested_at) or _now(),
            *[known[k] for k in ELECTRICAL_TEST_FIELDS],
-           tested_by, notes, _now()]
+           tested_by, notes, _now(),
+           rec.get("employee_no"), rec.get("name")]
 
     with _connect() as conn:
         cur = conn.execute(
@@ -581,7 +610,8 @@ def latest_electrical_tests() -> Dict[str, Dict]:
 
 
 def void_test(table: str, transformer_id: str, test_id: int,
-              reason: str) -> bool:
+              reason: str,
+              voided_by: Optional[Dict[str, str]] = None) -> bool:
     """Bir test kaydını GEÇERSİZ işaretler (silmez).
 
     NEDEN SİLMİYORUZ
@@ -602,11 +632,17 @@ def void_test(table: str, transformer_id: str, test_id: int,
     if table not in ("oil_tests", "electrical_tests"):
         raise ValueError(f"Bilinmeyen tablo: {table}")
 
+    rec = voided_by or {}
     voided_at = _now() if reason else None
     with _connect() as conn:
         cur = conn.execute(
-            f"""UPDATE {table} SET voided_at = ?, void_reason = ?
+            f"""UPDATE {table}
+                SET voided_at = ?, void_reason = ?,
+                    voided_by_id = ?, voided_by_name = ?
                 WHERE id = ? AND transformer_id = ?""",
-            (voided_at, reason or None, int(test_id), transformer_id),
+            (voided_at, reason or None,
+             rec.get("employee_no") if reason else None,
+             rec.get("name") if reason else None,
+             int(test_id), transformer_id),
         )
         return cur.rowcount > 0

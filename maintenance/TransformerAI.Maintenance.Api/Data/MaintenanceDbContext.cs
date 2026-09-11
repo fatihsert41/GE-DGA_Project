@@ -46,6 +46,8 @@ public class MaintenanceDbContext : DbContext
     /// <summary>technicians tablosu.</summary>
     public DbSet<Technician> Technicians => Set<Technician>();
 
+    public DbSet<Session> Sessions => Set<Session>();
+
     /// <summary>Tablo/sütun ayrıntılarını burada tanımlıyoruz.</summary>
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -95,6 +97,30 @@ public class MaintenanceDbContext : DbContext
         // iki istek aynı anda gelirse yetersiz kalır. (İş emri sıra
         // numarasında da aynı gerekçeyle unique index kullanılmıştı.)
         tech.HasIndex(t => t.EmployeeNo).IsUnique();
+
+        // PIN alanları (Faz 9.0b). Özet ve tuz base64 metin olarak durur.
+        tech.Property(t => t.PinHash).HasMaxLength(100);
+        tech.Property(t => t.PinSalt).HasMaxLength(50);
+
+        // --- Oturumlar (Faz 9.0b) ----------------------------------------
+        var sess = modelBuilder.Entity<Session>();
+        sess.ToTable("sessions");
+        // Anahtar belirtecin ÖZETİ: belirtecin kendisi veritabanında
+        // hiçbir zaman bulunmaz. Sızma hâlinde açık oturumlar ele
+        // geçirilemesin diye — PIN'dekiyle aynı mantık.
+        sess.HasKey(x => x.TokenHash);
+        sess.Property(x => x.TokenHash).HasMaxLength(100);
+        sess.Property(x => x.TechnicianId).HasMaxLength(20).IsRequired();
+        sess.HasIndex(x => x.TechnicianId);
+        sess.HasIndex(x => x.ExpiresAt);
+
+        // Personel silinirse oturumları da gitsin. İş emirlerinde
+        // SetNull kullanmıştık (geçmiş korunmalı), ama oturum geçmiş
+        // değil, anlık bir yetkidir: personel yoksa oturumu da olmamalı.
+        sess.HasOne(x => x.Technician)
+            .WithMany()
+            .HasForeignKey(x => x.TechnicianId)
+            .OnDelete(DeleteBehavior.Cascade);
 
         // --- İlişki: bir teknisyenin ÇOK iş emri olur (one-to-many) ------
         tech.HasMany(t => t.WorkOrders)      // teknisyenin iş emirleri
