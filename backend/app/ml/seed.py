@@ -192,6 +192,61 @@ FLEET = [
 ]
 
 
+# Bileşen testi senaryoları (Faz 9.4). Yine elle seçildi.
+#
+#   TR-01  OLTC 58.000 işletme -> revizyon zamanı geçmiş. Şebeke
+#          bağlantı noktası, kademe sürekli çalışıyor. DGA'sı D2
+#          zaten kritik; bu ayrı bir bakım kalemi.
+#   TR-08  B buşinginde kapasitans %6.8 sapma -> kondansatör katmanı
+#          delinmiş. RES bağlantısı, 2020 yapımı, DGA'sı sadece T2:
+#          YENİ bir trafoda buşing sorunu, aktif kısımdan bağımsız.
+#   TR-06  OLTC az çalışmış (DETC zaten) ama 9 yıldır revizyonsuz ->
+#          sayaç dolmasa da süre doldu.
+#   Diğerleri temiz. TR-09/TR-10 kasten yok.
+COMPONENT_SCENARIOS = {
+    "TR-01": {"bushing_a_pf_pct": 0.28, "bushing_a_cap_pf": 498.0,
+              "bushing_a_cap_rated_pf": 496.0,
+              "bushing_b_pf_pct": 0.30, "bushing_b_cap_pf": 495.0,
+              "bushing_b_cap_rated_pf": 496.0,
+              "bushing_c_pf_pct": 0.29, "bushing_c_cap_pf": 497.0,
+              "bushing_c_cap_rated_pf": 496.0,
+              "oltc_operations": 214_000, "oltc_ops_since_overhaul": 58_000,
+              "oltc_years_since_overhaul": 5.5, "oltc_oil_bdv_kv": 34.0},
+    "TR-02": {"bushing_a_pf_pct": 0.24, "bushing_a_cap_pf": 372.0,
+              "bushing_a_cap_rated_pf": 371.0,
+              "bushing_b_pf_pct": 0.25, "bushing_b_cap_pf": 370.0,
+              "bushing_b_cap_rated_pf": 371.0,
+              "bushing_c_pf_pct": 0.23, "bushing_c_cap_pf": 372.0,
+              "bushing_c_cap_rated_pf": 371.0,
+              "oltc_operations": 61_000, "oltc_ops_since_overhaul": 14_000,
+              "oltc_years_since_overhaul": 2.1, "oltc_oil_bdv_kv": 42.0},
+    "TR-04": {"bushing_a_pf_pct": 0.41, "bushing_a_cap_pf": 288.0,
+              "bushing_a_cap_rated_pf": 287.0,
+              "bushing_b_pf_pct": 0.44, "bushing_b_cap_pf": 286.0,
+              "bushing_b_cap_rated_pf": 287.0,
+              "bushing_c_pf_pct": 0.42, "bushing_c_cap_pf": 289.0,
+              "bushing_c_cap_rated_pf": 287.0,
+              "oltc_operations": 132_000, "oltc_ops_since_overhaul": 31_000,
+              "oltc_years_since_overhaul": 4.0, "oltc_oil_bdv_kv": 31.0},
+    "TR-06": {"bushing_a_pf_pct": 0.52, "bushing_a_cap_pf": 246.0,
+              "bushing_a_cap_rated_pf": 245.0,
+              "bushing_b_pf_pct": 0.55, "bushing_b_cap_pf": 244.0,
+              "bushing_b_cap_rated_pf": 245.0,
+              "bushing_c_pf_pct": 0.51, "bushing_c_cap_pf": 246.0,
+              "bushing_c_cap_rated_pf": 245.0,
+              "oltc_operations": 9_400, "oltc_ops_since_overhaul": 4_100,
+              "oltc_years_since_overhaul": 9.2, "oltc_oil_bdv_kv": 26.0},
+    "TR-08": {"bushing_a_pf_pct": 0.22, "bushing_a_cap_pf": 355.0,
+              "bushing_a_cap_rated_pf": 354.0,
+              "bushing_b_pf_pct": 0.38, "bushing_b_cap_pf": 378.0,
+              "bushing_b_cap_rated_pf": 354.0,
+              "bushing_c_pf_pct": 0.23, "bushing_c_cap_pf": 353.0,
+              "bushing_c_cap_rated_pf": 354.0,
+              "oltc_operations": 44_000, "oltc_ops_since_overhaul": 22_000,
+              "oltc_years_since_overhaul": 3.1, "oltc_oil_bdv_kv": 39.0},
+}
+
+
 # Fiziksel gözlem senaryoları (Faz 9.5). Elle seçildi: her biri
 # "gözün gördüğünü cihaz göremez" savını bir vakayla kanıtlıyor.
 #
@@ -270,6 +325,7 @@ def _reset() -> None:
     """Tabloları oluştur ve eski demo kayıtları temizle (temiz başlangıç)."""
     database.init_db()
     with sqlite3.connect(database.DB_PATH) as conn:
+        conn.execute("DELETE FROM component_tests")
         conn.execute("DELETE FROM physical_inspections")
         conn.execute("DELETE FROM lifecycle_events")
         conn.execute("DELETE FROM electrical_tests")
@@ -377,6 +433,15 @@ def seed() -> None:
                     unit["id"], values, tested_at=tested.isoformat(),
                     tested_by="Demo Saha Ekibi")
 
+        # --- Bileşen testi (Faz 9.4) ----------------------------------
+        # Elektriksel testlerle birlikte, planlı kesintide yapılır.
+        comp_values = COMPONENT_SCENARIOS.get(unit["id"])
+        if comp_values:
+            when = datetime.now(timezone.utc) - timedelta(days=200 + idx * 40)
+            database.save_component_test(
+                unit["id"], comp_values, tested_at=when.isoformat(),
+                recorded_by={"employee_no": "10318", "name": "Demo Test Ekibi"})
+
         # --- Fiziksel gözlem (Faz 9.5) --------------------------------
         # DGA'dan daha SIK yapılabilir: cihaz gerektirmez, teknisyen
         # zaten sahada. Demo filoda son iki tur kaydediliyor.
@@ -434,6 +499,15 @@ def seed() -> None:
     if fleet_ph["never_inspected"]:
         print(f"  hic gozlem yapilmamis: "
               f"{', '.join(fleet_ph['never_inspected'])}")
+
+    from ..services import components as comp_service
+    fleet_comp = comp_service.fleet_summary()
+    print(f"Busing/kademe: {fleet_comp['tested']} trafo, "
+          f"durum dagilimi {dict(fleet_comp['condition_counts'])}")
+    for r in fleet_comp["items"]:
+        if r["overall"] != "iyi":
+            print(f"  {r['transformer_id']}  {r['overall']}: "
+                  f"{'; '.join(r['problems'])}")
 
     print("En yasli kagitlar:")
     for r in fleet_oil["most_aged_paper"]:

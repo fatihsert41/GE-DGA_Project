@@ -20,6 +20,7 @@ from ..core.gases import (FAULT_FAMILY, FAULT_GROUP, FAULT_LABELS_TR,
 from ..core.risk import RISK_LEVELS_TR, RISK_ORDER
 from . import electrical as electrical_service
 from . import oil as oil_service
+from . import components as component_service
 from . import physical as physical_service
 from .diagnosis import CONFIDENCE_THRESHOLD
 
@@ -155,7 +156,8 @@ def _lifecycle_distribution(cards: List[Dict]) -> Dict[str, int]:
 def build_overview(rows: List[Dict],
                    oil_tests: Optional[Dict[str, Dict]] = None,
                    electrical_tests: Optional[Dict[str, Dict]] = None,
-                   inspections: Optional[Dict[str, Dict]] = None) -> Dict:
+                   inspections: Optional[Dict[str, Dict]] = None,
+                   component_tests: Optional[Dict[str, Dict]] = None) -> Dict:
     """Saf hesaplama: DB satırlarını özet + kart listesine çevirir.
 
     Veritabanına dokunmaz, bu yüzden sahte satırlarla test edilebilir.
@@ -163,6 +165,7 @@ def build_overview(rows: List[Dict],
     oil_tests = oil_tests or {}
     electrical_tests = electrical_tests or {}
     inspections = inspections or {}
+    component_tests = component_tests or {}
     cards: List[Dict] = []
     for r in rows:
         card = _to_card(r)
@@ -176,6 +179,9 @@ def build_overview(rows: List[Dict],
         # Fiziksel gözlem özeti (Faz 9.5).
         card.update(physical_service.physical_card(
             inspections.get(card["id"])))
+        # Buşing ve kademe değiştirici (Faz 9.4).
+        card.update(component_service.component_card(
+            card["id"], component_tests.get(card["id"])))
         # Sağlık endeksi (Faz 8.5/8.6): dört boyutu tek skorda birleştirir.
         # `priority` ACİLİYETİ ölçer (bugün kime koşayım), `health` DURUMU
         # (bu varlık genel olarak ne hâlde) — ikisi farklı sorulardır.
@@ -185,6 +191,7 @@ def build_overview(rows: List[Dict],
             paper=card.pop("paper", None),
             electrical_overall=card.get("electrical_overall"),
             physical_overall=card.get("physical_overall"),
+            component_overall=card.get("component_overall"),
             asset_weight=card.get("asset_weight"),
         )
         card["health_score"] = card["health"].get("score")
@@ -248,4 +255,5 @@ def overview() -> Dict:
     return build_overview(database.latest_measurements(),
                           database.latest_oil_tests(),
                           database.latest_electrical_tests(),
-                          database.latest_physical_inspections())
+                          database.latest_physical_inspections(),
+                          database.latest_component_tests())

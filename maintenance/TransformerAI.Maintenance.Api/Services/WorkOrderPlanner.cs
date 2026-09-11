@@ -320,6 +320,26 @@ public class WorkOrderPlanner
                 today.AddDays(DueDaysHigh), "physical-critical"));
         }
 
+        // KURAL 7c — Buşing / kademe değiştirici bulgusu.
+        //
+        // Ayrı bir iş emri türü kullanılmıyor; Repair yeterli. Ama
+        // ÖNEMLİ: bu bulgular aktif kısımdan (sargı, yağ, kağıt)
+        // bağımsızdır. TR-08 örneği: 2020 yapımı, DGA'sı sadece T2, ama
+        // B buşinginde kondansatör katmanı delinmiş. Yeni bir trafoda
+        // eklenti arızası — aktif kısma bakan hiçbir ölçüt bunu görmez.
+        if (t.ComponentOverall == "kötü"
+            && t.ComponentProblems is { Count: > 0 })
+        {
+            Add(output, openPairs, new Suggestion(
+                t.Id, WorkOrderKind.Repair,
+                "Buşing / kademe bulgusu",
+                string.Join(" · ", t.ComponentProblems)
+                    + ". Eklenti bileşeninden geldi; aktif kısmı ölçen "
+                    + "testlere yansımaz.",
+                ElectricalFaultCondition * t.AssetWeight,
+                today.AddDays(DueDaysHigh), "component-fault"));
+        }
+
         // KURAL 8 — Kağıdın ömrü tükeniyor.
         //
         // Aciliyeti DÜŞÜK ama önemi yüksek: kağıt bozunması geri

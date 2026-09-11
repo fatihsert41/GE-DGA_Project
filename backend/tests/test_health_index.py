@@ -139,10 +139,11 @@ def test_en_zayif_boyut_bildirilir():
 # --- Dördüncü boyut: elektriksel testler (Faz 8.6) -----------------------
 
 def test_tum_boyutlar_ortalamaya_girer():
-    """Beş boyut ölçülüyse payda 13 olmalı (4+3+3+2+1)."""
+    """Altı boyut ölçülüyse payda 15 olmalı (4+3+3+2+2+1)."""
     r = hi.compute(risk_condition=1, oil_overall="iyi", paper=paper(0),
-                   electrical_overall="iyi", physical_overall="iyi")
-    assert r["weight_sum"] == 13.0
+                   electrical_overall="iyi", physical_overall="iyi",
+                   component_overall="iyi")
+    assert r["weight_sum"] == 15.0
     assert r["coverage"]["level"] == "full"
     assert r["score"] == 100.0
 
@@ -150,9 +151,9 @@ def test_tum_boyutlar_ortalamaya_girer():
 def test_elektriksel_test_yoksa_kapsama_eksik():
     """Elektriksel test seyrek yapılır; eksikliği GÖRÜNÜR olmalı."""
     r = hi.compute(risk_condition=1, oil_overall="iyi", paper=paper(0),
-                   physical_overall="iyi")
+                   physical_overall="iyi", component_overall="iyi")
     assert r["coverage"]["level"] == "partial"
-    assert r["coverage"]["measured"] == 4
+    assert r["coverage"]["measured"] == 5
     assert any("Elektriksel testler" in w for w in r["warnings"])
 
 
@@ -207,3 +208,21 @@ def test_gozlem_yoksa_kapsama_eksik_kalir():
                    electrical_overall="iyi")
     assert r["coverage"]["level"] == "partial"
     assert any("Fiziksel gözlem" in w for w in r["warnings"])
+
+
+# --- Altıncı boyut: buşing ve kademe (Faz 9.4) --------------------------
+
+def test_bilesen_boyutu_yagdan_agir_elektrikselden_hafif():
+    """Buşing değiştirilebilir; sargı ve kağıt değiştirilemez."""
+    w = hi.DIMENSIONS
+    assert w["components"]["weight"] == w["oil"]["weight"]
+    assert w["components"]["weight"] < w["electrical"]["weight"]
+    assert w["components"]["weight"] < w["paper"]["weight"]
+
+
+def test_bilesen_arizasi_tavan_uygular():
+    r = hi.compute(risk_condition=1, oil_overall="iyi", paper=paper(5),
+                   electrical_overall="iyi", physical_overall="iyi",
+                   component_overall="kötü")
+    assert r["capped"] is True
+    assert "Buşing ve kademe" in r["critical_dimensions"]

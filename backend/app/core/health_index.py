@@ -1,14 +1,15 @@
-"""Sağlık Endeksi — beş boyutu tek 0-100 skora indirger. — Faz 8.5/9.5
+"""Sağlık Endeksi — altı boyutu tek 0-100 skora indirger. — Faz 8.5/9.4
 
 NEDEN?
 ------
-Elimizde trafonun durumunu anlatan BEŞ ayrı ölçüt var ve beşi farklı
+Elimizde trafonun durumunu anlatan ALTI ayrı ölçüt var ve altısı farklı
 birimlerde konuşuyor:
 
 * **DGA riski**        — IEEE C57.104 kondisyonu (1-4)
 * **Kağıt DP**         — tüketilen ömür yüzdesi (Chendong / IEC 61198)
 * **Elektriksel test** — iyi / kabul / kötü (IEEE C57.152, Faz 8.6)
 * **Yağ kalitesi**     — iyi / kabul / kötü (IEC 60422 ailesi)
+* **Buşing ve kademe** — kapasitans sapması, işletme sayacı (9.4)
 * **Fiziksel gözlem**  — saha kontrol listesi (Faz 9.5)
 
 İlk üçü aynı yağ numunesinden ya da işletme sırasında okunur; elektriksel
@@ -79,6 +80,14 @@ DIMENSIONS: Dict[str, Dict[str, object]] = {
         "meaning": "Sargı ve yalıtımın mekanik/elektriksel bütünlüğü — "
                    "yağın göremediği arızalar.",
     },
+    "components": {
+        "key": "components",
+        "label": "Buşing ve kademe",
+        "weight": 2.0,
+        "source": "IEEE C57.19.01 / C57.131 (kapasitans, güç faktörü, sayaç)",
+        "meaning": "Eklentiler: buşing kondansatör katmanları ve kademe "
+                   "değiştirici kontak aşınması. Aktif kısımdan ayrı.",
+    },
     "physical": {
         "key": "physical",
         "label": "Fiziksel gözlem",
@@ -96,8 +105,8 @@ DIMENSIONS: Dict[str, Dict[str, object]] = {
     },
 }
 
-DIMENSION_ORDER: List[str] = ["dga", "paper", "electrical", "oil",
-                             "physical"]
+DIMENSION_ORDER: List[str] = ["dga", "paper", "electrical",
+                             "components", "oil", "physical"]
 
 # IEEE kondisyonu -> 0-100 puan. Doğrusal DEĞİL: 1'den 2'ye geçmek rutin
 # bir uyarıdır, 3'ten 4'e geçmek acil müdahaledir. Puan da bunu yansıtmalı.
@@ -121,6 +130,15 @@ ELECTRICAL_SCORES: Dict[str, float] = {"iyi": 100.0, "kabul": 60.0,
 PHYSICAL_SCORES: Dict[str, float] = {"iyi": 100.0, "kabul": 65.0,
                                      "kötü": 25.0}
 
+# Bileşen (buşing + kademe) -> 0-100 puan.
+#
+# Ağırlık 2.0: yağ kadar, elektrikselden az. Gerekçe: buşing arızası
+# şiddetli biter (patlama, yangın) ama bileşen DEĞİŞTİRİLEBİLİR — bozuk
+# bir buşing sökülüp yenisi takılır, sargı öyle değil. Kağıt ve sargı
+# geri dönüşsüz olduğu için daha ağır.
+COMPONENT_SCORES: Dict[str, float] = {"iyi": 100.0, "kabul": 60.0,
+                                      "kötü": 20.0}
+
 # Skor bandı: (alt_sınır, kod, etiket, eylem)
 BANDS = [
     (85.0, "excellent", "Çok İyi", "Rutin izlemeye devam."),
@@ -141,10 +159,11 @@ PAPER_CRITICAL_CONSUMED = 90.0    # tüketilen ömür %90 üstü
 OIL_CRITICAL = "kötü"
 ELECTRICAL_CRITICAL = "kötü"
 PHYSICAL_CRITICAL = "kötü"
+COMPONENT_CRITICAL = "kötü"
 
 # Kapsama (coverage) yorumları: skor kaç boyutun verisine dayanıyor?
 COVERAGE_LABELS = {
-    "full": "Beş boyutun beşi de ölçülü.",
+    "full": "Altı boyutun altısı da ölçülü.",
     "partial": "Bazı boyutlarda ölçüm yok; skor eksik veriye dayanıyor.",
     "none": "Hiçbir boyutta ölçüm yok; sağlık endeksi hesaplanamaz.",
 }
@@ -260,11 +279,25 @@ def _physical_dimension(overall: Optional[str]) -> Dict[str, object]:
     }
 
 
+def _component_dimension(overall: Optional[str]) -> Dict[str, object]:
+    """Buşing/kademe hükmünü 0-100 puana çevirir. (Faz 9.4)"""
+    if not overall or overall == "bilinmiyor":
+        return {"available": False, "reason": "buşing/kademe testi yok"}
+    return {
+        "available": True,
+        "score": COMPONENT_SCORES.get(overall, 60.0),
+        "detail": f"Genel hüküm: {overall}",
+        "raw": overall,
+        "is_critical": overall == COMPONENT_CRITICAL,
+    }
+
+
 def compute(risk_condition: Optional[int] = None,
             oil_overall: Optional[str] = None,
             paper: Optional[Dict[str, object]] = None,
             electrical_overall: Optional[str] = None,
             physical_overall: Optional[str] = None,
+            component_overall: Optional[str] = None,
             asset_class: Optional[str] = None,
             asset_weight: Optional[float] = None) -> Dict[str, object]:
     """Sağlık endeksini hesaplar.
@@ -281,6 +314,7 @@ def compute(risk_condition: Optional[int] = None,
         "paper": _paper_dimension(paper),
         "electrical": _electrical_dimension(electrical_overall),
         "oil": _oil_dimension(oil_overall),
+        "components": _component_dimension(component_overall),
         "physical": _physical_dimension(physical_overall),
     }
 

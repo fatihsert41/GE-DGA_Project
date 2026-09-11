@@ -132,6 +132,15 @@ export const api = {
     client.delete(`/transformers/${id}/electrical-tests/${testId}/void`)
       .then((r) => r.data),
 
+  // --- Buşing ve kademe değiştirici (Faz 9.4) -----------------------------
+  componentsSchema: () => client.get('/components/schema').then((r) => r.data),
+  componentsFleet: () => client.get('/components/fleet').then((r) => r.data),
+  componentTests: (id) =>
+    client.get(`/transformers/${id}/component-tests`).then((r) => r.data),
+  createComponentTest: (id, payload) =>
+    client.post(`/transformers/${id}/component-tests`, payload)
+      .then((r) => r.data),
+
   // --- Fiziksel saha gözlemi (Faz 9.5) ------------------------------------
   physicalSchema: () => client.get('/physical/schema').then((r) => r.data),
   physicalFleet: () => client.get('/physical/fleet').then((r) => r.data),

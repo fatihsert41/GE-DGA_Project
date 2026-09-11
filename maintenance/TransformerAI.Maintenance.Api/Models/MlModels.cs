@@ -119,7 +119,15 @@ public record TransformerRisk(
     /// <summary>Kritik bulgular (yağ kaçağı, soğutma, koruma...).</summary>
     List<string>? PhysicalFindings = null,
 
-    bool HasInspection = false);
+    bool HasInspection = false,
+
+    // --- Faz 9.4: buşing ve kademe değiştirici ------------------------
+    /// <summary>Bileşen testi hükmü: iyi / kabul / kötü.</summary>
+    string? ComponentOverall = null,
+
+    List<string>? ComponentProblems = null,
+
+    bool HasComponentTest = false);
 
 /// <summary>Filo özeti — Python'daki /fleet/overview cevabının "summary" kısmı.</summary>
 public record FleetSummary(
