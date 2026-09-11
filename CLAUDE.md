@@ -78,23 +78,34 @@ cd C:\Users\Esma\Desktop\Python\GE-DGA_Project
 
 Arayüz: http://localhost:5173 · API: http://localhost:8000/docs
 
-**Durum:** Her şey commit'li ve push'lu. Faz 0-7 bitti, Faz 8 devam ediyor
-(8.1-8.4 tamam). **145 test** (95 Python + 50 .NET).
+**Durum:** Faz 0-7 bitti, Faz 8 devam ediyor (8.1-8.5 tamam).
+**159 test** (109 Python + 50 .NET).
 
-**BEKLEYEN KARAR — ilk iş bunu sor:** Faz 8.5 için iki seçenek var,
-kullanıcı henüz seçmedi:
+**Faz 8.5 — Sağlık Endeksi TAMAM** (kullanıcı B'yi seçti).
+`core/health_index.py` üç boyutu (DGA kondisyonu ×4, kağıt DP ×3, yağ
+kalitesi ×2) tek 0-100 skorda birleştirir. Üç tasarım kararı:
+* **Bilinmeyen boyut "sağlıklı" sayılmaz** — ortalamadan çıkarılır,
+  `coverage` skorun ne kadar veriye dayandığını söyler.
+* **Kritik boyut tavanı (45)** — iki iyi boyut, ark yapan bir trafoyu
+  gizleyemez. (`oil_quality.assess`'teki "en kötü parametre" ile aynı
+  gerekçe.)
+* **Yaş ayrı boyut DEĞİL** — etkisi zaten kağıt DP'sinin içinde; iki kez
+  saymak olurdu.
+Ayrıca `weakest` (skoru en çok çeken boyut) döner: tek sayı hikâyeyi
+gizler. Demo filoda ortalama **59.6**, en kötü TR-07 (25.5).
+`renewal_priority` = (100−skor)/100 × varlık ağırlığı — mevcut `priority`
+ACİLİYETİ ölçer, bu DURUMU ölçer; filo sıralaması DEĞİŞTİRİLMEDİ.
+Uç noktalar: `/health-index/schema`, `/health-index/fleet`,
+`/transformers/{id}/health`. Arayüz: filo kartında `HealthStrip`,
+detayda dördüncü sekme `HealthPanel` (formülü satır satır gösterir).
+Testler: `tests/test_health_index.py` (14 test) — toplam 109 Python.
 
-* **(A) Elektriksel testler** — TTR (sarım oranı) öncelikli. Künye zaten
-  beklenen oranı hesaplıyor (`core/nameplate.rated_turns_ratio`, kademe
-  için `turns_ratio_at_tap`); ölçüleni girip sapmayı değerlendirmek
-  kalıyor. Sargı direnci, yalıtım direnci/PI, tan δ da eklenebilir.
-  Kural tabanlı ve açıklanabilir. **Kullanıcının kendi fikri.**
-* **(B) Sağlık Endeksi** — üç boyutu (DGA riski, yağ kalitesi, kağıt DP)
-  tek 0-100 skora indirger. Mevcut öncelik skorunun
-  (`assets.priority_score` = kondisyon × varlık ağırlığı)
-  genelleştirilmesi olur. **Claude'un önerisi**, çünkü artık
-  birleştirilecek boyutlar var ve "hangi trafoya önce bakayım?" sorusunu
-  gerçekten cevaplar.
+**Sıradaki:** (A) Elektriksel testler — TTR (sarım oranı) öncelikli.
+Künye zaten beklenen oranı hesaplıyor (`core/nameplate.rated_turns_ratio`,
+kademe için `turns_ratio_at_tap`); ölçüleni girip sapmayı değerlendirmek
+kalıyor. Sargı direnci, yalıtım direnci/PI, tan δ da eklenebilir. Kural
+tabanlı ve açıklanabilir. **Kullanıcının kendi fikri.** Eklendiğinde
+sağlık endeksine dördüncü boyut olarak girebilir.
 
 **Sonra gelecek işler (sırasız):**
 * Kalibrasyon katmanı (`docs/FAZ6-IYILESTIRME-YOL-HARITASI.md` 1. sıra) —

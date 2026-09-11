@@ -673,3 +673,98 @@ button.tcard:hover .tcard-go { color: var(--accent); }
   background: var(--surface-2); border-left: 3px solid var(--medium);
   font-size: 0.84rem; line-height: 1.5;
 }
+
+/* ---------------------------------------------------------------------
+   Faz 8.5 — Sağlık Endeksi
+   Yeni bir renk ailesi eklenmedi: beş bant, doğrulanmış risk rampasına
+   eşlendi. Skorun yanında her yerde bant ADI da yazar — renk tek başına
+   anlam taşımaz kuralı burada da geçerli.
+   ------------------------------------------------------------------- */
+
+.hi-gauge { margin: 18px 0 10px; }
+
+.hi-score { display: flex; align-items: baseline; gap: 10px; }
+.hi-number {
+  font-family: var(--mono); font-size: 2.9rem; font-weight: 600;
+  line-height: 1; font-variant-numeric: tabular-nums;
+}
+.hi-number.low { color: var(--low); }
+.hi-number.medium { color: var(--medium); }
+.hi-number.high { color: var(--high); }
+.hi-number.critical { color: var(--critical); }
+.hi-outof { color: var(--muted); font-size: 0.9rem; margin-right: 6px; }
+
+/* Ölçek: bant sınırları çentikle işaretli, böylece "85 iyi mi?" sorusu
+   açıklama okumadan cevaplanıyor. */
+.hi-scale {
+  position: relative; height: 12px; margin-top: 14px;
+  background: var(--surface-2); border-radius: 6px; overflow: hidden;
+}
+.hi-fill {
+  display: block; height: 100%; border-radius: 6px;
+  background: linear-gradient(90deg, var(--critical), var(--high),
+                              var(--medium), var(--low));
+}
+.hi-tick {
+  position: absolute; top: 0; bottom: 0; width: 1px;
+  background: var(--surface); opacity: 0.9;
+}
+.hi-scale-legend {
+  display: flex; justify-content: space-between; margin-top: 5px;
+  font-size: 0.7rem; color: var(--muted);
+}
+
+.hi-action { margin: 14px 0 0; font-size: 0.9rem; color: var(--ink-soft); }
+
+.hi-weakest {
+  margin-top: 14px; padding: 10px 14px; border-radius: 8px;
+  background: var(--surface-2); font-size: 0.86rem;
+}
+.hi-weakest .k { color: var(--muted); margin-right: 8px; }
+
+.hi-note {
+  margin-top: 12px; padding: 12px 16px; border-radius: 8px;
+  background: var(--surface-2); border-left: 3px solid var(--rule-strong);
+  font-size: 0.84rem; line-height: 1.55;
+}
+.hi-note.warn { border-left-color: var(--medium); }
+
+.hi-table td { vertical-align: top; }
+.hi-source { font-size: 0.72rem; }
+.hi-missing { opacity: 0.62; }
+.hi-formula {
+  font-family: var(--mono); font-variant-numeric: tabular-nums;
+  background: var(--surface-2);
+}
+.hi-sources { margin-top: 4px; }
+
+/* Filo kartındaki tek satırlık sağlık göstergesi. */
+.hstrip {
+  margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--rule);
+}
+.hstrip-top {
+  display: flex; align-items: baseline; gap: 6px; font-size: 0.8rem;
+}
+.hstrip-top .k { color: var(--muted); }
+.hstrip-score {
+  font-family: var(--mono); font-size: 1.15rem;
+  font-variant-numeric: tabular-nums;
+}
+.hstrip-score.low { color: var(--low); }
+.hstrip-score.medium { color: var(--medium); }
+.hstrip-score.high { color: var(--high); }
+.hstrip-score.critical { color: var(--critical); }
+.hstrip-partial {
+  margin-left: auto; font-size: 0.68rem; color: var(--ink-soft);
+  background: var(--surface-2); border-radius: 999px; padding: 2px 8px;
+}
+.hstrip-bar {
+  height: 6px; margin-top: 6px; background: var(--surface-2);
+  border-radius: 3px; overflow: hidden;
+}
+.hstrip-bar span { display: block; height: 100%; }
+.hstrip-bar .low { background: var(--low); }
+.hstrip-bar .medium { background: var(--medium); }
+.hstrip-bar .high { background: var(--high); }
+.hstrip-bar .critical { background: var(--critical); }
+.hstrip-why { margin-top: 4px; font-size: 0.72rem; }

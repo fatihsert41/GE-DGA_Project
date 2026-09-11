@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
 from .. import database
-from ..core import assets, nameplate
+from ..core import assets, health_index, nameplate
 from ..core.gases import (FAULT_FAMILY, FAULT_GROUP, FAULT_LABELS_TR,
                           SEVERE_FAULTS, total_combustible)
 from ..core.risk import RISK_LEVELS_TR, RISK_ORDER
@@ -133,6 +133,17 @@ def build_overview(rows: List[Dict],
         # Yağ özeti karta eklenir; testi olmayan trafo için güvenli boş değer.
         card.update(oil_service.oil_card(card["id"],
                                          oil_tests.get(card["id"])))
+        # Sağlık endeksi (Faz 8.5): üç boyutu tek skorda birleştirir.
+        # `priority` ACİLİYETİ ölçer (bugün kime koşayım), `health` DURUMU
+        # (bu varlık genel olarak ne hâlde) — ikisi farklı sorulardır.
+        card["health"] = health_index.compute(
+            risk_condition=card.get("risk_condition"),
+            oil_overall=card.get("oil_overall"),
+            paper=card.pop("paper", None),
+            asset_weight=card.get("asset_weight"),
+        )
+        card["health_score"] = card["health"].get("score")
+        card["health_band"] = card["health"].get("band")
         cards.append(card)
     cards.sort(key=_severity_key)
 
@@ -171,6 +182,11 @@ def build_overview(rows: List[Dict],
             "sampling_overdue": sum(1 for c in cards if c["sampling_overdue"]),
             "never_sampled": sum(1 for c in cards
                                  if c["sampling_status"] == "never_sampled"),
+            # Sağlık endeksi filo özeti. Ortalamanın yanında `unknown`
+            # da veriliyor: kaç varlığın durumunu BİLMEDİĞİMİZ, ortalama
+            # kadar önemli bir yönetim bilgisidir.
+            "health": health_index.fleet_stats(
+                [c["health_score"] for c in cards]),
         },
         "transformers": cards,
     }

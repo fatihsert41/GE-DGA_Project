@@ -7,6 +7,41 @@ const fmtDate = (iso) =>
   iso ? new Date(iso).toLocaleDateString('tr-TR',
     { day: 'numeric', month: 'short', year: 'numeric' }) : '—'
 
+// Sağlık endeksi bandı -> mevcut renk sınıfları. Yeni bir renk ailesi
+// EKLENMEDİ: beş bant, zaten renk körlüğü doğrulamasından geçmiş risk
+// rampasına eşleniyor.
+const HEALTH_BAND_CLASS = {
+  excellent: 'low', good: 'low', fair: 'medium',
+  poor: 'high', critical: 'critical',
+}
+
+/** Kartın içinde tek satırlık sağlık göstergesi. Skorun yanında onu
+ *  aşağı çeken boyut da yazılır; yoksa "66 puan" hiçbir şey anlatmaz. */
+function HealthStrip({ health }) {
+  if (!health?.available) return null
+  const cls = HEALTH_BAND_CLASS[health.band] || 'medium'
+  return (
+    <div className="hstrip">
+      <div className="hstrip-top">
+        <span className="k">Sağlık</span>
+        <b className={`hstrip-score ${cls}`}>{health.score}</b>
+        <span className="muted">/100 · {health.band_tr}</span>
+        {health.coverage?.level !== 'full' && (
+          <span className="hstrip-partial" title={health.coverage?.note}>
+            eksik veri
+          </span>
+        )}
+      </div>
+      <div className="hstrip-bar">
+        <span className={cls} style={{ width: `${health.score}%` }} />
+      </div>
+      <div className="hstrip-why muted">
+        çeken boyut: {health.weakest?.label} ({health.weakest?.score})
+      </div>
+    </div>
+  )
+}
+
 function StatTile({ label, value, hint, tone }) {
   return (
     <div className={`kpi${tone ? ` ${tone}` : ''}`}>
@@ -118,6 +153,8 @@ function TransformerCard({ t, onSelect }) {
           <b>{t.priority?.toFixed(2)}</b>
         </span>
       </div>
+
+      <HealthStrip health={t.health} />
 
       {t.sampling_overdue && (
         <span className="overdue-chip">
@@ -263,6 +300,11 @@ export default function FleetOverview({ onSelect, onCreate }) {
             hint="model kararsız" />
           <StatTile label="Numune gecikti" value={summary.sampling_overdue ?? 0}
             hint="sınıfa göre aralık" tone={summary.sampling_overdue ? 'alert' : ''} />
+          <StatTile label="Filo sağlığı"
+            value={summary.health?.average ?? '—'}
+            hint={summary.health?.worst != null
+              ? `en kötü ${summary.health.worst}`
+              : 'ortalama endeks'} />
         </div>
 
         <h3>Risk Dağılımı</h3>

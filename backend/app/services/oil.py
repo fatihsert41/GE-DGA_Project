@@ -112,7 +112,7 @@ def oil_card(transformer_id: str,
     if not test:
         return {"has_oil_test": False, "oil_overall": None,
                 "dp_estimate": None, "paper_band": None,
-                "life_consumed_pct": None}
+                "life_consumed_pct": None, "paper": None}
 
     assessment = assess_test(transformer_id, test)
     paper = assessment["paper"]
@@ -124,4 +124,8 @@ def oil_card(transformer_id: str,
         "paper_band": paper.get("band"),
         "life_consumed_pct": paper.get("life_consumed_pct"),
         "paper_reliable": paper.get("reliable"),
+        # Sağlık endeksi (Faz 8.5) kağıt boyutunu buradan okur; özet
+        # alanlardan yeniden türetmek yerine değerlendirmenin kendisini
+        # taşıyoruz ki tek doğruluk kaynağı kalsın.
+        "paper": paper,
     }
