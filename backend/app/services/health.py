@@ -27,10 +27,15 @@ def transformer_health(transformer_id: str) -> Dict[str, object]:
     measurements = database.get_measurements(transformer_id)
     latest_dga = measurements[-1] if measurements else None
 
-    tests = database.get_oil_tests(transformer_id)
+    # Geçersiz işaretlenmiş kayıtlar ATLANIR. Bunu unutmak, hatalı
+    # olduğunu bildiğimiz bir ölçümün skoru bozmasına izin vermek olurdu
+    # — geçersiz işaretlemenin tüm amacı tam olarak bunu engellemek.
+    tests = [t for t in database.get_oil_tests(transformer_id)
+             if not t.get("voided_at")]
     oil = oil_service.oil_card(transformer_id, tests[-1] if tests else None)
 
-    el_tests = database.get_electrical_tests(transformer_id)
+    el_tests = [t for t in database.get_electrical_tests(transformer_id)
+                if not t.get("voided_at")]
     el = electrical_service.electrical_card(
         transformer_id, el_tests[-1] if el_tests else None)
 

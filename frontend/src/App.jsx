@@ -10,6 +10,7 @@ import FleetOverview from './components/FleetOverview'
 import TransformerDetail from './components/TransformerDetail'
 import MaintenancePanel from './components/MaintenancePanel'
 import NameplateForm from './components/NameplateForm'
+import TestsOverview from './components/TestsOverview'
 
 const TABS = [
   { id: 'diagnosis', label: 'Tanı' },
@@ -21,7 +22,9 @@ const TABS = [
 const VIEWS = [
   { id: 'fleet', label: 'Filo' },
   { id: 'analysis', label: 'Numune Analizi' },
-  // Bakım ekranı .NET servisinden beslenir (diğer ikisi Python'dan).
+  // Filo geneli test durumu: "hangi trafo bozuk" değil, "nerede eksiğim".
+  { id: 'tests', label: 'Testler' },
+  // Bakım ekranı .NET servisinden beslenir (diğerleri Python'dan).
   { id: 'maintenance', label: 'Bakım Planlama' },
 ]
 
@@ -116,6 +119,15 @@ export default function App() {
                 onBack={() => setSelected(null)} />
             : <FleetOverview key={fleetVersion} onSelect={setSelected}
                 onCreate={() => setCreating(true)} />
+      )}
+
+      {view === 'tests' && (
+        selected
+          ? <TransformerDetail id={selected.id} meta={selected}
+              onBack={() => setSelected(null)} />
+          // Test ekranından bir trafoya tıklayınca detayına gidilir;
+          // ID'den kart verisi yok, en azından kimliği taşıyoruz.
+          : <TestsOverview onSelect={(id) => setSelected({ id })} />
       )}
 
       {view === 'maintenance' && <MaintenancePanel />}

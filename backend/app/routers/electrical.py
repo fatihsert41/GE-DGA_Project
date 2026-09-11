@@ -11,7 +11,7 @@ from fastapi import APIRouter, HTTPException
 from .. import database
 from ..core import electrical as core_electrical
 from ..core import nameplate
-from ..schemas import ElectricalTestIn
+from ..schemas import ElectricalTestIn, VoidTestIn
 from ..services import electrical as electrical_service
 
 router = APIRouter(tags=["electrical tests"])
@@ -169,3 +169,58 @@ def create_electrical_test(transformer_id: str,
     return {"ok": True, "id": test_id,
             "assessment": electrical_service.assess_test(transformer_id,
                                                          saved)}
+
+
+@router.get("/transformers/{transformer_id}/electrical-tests/{test_id}")
+def get_electrical_test(transformer_id: str, test_id: int) -> dict:
+    """Tek bir testin değerlendirmesi — geçmişten seçilen kayıt için.
+
+    Panel başlangıçta yalnızca son testi gösteriyordu; kullanıcı kendi
+    girdiği bir testin sonucuna bir daha ulaşamıyordu. Sahada geçmiş
+    testler tam olarak karşılaştırma yapmak için tutulur.
+    """
+    tests = database.get_electrical_tests(transformer_id)
+    if not tests:
+        raise HTTPException(status_code=404,
+                            detail=f"Trafo bulunamadı: {transformer_id}")
+
+    test = next((t for t in tests if int(t["id"]) == int(test_id)), None)
+    if test is None:
+        raise HTTPException(status_code=404,
+                            detail=f"Test bulunamadı: {test_id}")
+
+    return {"test": test,
+            "assessment": electrical_service.assess_test(transformer_id, test)}
+
+
+@router.post("/transformers/{transformer_id}/electrical-tests/{test_id}/void")
+def void_electrical_test(transformer_id: str, test_id: int,
+                         body: VoidTestIn) -> dict:
+    """Hatalı bir test kaydını GEÇERSİZ işaretler — silmez.
+
+    Silme uç noktası bilinçli olarak YOKTUR. Ölçüm kayıtları bir varlığın
+    denetlenebilir geçmişidir: sahada hatalı çıkan bir test raporu imha
+    edilmez, üzerine "geçersiz" damgası vurulur ve dosyada kalır.
+    "Ölçüm yapılmadı" ile "yapıldı ama hatalıydı" farklı bilgilerdir.
+
+    Geçersiz kayıt geçmişte görünmeye devam eder ama son test seçilirken
+    atlanır ve hüküm/sağlık endeksi hesabına girmez.
+    """
+    ok = database.void_test("electrical_tests", transformer_id, test_id,
+                            body.reason)
+    if not ok:
+        raise HTTPException(status_code=404,
+                            detail=f"Test bulunamadı: {test_id}")
+    return {"ok": True, "voided": True,
+            "history": electrical_service.history(transformer_id)}
+
+
+@router.delete("/transformers/{transformer_id}/electrical-tests/{test_id}/void")
+def unvoid_electrical_test(transformer_id: str, test_id: int) -> dict:
+    """Geçersiz işaretini kaldırır (yanlışlıkla işaretlenmişse)."""
+    ok = database.void_test("electrical_tests", transformer_id, test_id, "")
+    if not ok:
+        raise HTTPException(status_code=404,
+                            detail=f"Test bulunamadı: {test_id}")
+    return {"ok": True, "voided": False,
+            "history": electrical_service.history(transformer_id)}

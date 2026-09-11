@@ -63,6 +63,14 @@ export const api = {
     client.get(`/transformers/${id}/expected-ratio`,
       { params: tap == null ? {} : { tap } }).then((r) => r.data),
 
+  // Hatalı kayıt SİLİNMEZ, geçersiz işaretlenir: denetim izi korunur.
+  voidElectricalTest: (id, testId, reason) =>
+    client.post(`/transformers/${id}/electrical-tests/${testId}/void`,
+      { reason }).then((r) => r.data),
+  unvoidElectricalTest: (id, testId) =>
+    client.delete(`/transformers/${id}/electrical-tests/${testId}/void`)
+      .then((r) => r.data),
+
   // --- Sağlık endeksi (Faz 8.5) -------------------------------------------
   // Ağırlıklar ve bantlar backend'den gelir; arayüze sabit yazmak formül
   // değiştiğinde ekranın yalan söylemesine yol açardı.

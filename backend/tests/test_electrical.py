@@ -171,3 +171,48 @@ def test_hicbir_olcum_yoksa_bilinmiyor():
     r = el.assess({}, expected_ratio=4.4638)
     assert r["overall"] == "bilinmiyor"
     assert r["measured_count"] == 0
+
+
+# --- İmkânsız sapma: arıza değil, veri hatası ---------------------------
+# Bu kural GERÇEKTEN YAŞANMIŞ bir vakadan doğdu: kullanıcı C fazını
+# 3.1631 yerine 1.1631 yazdı (basamak atladı) ve sistem %63 sapmayı
+# "kısa devre olmuş spir — devreden çıkar" diye raporladı.
+
+def test_imkansiz_sapma_ariza_degil_veri_hatasi_sayilir():
+    """%63 sapma fiziksel olarak mümkün değil: sargının 2/3'ü yok demek."""
+    r = el.assess_turns_ratio({"A": 3.1625, "B": 3.1608, "C": 1.1631},
+                              expected=3.1617)
+    assert r["data_suspect"] is True
+    assert "fiziksel olarak mümkün değil" in r["note"]
+    # Yanlış TEŞHİS artık verilmemeli. ("kısa devre" ifadesi notta
+    # açıklama olarak geçiyor — "birkaç spirin kısa devre olması %1'in
+    # altında sapma yapar" — o meşru; yasak olan teşhis cümlesi.)
+    assert "spir işaretidir" not in r["note"]
+    assert "devreden çıkarma sebebidir" not in r["note"]
+    assert any("giriş hatası" in p for p in r["problems"])
+
+
+def test_gercek_spir_kaybi_veri_supheli_sayilmaz():
+    """Ayrım işe yaramalı: %1.4 sapma gerçek bir arızadır, şüphe değil."""
+    r = el.assess_turns_ratio({"A": 3.1625, "B": 3.1174, "C": 3.1631},
+                              expected=3.1617)
+    assert r["data_suspect"] is False
+    assert "ayrışıyor" in r["note"]
+
+
+def test_kademe_hatasi_da_veri_supheli_sayilmaz():
+    """%5 sapma (2 kademe) imkânsız değil; eşik %10 bunu ayırt etmeli."""
+    shifted = 3.1617 * 1.05
+    r = el.assess_turns_ratio({"A": shifted, "B": shifted * 0.9999,
+                               "C": shifted * 1.0001}, expected=3.1617)
+    assert r["data_suspect"] is False
+    assert "KADEME" in r["note"]
+
+
+def test_veri_supheliyken_yayilim_yorumu_yapilmaz():
+    """Geçersiz bir sayıdan 'faz deseni' okumaya çalışmak yanlış olur."""
+    r = el.assess_turns_ratio({"A": 3.1625, "B": 3.1608, "C": 1.1631},
+                              expected=3.1617)
+    # Yayılım hâlâ hesaplanır (bilgi), ama yorum imkânsızlık üzerine.
+    assert r["spread_pct"] is not None
+    assert "tek fazda yoğunlaşmış" not in r["note"]

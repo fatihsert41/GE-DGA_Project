@@ -310,15 +310,23 @@ button.tcard:hover .tcard-go { color: var(--accent); }
   font-family: var(--mono); font-size: 1.2rem; font-weight: 600;
   margin: 13px 0 2px; letter-spacing: -0.02em;
 }
-.tcard .tmeta {
-  display: grid; grid-template-columns: auto 1fr; gap: 5px 14px;
-  font-size: 0.8rem; margin-top: 14px; padding-top: 12px;
-  border-top: 1px solid var(--rule);
+/* Etiket-değer ızgarası. Önce yalnızca .tcard içinde tanımlıydı; panel
+   içinde kullanılınca stilsiz kalıp tüm alanlar tek satıra bitişik
+   yazılıyordu ("Son test11 Eyl 2026 · Fatih SertGeçmiş2 test..."). Artık
+   sınıf kendi başına ayakta, .tcard yalnızca üstüne ekleme yapıyor. */
+.tmeta {
+  display: grid; grid-template-columns: auto 1fr; gap: 6px 16px;
+  font-size: 0.82rem; margin-top: 14px;
   font-family: var(--mono); font-variant-numeric: tabular-nums;
+  align-items: baseline;
 }
-.tcard .tmeta .k {
+.tmeta .k {
   color: var(--muted); font-family: var(--sans); font-size: 0.78rem;
   font-weight: 500; letter-spacing: 0;
+}
+.tcard .tmeta {
+  gap: 5px 14px; font-size: 0.8rem; padding-top: 12px;
+  border-top: 1px solid var(--rule);
 }
 
 /* ============================================================
@@ -827,3 +835,74 @@ button.tcard:hover .tcard-go { color: var(--accent); }
 td.num, span.num, b.num {
   font-family: var(--mono); font-variant-numeric: tabular-nums;
 }
+
+/* Eylem düğmesi. Çipten (filtre/etiket) bilinçli olarak AYRI: ilk
+   denemede ikisi aynı göründüğü için kullanıcı "test gir" düğmesini
+   bulamadı. Eylemler filtrelerden farklı görünmeli. */
+.btn-add {
+  padding: 8px 16px; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--ink); background: var(--ink);
+  color: var(--surface); font: inherit; font-size: 0.84rem;
+  font-weight: 600; white-space: nowrap;
+}
+.btn-add:hover { background: var(--accent); border-color: var(--accent); }
+
+/* "Veri şüpheli" uyarısı, arıza bulgusundan AYRI görünmeli: biri
+   trafoya gitmeyi, diğeri ölçümü tekrarlamayı gerektirir. Aynı
+   görünürlerse yanlış eylem seçilir. */
+.el-note.stop {
+  border-left-color: var(--critical); border-left-width: 4px;
+  background: var(--surface);
+  border: 1px solid var(--rule); border-left: 4px solid var(--critical);
+}
+
+/* Ondalık ayırıcı uyarısı. Türkçede nokta BİNLİK ayırıcıdır ama HTML
+   sayı kutuları ondalık için noktayı zorunlu tutar; kullanıcı ekranda
+   Türkçe okuyup İngilizce yazmak zorunda kalıyor. Sessiz bir tuzak
+   olduğu için formun başında açıkça söyleniyor. */
+.decimal-hint {
+  background: var(--surface-2); border-radius: 8px; padding: 10px 14px;
+  margin: 0 0 14px;
+}
+.decimal-hint code {
+  font-family: var(--mono); background: var(--surface);
+  border: 1px solid var(--rule); border-radius: 4px; padding: 1px 5px;
+}
+
+/* Test geçmişi tablosu */
+.el-history tr.selected { background: var(--surface-2); }
+.el-history .el-finding {
+  max-width: 34ch; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; font-size: 0.78rem;
+}
+.link-like {
+  background: none; border: none; padding: 0; font: inherit;
+  color: var(--accent); cursor: pointer; text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.link-like:hover { color: var(--ink); }
+.suspect-chip {
+  margin-left: 6px; font-size: 0.66rem; padding: 2px 8px;
+  border-radius: 999px; background: var(--critical); color: #fffdf8;
+}
+
+/* Geçersiz işaretlenmiş kayıt: görünür ama hüküm üretmediği belli. */
+.el-history tr.voided { opacity: 0.55; }
+.el-history tr.voided td:first-child { text-decoration: line-through; }
+
+/* Son testin ölçülen DEĞERLERİ, hükümden önce. Kullanıcı geri bildirimi:
+   "yukarıda son test verilerini vermesi daha iyi olmaz mı" — haklı,
+   çünkü "ne ölçüldü?" sorusu "ne anlama geliyor?" sorusundan önce gelir. */
+.el-readout {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 1px; margin-top: 16px; background: var(--rule);
+  border: 1px solid var(--rule); border-radius: 8px; overflow: hidden;
+}
+.el-readout-cell { background: var(--surface); padding: 12px 14px; }
+.el-readout-cell.empty-cell { background: var(--surface-2); }
+.el-readout-cell .k { font-size: 0.72rem; color: var(--muted); }
+.el-readout-value {
+  font-family: var(--mono); font-size: 1.05rem; font-weight: 600;
+  font-variant-numeric: tabular-nums; margin-top: 3px;
+}
+.el-readout-suffix { font-size: 0.7rem; margin-top: 2px; }

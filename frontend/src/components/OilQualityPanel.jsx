@@ -247,6 +247,11 @@ function OilTestForm({ transformerId, schema, onSaved, onCancel }) {
 
       {error && <div className="np-problems"><b>{String(error)}</b></div>}
 
+      <p className="note decimal-hint">
+        <b>Ondalık ayırıcı nokta:</b> <code>1.842</code> = bir tam 842
+        (Türkçe yazımla <i>1,842</i>). Sayı kutuları virgül kabul etmez.
+      </p>
+
       <div className="np-grid">
         {params.map(([key, spec]) => (
           <div className="field np-field" key={key}>
@@ -337,8 +342,8 @@ export default function OilQualityPanel({ id }) {
       <div className="panel">
         <div className="np-head">
           <h2>Yağ Kalitesi</h2>
-          <button type="button" className="chip"
-            onClick={() => setAdding(true)}>+ Test ekle</button>
+          <button type="button" className="btn-add"
+            onClick={() => setAdding(true)}>+ Yeni yağ testi</button>
         </div>
         <p className="empty">{data.message}</p>
       </div>
@@ -361,8 +366,8 @@ export default function OilQualityPanel({ id }) {
             son test {fmtDate(test.sampled_at)}
             {test.lab ? ` · ${test.lab}` : ''} · toplam {data.n_tests} test
           </span>
-          <button type="button" className="chip"
-            onClick={() => setAdding(true)}>+ Test ekle</button>
+          <button type="button" className="btn-add"
+            onClick={() => setAdding(true)}>+ Yeni yağ testi</button>
         </div>
 
         <OilParameters assessment={a} />

@@ -69,21 +69,68 @@ def assess_test(transformer_id: str,
     return result
 
 
+def _summaries(transformer_id: str,
+               tests: List[Dict[str, object]]) -> List[Dict[str, object]]:
+    """Her testin kısa hükmü — geçmiş listesi için."""
+    rows: List[Dict[str, object]] = []
+    for t in tests:
+        a = assess_test(transformer_id, t)
+        ttr = a["sections"]["turns_ratio"]
+        rows.append({
+            "id": t["id"],
+            "tested_at": t["tested_at"],
+            "tested_by": t.get("tested_by"),
+            "notes": t.get("notes"),
+            "overall": a["overall"],
+            "problems": a["problems"],
+            "sections_measured": a["measured_count"],
+            "data_suspect": bool(ttr.get("data_suspect")),
+            "voided": bool(t.get("voided_at")),
+            "void_reason": t.get("void_reason"),
+        })
+    return rows
+
+
 def history(transformer_id: str) -> Dict[str, object]:
-    """Trafonun tüm elektriksel testleri + en sonun değerlendirmesi."""
+    """Trafonun tüm elektriksel testleri + geçerli en sonun değerlendirmesi.
+
+    Geçersiz işaretlenmiş kayıtlar listede GÖRÜNÜR (gerekçesiyle) ama
+    hüküm üretmez. Gizlemek yanlış olurdu: "ölçüm yapılmadı" ile
+    "yapıldı ama hatalıydı" farklı bilgilerdir.
+    """
     tests = database.get_electrical_tests(transformer_id)
     if not tests:
         return {"available": False, "reason": "no_electrical_tests",
                 "message": "Bu trafo için elektriksel test kaydı yok.",
                 "tests": []}
 
-    latest = assess_test(transformer_id, tests[-1])
+    valid = [t for t in tests if not t.get("voided_at")]
+    if not valid:
+        return {"available": False, "reason": "all_voided",
+                "message": "Bu trafonun tüm test kayıtları geçersiz "
+                           "işaretlenmiş; hüküm verilebilecek ölçüm yok.",
+                "tests": tests,
+                "summaries": _summaries(transformer_id, tests)}
+
+    latest = assess_test(transformer_id, valid[-1])
+
+    # Her testin HÜKMÜ de dönüyor, yalnızca sonuncusunun değil. Panel
+    # önce sadece son testi gösteriyordu ve kullanıcı girdiği bir testin
+    # sonucunu bir daha göremiyordu — geçmiş, sahada tam olarak
+    # karşılaştırma yapmak için tutulur.
+    summaries = _summaries(transformer_id, tests)
+    # Tam değerlendirmeler de id'ye göre dönüyor. Her test için ayrı
+    # istek atmak yerine hepsi tek cevapta: değerlendirme zaten burada
+    # hesaplanıyor (özet için), ikinci kez hesaplatmanın anlamı yok.
+    assessments: Dict[int, Dict[str, object]] = {
+        int(t["id"]): assess_test(transformer_id, t) for t in tests
+    }
 
     # Sargı direnci dengesizliğinin ZAMAN İÇİNDEKİ seyri, tek bir
     # ölçümden daha bilgilendiricidir: %1.8 tek başına "iyi"dir, ama iki
     # yılda %0.4'ten %1.8'e çıkmışsa gelişen bir sorun vardır.
     imbalance_series: List[Dict[str, object]] = []
-    for t in tests:
+    for t in valid:
         section = electrical.assess_winding_resistance(
             {ph: t.get(f"rw_{ph.lower()}_ohm") for ph in electrical.PHASES},
             temp_c=t.get("winding_temp_c"),
@@ -97,8 +144,12 @@ def history(transformer_id: str) -> Dict[str, object]:
     return {
         "available": True,
         "n_tests": len(tests),
+        "n_valid": len(valid),
+        "latest_valid_id": valid[-1]["id"],
         "tests": tests,
         "latest_assessment": latest,
+        "summaries": summaries,
+        "assessments": assessments,
         "imbalance_series": imbalance_series,
     }
 

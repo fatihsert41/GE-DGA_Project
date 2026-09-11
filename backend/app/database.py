@@ -75,6 +75,15 @@ def init_db() -> None:
 
         _init_oil_tests(conn)
         _init_electrical_tests(conn)
+        # Geçersiz işaretleme sütunları (Faz 8.6). Hatalı bir ölçüm
+        # SİLİNMEZ, geçersiz işaretlenir: denetim izi korunur, ama kayıt
+        # hüküm üretmez. Endüstride yapılan da budur — bir test raporu
+        # yanlış çıktığında rapor imha edilmez, "void" damgası vurulur.
+        for table in ("oil_tests", "electrical_tests"):
+            _ensure_column(conn, table, "voided_at", "TEXT")
+            _ensure_column(conn, table, "void_reason", "TEXT")
+
+        _normalize_existing_timestamps(conn)
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS measurements (
@@ -193,8 +202,52 @@ def _init_electrical_tests(conn: sqlite3.Connection) -> None:
     )
 
 
+def _normalize_existing_timestamps(conn: sqlite3.Connection) -> None:
+    """Eski kayıtlardaki tarih-only damgaları düzeltir (yinelenebilir göç).
+
+    ``_ensure_column`` ile aynı felsefe: kullanıcının veritabanını silmesi
+    gerekmesin. Bu göç olmadan, hatanın bulunmasından ÖNCE girilmiş
+    kayıtlar yanlış sıralanmaya devam ederdi.
+    """
+    for table, column in (("oil_tests", "sampled_at"),
+                          ("electrical_tests", "tested_at")):
+        conn.execute(
+            f"""UPDATE {table} SET {column} = {column} || 'T00:00:00+00:00'
+                WHERE length({column}) = 10""")
+
+
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _normalize_ts(value: Optional[str]) -> Optional[str]:
+    """Tarih girişini sıralanabilir bir ISO zaman damgasına çevirir.
+
+    ⚠ YAŞANAN HATA: Tarihler METİN olarak saklanıp metin olarak
+    sıralanıyor (SQLite'ta tarih tipi yok). Arayüzdeki ``<input
+    type="date">`` "2026-09-11" gönderir; otomatik kayıtlar ise
+    "2026-09-11T08:00:00+00:00" biçimindedir. Metin karşılaştırmasında
+
+        "2026-09-11" < "2026-09-11T08:00:00+00:00"
+
+    olduğu için, AYNI GÜN elle tarih girilerek kaydedilen yeni bir test
+    eski testin ARKASINA düşüyor ve "en son test" olarak seçilmiyordu.
+    Kullanıcı yeni testini kaydediyor ama ekranda eskisini görüyordu.
+
+    Çözüm: yalnızca tarih verilmişse o tarihe ŞU ANKİ saat eklenir.
+    Gün başına (T00:00) sabitlemek yetmezdi: aynı gün girilen yeni bir
+    test, o gün otomatik kaydedilmiş bir testin yine arkasına düşerdi.
+    Şimdiki saati kullanmak, aynı güne girilen testleri doğal olarak
+    giriş sırasına dizer; geçmiş tarihli testler ise yine kendi gününde
+    kalır.
+    """
+    if not value:
+        return None
+    text = str(value).strip()
+    if len(text) == 10 and text[4] == "-" and text[7] == "-":
+        clock = datetime.now(timezone.utc).strftime("%H:%M:%S")
+        return f"{text}T{clock}+00:00"
+    return text
 
 
 def upsert_transformer(tid: str, name: str, location: str = "",
@@ -351,7 +404,7 @@ def save_oil_test(transformer_id: str, values: Dict[str, object],
     known = {k: values.get(k) for k in OIL_TEST_FIELDS}
     columns = ["transformer_id", "sampled_at", *OIL_TEST_FIELDS,
                "lab", "notes", "created_at"]
-    row = [transformer_id, sampled_at or _now(),
+    row = [transformer_id, _normalize_ts(sampled_at) or _now(),
            *[known[k] for k in OIL_TEST_FIELDS], lab, notes, _now()]
 
     with _connect() as conn:
@@ -368,7 +421,7 @@ def get_oil_tests(transformer_id: str) -> List[Dict]:
     with _connect() as conn:
         rows = conn.execute(
             """SELECT * FROM oil_tests WHERE transformer_id = ?
-               ORDER BY sampled_at ASC""",
+               ORDER BY sampled_at ASC, id ASC""",
             (transformer_id,),
         ).fetchall()
     return [dict(r) for r in rows]
@@ -390,6 +443,7 @@ def latest_oil_tests() -> Dict[str, Dict]:
                            ORDER BY o.sampled_at DESC, o.id DESC
                        ) AS rn
                 FROM oil_tests o
+                WHERE o.voided_at IS NULL
             )
             SELECT * FROM ranked WHERE rn = 1
             """
@@ -478,7 +532,7 @@ def save_electrical_test(transformer_id: str, values: Dict[str, object],
     known = {k: values.get(k) for k in ELECTRICAL_TEST_FIELDS}
     columns = ["transformer_id", "tested_at", *ELECTRICAL_TEST_FIELDS,
                "tested_by", "notes", "created_at"]
-    row = [transformer_id, tested_at or _now(),
+    row = [transformer_id, _normalize_ts(tested_at) or _now(),
            *[known[k] for k in ELECTRICAL_TEST_FIELDS],
            tested_by, notes, _now()]
 
@@ -496,7 +550,7 @@ def get_electrical_tests(transformer_id: str) -> List[Dict]:
     with _connect() as conn:
         rows = conn.execute(
             """SELECT * FROM electrical_tests WHERE transformer_id = ?
-               ORDER BY tested_at ASC""",
+               ORDER BY tested_at ASC, id ASC""",
             (transformer_id,),
         ).fetchall()
     return [dict(r) for r in rows]
@@ -518,8 +572,41 @@ def latest_electrical_tests() -> Dict[str, Dict]:
                            ORDER BY e.tested_at DESC, e.id DESC
                        ) AS rn
                 FROM electrical_tests e
+                WHERE e.voided_at IS NULL
             )
             SELECT * FROM ranked WHERE rn = 1
             """
         ).fetchall()
     return {r["transformer_id"]: dict(r) for r in rows}
+
+
+def void_test(table: str, transformer_id: str, test_id: int,
+              reason: str) -> bool:
+    """Bir test kaydını GEÇERSİZ işaretler (silmez).
+
+    NEDEN SİLMİYORUZ
+    ----------------
+    Ölçüm kayıtları bir varlığın geçmişidir ve denetlenebilir olmalıdır.
+    Sahada hatalı çıkan bir test raporu imha edilmez; üzerine "geçersiz"
+    damgası vurulur, gerekçesi yazılır ve dosyada kalır. Sebebi pratik:
+    "bu ölçüm neden yapılmadı?" ile "yapıldı ama hatalıydı" farklı
+    şeylerdir ve ikincisi bilgi taşır — aynı hata tekrarlanıyorsa bunu
+    ancak kayıtlar gösterir.
+
+    Geçersiz kayıtlar geçmişte GÖRÜNÜR (gerekçesiyle) ama:
+      * "son test" seçilirken atlanır,
+      * hüküm ve sağlık endeksi hesabına girmez.
+
+    Geri alınabilir: ``reason`` boş verilirse işaret kaldırılır.
+    """
+    if table not in ("oil_tests", "electrical_tests"):
+        raise ValueError(f"Bilinmeyen tablo: {table}")
+
+    voided_at = _now() if reason else None
+    with _connect() as conn:
+        cur = conn.execute(
+            f"""UPDATE {table} SET voided_at = ?, void_reason = ?
+                WHERE id = ? AND transformer_id = ?""",
+            (voided_at, reason or None, int(test_id), transformer_id),
+        )
+        return cur.rowcount > 0

@@ -148,3 +148,106 @@ def test_olmayan_trafo_404(db):
     client = TestClient(app)
     assert client.get("/transformers/YOK/electrical-tests").status_code == 404
     assert client.get("/transformers/YOK/expected-ratio").status_code == 404
+
+
+# --- Geçersiz işaretleme: silme YOK --------------------------------------
+# Ölçüm kayıtları bir varlığın denetlenebilir geçmişidir. Hatalı bir test
+# raporu sahada imha edilmez, "geçersiz" damgası vurulur ve dosyada kalır.
+
+def test_silme_uc_noktasi_YOKTUR(db):
+    """Bilinçli bir tasarım kararı; yanlışlıkla eklenirse test uyarsın."""
+    from fastapi.testclient import TestClient
+    from app.main import app
+
+    database.save_electrical_test("TR-TEST", {"tan_delta_pct": 0.3})
+    test_id = database.get_electrical_tests("TR-TEST")[0]["id"]
+
+    client = TestClient(app)
+    r = client.delete(f"/transformers/TR-TEST/electrical-tests/{test_id}")
+    assert r.status_code in (404, 405)      # böyle bir uç nokta yok
+    assert len(database.get_electrical_tests("TR-TEST")) == 1
+
+
+def test_gecersiz_isaretlenen_kayit_silinmez_ama_hukum_uretmez(db):
+    database.save_electrical_test("TR-TEST", {"tan_delta_pct": 0.3})
+    test_id = database.get_electrical_tests("TR-TEST")[0]["id"]
+
+    assert database.void_test("electrical_tests", "TR-TEST", test_id,
+                              "basamak hatası") is True
+
+    # Kayıt DURUYOR:
+    tests = database.get_electrical_tests("TR-TEST")
+    assert len(tests) == 1
+    assert tests[0]["void_reason"] == "basamak hatası"
+
+    # Ama hüküm üretmiyor:
+    assert database.latest_electrical_tests().get("TR-TEST") is None
+    h = el_service.history("TR-TEST")
+    assert h["available"] is False
+    assert h["reason"] == "all_voided"
+    # Geçmişte yine de GÖRÜNÜYOR, gerekçesiyle:
+    assert h["summaries"][0]["voided"] is True
+
+
+def test_gecersiz_kayit_saglik_endeksine_girmez(db):
+    """Hatalı ölçüm skoru bozmamalı — ama 'ölçüm yok' da demeli."""
+    from app.services import health as health_service
+
+    database.save_electrical_test("TR-TEST", {"tan_delta_pct": 4.0})  # kötü
+    test_id = database.get_electrical_tests("TR-TEST")[0]["id"]
+
+    before = health_service.transformer_health("TR-TEST")["health"]
+    database.void_test("electrical_tests", "TR-TEST", test_id, "cihaz arızası")
+    after = health_service.transformer_health("TR-TEST")["health"]
+
+    el_before = next(d for d in before["dimensions"] if d["key"] == "electrical")
+    el_after = next(d for d in after["dimensions"] if d["key"] == "electrical")
+    assert el_before["available"] is True
+    assert el_after["available"] is False      # artık ölçüm sayılmıyor
+
+
+def test_gecersiz_isareti_geri_alinabilir(db):
+    database.save_electrical_test("TR-TEST", {"tan_delta_pct": 0.3})
+    test_id = database.get_electrical_tests("TR-TEST")[0]["id"]
+
+    database.void_test("electrical_tests", "TR-TEST", test_id, "yanlışlıkla")
+    database.void_test("electrical_tests", "TR-TEST", test_id, "")
+
+    assert database.latest_electrical_tests().get("TR-TEST") is not None
+    assert el_service.history("TR-TEST")["available"] is True
+
+
+def test_gecersiz_isaretlemede_gerekce_zorunlu(db):
+    """Gerekçesiz damga, silmekten pek farklı olmazdı."""
+    from fastapi.testclient import TestClient
+    from app.main import app
+
+    database.save_electrical_test("TR-TEST", {"tan_delta_pct": 0.3})
+    test_id = database.get_electrical_tests("TR-TEST")[0]["id"]
+
+    client = TestClient(app)
+    r = client.post(f"/transformers/TR-TEST/electrical-tests/{test_id}/void",
+                    json={"reason": "kısa"})
+    assert r.status_code == 422                # min_length=5
+
+
+def test_gecersiz_kayit_son_test_olarak_gosterilmez(db):
+    """Yaşanan hata: geçersiz kaydın bulgusu ekranda "son test" görünüyordu.
+
+    Geçersiz işaretlemenin tüm amacı o kaydın hüküm üretmemesi; başlıkta
+    onu göstermek amacı boşa çıkarırdı.
+    """
+    database.save_electrical_test("TR-TEST", {"tan_delta_pct": 0.3},
+                                  tested_at="2026-09-10T10:00:00+00:00")
+    database.save_electrical_test("TR-TEST", {"tan_delta_pct": 4.0},
+                                  tested_at="2026-09-11T10:00:00+00:00")
+    tests = database.get_electrical_tests("TR-TEST")
+    database.void_test("electrical_tests", "TR-TEST", tests[-1]["id"],
+                       "cihaz kalibrasyonu şüpheli")
+
+    h = el_service.history("TR-TEST")
+    assert h["available"] is True
+    # Geçerli son test 10 Eylül'deki; hüküm ondan gelmeli:
+    assert h["latest_valid_id"] == tests[0]["id"]
+    assert h["latest_assessment"]["overall"] == "iyi"
+    assert h["n_tests"] == 2 and h["n_valid"] == 1
