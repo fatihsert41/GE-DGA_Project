@@ -12,7 +12,62 @@ const client = axios.create({ baseURL, timeout: 30000 })
 const maintBase = import.meta.env.VITE_MAINT_BASE || '/maint'
 const maint = axios.create({ baseURL: maintBase, timeout: 30000 })
 
+// --- Oturum belirteci (Faz 9.0d) -------------------------------------------
+//
+// Belirteç tarayıcıda `localStorage`ta tutulur, böylece sayfa
+// yenilendiğinde oturum kaybolmaz.
+//
+// ⚠ SINIR: localStorage, sayfaya kod enjekte edebilen bir saldırgana
+// (XSS) açıktır. Daha güvenlisi HttpOnly çerezdir — JavaScript onu
+// okuyamaz. Bu demoda localStorage seçildi çünkü çerez, iki ayrı servise
+// (8000 ve 5080) giden istekler için alan/CORS ayarı gerektiriyor ve
+// konuyu dağıtıyordu. Gerçek kurulumda HttpOnly çerez + TLS kullanılmalı.
+const TOKEN_KEY = 'transformerai.token'
+const USER_KEY = 'transformerai.user'
+
+export const session = {
+  token: () => {
+    try { return localStorage.getItem(TOKEN_KEY) } catch { return null }
+  },
+  user: () => {
+    try { return JSON.parse(localStorage.getItem(USER_KEY) || 'null') }
+    catch { return null }
+  },
+  save: (token, user) => {
+    try {
+      localStorage.setItem(TOKEN_KEY, token)
+      localStorage.setItem(USER_KEY, JSON.stringify(user))
+    } catch { /* özel sekme: oturum sayfa ömrü kadar sürer */ }
+  },
+  clear: () => {
+    try {
+      localStorage.removeItem(TOKEN_KEY)
+      localStorage.removeItem(USER_KEY)
+    } catch { /* yok sayılır */ }
+  },
+}
+
+// Her isteğe belirteci ekle. İki istemciye de ayrı ayrı takılıyor:
+// Python kimliği imzadan doğrular, .NET hem imzayı hem oturum satırını.
+const attachToken = (config) => {
+  const token = session.token()
+  if (token) config.headers.Authorization = `Bearer ${token}`
+  return config
+}
+client.interceptors.request.use(attachToken)
+maint.interceptors.request.use(attachToken)
+
 export const api = {
+  // --- Kimlik (Faz 9.0) ---------------------------------------------------
+  // Giriş .NET'te: personel kaydı orada duruyor. Python belirteci
+  // imzasından doğruluyor, kimlik için .NET'e SORMUYOR — böylece .NET
+  // kapalıyken de ölçüm girilebilir.
+  login: (employeeNo, pin) =>
+    maint.post('/auth/login', { employeeNo, pin }).then((r) => r.data),
+  logout: () => maint.post('/auth/logout').then((r) => r.data),
+  me: () => maint.get('/auth/me').then((r) => r.data),
+  personnel: () => maint.get('/technicians').then((r) => r.data),
+
   health: () => client.get('/health').then((r) => r.data),
   predict: (payload) => client.post('/predict', payload).then((r) => r.data),
   explain: (gases) => client.post('/explain', gases).then((r) => r.data),

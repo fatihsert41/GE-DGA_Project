@@ -338,8 +338,8 @@ function TestHistory({ summaries, selectedId, onSelect, onVoid, onUnvoid }) {
       <table className="compare el-history">
         <thead>
           <tr>
-            <th>Tarih</th><th>Test eden</th><th>Bölüm</th>
-            <th>Hüküm</th><th>Bulgu</th><th></th>
+            <th>Tarih</th><th>Test eden</th><th>Kaydı giren</th>
+            <th>Bölüm</th><th>Hüküm</th><th>Bulgu</th><th></th>
           </tr>
         </thead>
         <tbody>
@@ -355,6 +355,14 @@ function TestHistory({ summaries, selectedId, onSelect, onVoid, onUnvoid }) {
                 </button>
               </td>
               <td className="muted">{r.tested_by || '—'}</td>
+              <td className="muted">
+                {r.recorded_by_name
+                  ? <>{r.recorded_by_name}
+                      <span className="who-meta"> {r.recorded_by_id}</span></>
+                  : <span title="Bu kayıt kimlik zorunlu olmadan önce girilmiş">
+                      kimliksiz
+                    </span>}
+              </td>
               <td className="muted">{r.sections_measured}/4</td>
               <td>
                 <Badge condition={r.overall} />
@@ -366,7 +374,12 @@ function TestHistory({ summaries, selectedId, onSelect, onVoid, onUnvoid }) {
               </td>
               <td className="muted el-finding">
                 {r.voided
-                  ? <span title={r.void_reason}>geçersiz: {r.void_reason}</span>
+                  ? <span title={r.void_reason}>
+                      geçersiz: {r.void_reason}
+                      {r.voided_by_name && (
+                        <span className="muted"> — {r.voided_by_name}</span>
+                      )}
+                    </span>
                   : r.problems.length ? r.problems[0] : 'bulgu yok'}
               </td>
               <td>
@@ -712,6 +725,12 @@ export default function ElectricalPanel({ id }) {
             {data.n_valid !== data.n_tests && (
               <span className="muted"> · {data.n_tests - data.n_valid} geçersiz</span>
             )}
+          </span>
+          <span className="k">Kaydı giren</span>
+          <span>{latest.recorded_by_name
+            ? <>{latest.recorded_by_name}
+                <span className="muted"> · sicil {latest.recorded_by_id}</span></>
+            : <span className="muted">kimlik kaydı yok (eski kayıt)</span>}
           </span>
           <span className="k">Anma sarım oranı</span>
           <span className="num">{ctx.rated_turns_ratio ?? '—'}</span>

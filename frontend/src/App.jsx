@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import api from './api'
+import api, { session } from './api'
 import GasForm from './components/GasForm'
 import DiagnosisResult from './components/DiagnosisResult'
 import ShapChart from './components/ShapChart'
@@ -11,6 +11,8 @@ import TransformerDetail from './components/TransformerDetail'
 import MaintenancePanel from './components/MaintenancePanel'
 import NameplateForm from './components/NameplateForm'
 import TestsOverview from './components/TestsOverview'
+import LoginScreen from './components/LoginScreen'
+import PersonnelPanel from './components/PersonnelPanel'
 
 const TABS = [
   { id: 'diagnosis', label: 'Tanı' },
@@ -26,9 +28,21 @@ const VIEWS = [
   { id: 'tests', label: 'Testler' },
   // Bakım ekranı .NET servisinden beslenir (diğerleri Python'dan).
   { id: 'maintenance', label: 'Bakım Planlama' },
+  // Personel kayıtları da .NET'te: kullanıcı ".NET kayıtlarını nerede
+  // görüyorum?" diye sordu, cevabı buraya kadar yoktu.
+  { id: 'personnel', label: 'Personel' },
 ]
 
+const ROLE_TR = {
+  Technician: 'Teknisyen',
+  Engineer: 'Mühendis',
+  Supervisor: 'Süpervizör',
+}
+
 export default function App() {
+  // Oturum. Sayfa yenilendiğinde localStorage'tan geri okunur; belirtecin
+  // hâlâ geçerli olup olmadığını /auth/me söyler.
+  const [user, setUser] = useState(() => session.user())
   const [view, setView] = useState('fleet')
   // Seçili trafo kartı (null ise filo listesi görünür).
   const [selected, setSelected] = useState(null)
@@ -41,6 +55,30 @@ export default function App() {
   const [loading, setLoading] = useState(false)
   const [health, setHealth] = useState(null)
   const [error, setError] = useState(null)
+
+  // Sayfa açılışında saklanan belirteç hâlâ geçerli mi? Süresi dolmuş
+  // ya da iptal edilmiş olabilir; o zaman kullanıcı yeniden giriş yapar.
+  useEffect(() => {
+    if (!session.token()) return
+    api.me()
+      .then((me) => setUser({
+        employeeNo: me.employeeNo, name: me.name, role: me.role,
+        region: me.region, specialty: me.specialty,
+      }))
+      .catch(() => { session.clear(); setUser(null) })
+  }, [])
+
+  const logout = () => {
+    // Sunucuya haber ver (belirteç ANINDA iptal olsun), sonra yerelde
+    // temizle. Sunucu ulaşılamazsa da yerel temizlik yapılır — yoksa
+    // kullanıcı .NET kapalıyken çıkış yapamaz hâle gelirdi.
+    api.logout().catch(() => {}).finally(() => {
+      session.clear()
+      setUser(null)
+      setSelected(null)
+      setView('fleet')
+    })
+  }
 
   const [result, setResult] = useState(null)
   const [explanation, setExplanation] = useState(null)
@@ -73,6 +111,8 @@ export default function App() {
 
   const trained = health?.model_trained
 
+  if (!user) return <LoginScreen onLogin={setUser} />
+
   return (
     <div className="app">
       <header className="top">
@@ -82,11 +122,21 @@ export default function App() {
             DGA arıza izleme · açıklanabilir ML · klasik yöntem karşılaştırma
           </div>
         </div>
-        <span className={`status-pill ${trained ? 'ok' : 'warn'}`}>
-          {health == null ? 'API bağlantısı yok'
-            : trained ? `Model hazır: ${health.model_name || 'ML'}`
-              : 'Model eğitilmemiş (klasik mod)'}
-        </span>
+        <div className="top-right">
+          <span className={`status-pill ${trained ? 'ok' : 'warn'}`}>
+            {health == null ? 'API bağlantısı yok'
+              : trained ? `Model hazır: ${health.model_name || 'ML'}`
+                : 'Model eğitilmemiş (klasik mod)'}
+          </span>
+          <div className="who">
+            <div className="who-name">{user.name}</div>
+            <div className="who-meta">
+              <span className="num">{user.employeeNo}</span>
+              {' · '}{ROLE_TR[user.role] || user.role}
+            </div>
+          </div>
+          <button type="button" className="chip" onClick={logout}>Çıkış</button>
+        </div>
       </header>
 
       {error && (
@@ -131,6 +181,8 @@ export default function App() {
       )}
 
       {view === 'maintenance' && <MaintenancePanel />}
+
+      {view === 'personnel' && <PersonnelPanel currentUser={user} />}
 
       {/* Analiz ekranı DOM'da kalır (sadece gizlenir) ki görünüm
           değiştirince girilen gaz değerleri ve sonuçlar kaybolmasın. */}
