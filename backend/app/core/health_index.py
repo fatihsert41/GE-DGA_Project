@@ -1,14 +1,15 @@
-"""Sağlık Endeksi — dört boyutu tek 0-100 skora indirger. — Faz 8.5/8.6
+"""Sağlık Endeksi — beş boyutu tek 0-100 skora indirger. — Faz 8.5/9.5
 
 NEDEN?
 ------
-Elimizde trafonun durumunu anlatan DÖRT ayrı ölçüt var ve dördü farklı
+Elimizde trafonun durumunu anlatan BEŞ ayrı ölçüt var ve beşi farklı
 birimlerde konuşuyor:
 
 * **DGA riski**        — IEEE C57.104 kondisyonu (1-4)
 * **Kağıt DP**         — tüketilen ömür yüzdesi (Chendong / IEC 61198)
 * **Elektriksel test** — iyi / kabul / kötü (IEEE C57.152, Faz 8.6)
 * **Yağ kalitesi**     — iyi / kabul / kötü (IEC 60422 ailesi)
+* **Fiziksel gözlem**  — saha kontrol listesi (Faz 9.5)
 
 İlk üçü aynı yağ numunesinden ya da işletme sırasında okunur; elektriksel
 testler ise trafo ENERJİSİZKEN yapılır. Bu, endekse **bağımsız bir duyu**
@@ -78,6 +79,14 @@ DIMENSIONS: Dict[str, Dict[str, object]] = {
         "meaning": "Sargı ve yalıtımın mekanik/elektriksel bütünlüğü — "
                    "yağın göremediği arızalar.",
     },
+    "physical": {
+        "key": "physical",
+        "label": "Fiziksel gözlem",
+        "weight": 1.0,
+        "source": "Saha kontrol listesi (kaçak, soğutma, koruma, buşing)",
+        "meaning": "Gözün gördüğü, cihazın göremediği: yağ kaçağı, tıkalı "
+                   "radyatör, doymuş silikajel, arızalı koruma.",
+    },
     "oil": {
         "key": "oil",
         "label": "Yağ kalitesi",
@@ -87,7 +96,8 @@ DIMENSIONS: Dict[str, Dict[str, object]] = {
     },
 }
 
-DIMENSION_ORDER: List[str] = ["dga", "paper", "electrical", "oil"]
+DIMENSION_ORDER: List[str] = ["dga", "paper", "electrical", "oil",
+                             "physical"]
 
 # IEEE kondisyonu -> 0-100 puan. Doğrusal DEĞİL: 1'den 2'ye geçmek rutin
 # bir uyarıdır, 3'ten 4'e geçmek acil müdahaledir. Puan da bunu yansıtmalı.
@@ -101,6 +111,15 @@ OIL_SCORES: Dict[str, float] = {"iyi": 100.0, "kabul": 65.0, "kötü": 25.0}
 # sargı sarılmak zorundadır.
 ELECTRICAL_SCORES: Dict[str, float] = {"iyi": 100.0, "kabul": 60.0,
                                        "kötü": 20.0}
+
+# Fiziksel gözlem -> 0-100 puan.
+#
+# EN DÜŞÜK AĞIRLIK (1.0) bilinçli: bu boyut ÖZNELDİR. "Hafif korozyon"
+# iki teknisyende iki farklı sonuç verir. Değeri hassasiyetinde değil
+# KAPSAMINDA: cihaz gerektirmediği için sık yapılabilir ve başka hiçbir
+# yöntemin göremediğini görür (yağ kaçağı, durmuş fan, arızalı röle).
+PHYSICAL_SCORES: Dict[str, float] = {"iyi": 100.0, "kabul": 65.0,
+                                     "kötü": 25.0}
 
 # Skor bandı: (alt_sınır, kod, etiket, eylem)
 BANDS = [
@@ -121,10 +140,11 @@ DGA_CRITICAL_CONDITION = 4        # IEEE kondisyon 4
 PAPER_CRITICAL_CONSUMED = 90.0    # tüketilen ömür %90 üstü
 OIL_CRITICAL = "kötü"
 ELECTRICAL_CRITICAL = "kötü"
+PHYSICAL_CRITICAL = "kötü"
 
 # Kapsama (coverage) yorumları: skor kaç boyutun verisine dayanıyor?
 COVERAGE_LABELS = {
-    "full": "Dört boyutun dördü de ölçülü.",
+    "full": "Beş boyutun beşi de ölçülü.",
     "partial": "Bazı boyutlarda ölçüm yok; skor eksik veriye dayanıyor.",
     "none": "Hiçbir boyutta ölçüm yok; sağlık endeksi hesaplanamaz.",
 }
@@ -221,10 +241,30 @@ def _electrical_dimension(overall: Optional[str]) -> Dict[str, object]:
     }
 
 
+def _physical_dimension(overall: Optional[str]) -> Dict[str, object]:
+    """Fiziksel gözlem hükmünü 0-100 puana çevirir.
+
+    Kritik bir madde (yağ kaçağı, soğutma, koruma, buşing, topraklama)
+    "müdahale gerekli" ise hüküm zaten "kötü" gelir ve bu boyut tavan
+    kuralını tetikler. Boyanın dökülmesi tetiklemez — ayrım
+    ``core/physical.py`` içinde.
+    """
+    if not overall or overall == "bilinmiyor":
+        return {"available": False, "reason": "saha gözlemi yok"}
+    return {
+        "available": True,
+        "score": PHYSICAL_SCORES.get(overall, 65.0),
+        "detail": f"Genel hüküm: {overall}",
+        "raw": overall,
+        "is_critical": overall == PHYSICAL_CRITICAL,
+    }
+
+
 def compute(risk_condition: Optional[int] = None,
             oil_overall: Optional[str] = None,
             paper: Optional[Dict[str, object]] = None,
             electrical_overall: Optional[str] = None,
+            physical_overall: Optional[str] = None,
             asset_class: Optional[str] = None,
             asset_weight: Optional[float] = None) -> Dict[str, object]:
     """Sağlık endeksini hesaplar.
@@ -241,6 +281,7 @@ def compute(risk_condition: Optional[int] = None,
         "paper": _paper_dimension(paper),
         "electrical": _electrical_dimension(electrical_overall),
         "oil": _oil_dimension(oil_overall),
+        "physical": _physical_dimension(physical_overall),
     }
 
     rows: List[Dict[str, object]] = []

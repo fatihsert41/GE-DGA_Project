@@ -138,20 +138,21 @@ def test_en_zayif_boyut_bildirilir():
 
 # --- Dördüncü boyut: elektriksel testler (Faz 8.6) -----------------------
 
-def test_elektriksel_boyut_ortalamaya_girer():
-    """Dört boyut ölçülüyse payda 12 olmalı (4+3+3+2)."""
+def test_tum_boyutlar_ortalamaya_girer():
+    """Beş boyut ölçülüyse payda 13 olmalı (4+3+3+2+1)."""
     r = hi.compute(risk_condition=1, oil_overall="iyi", paper=paper(0),
-                   electrical_overall="iyi")
-    assert r["weight_sum"] == 12.0
+                   electrical_overall="iyi", physical_overall="iyi")
+    assert r["weight_sum"] == 13.0
     assert r["coverage"]["level"] == "full"
     assert r["score"] == 100.0
 
 
 def test_elektriksel_test_yoksa_kapsama_eksik():
     """Elektriksel test seyrek yapılır; eksikliği GÖRÜNÜR olmalı."""
-    r = hi.compute(risk_condition=1, oil_overall="iyi", paper=paper(0))
+    r = hi.compute(risk_condition=1, oil_overall="iyi", paper=paper(0),
+                   physical_overall="iyi")
     assert r["coverage"]["level"] == "partial"
-    assert r["coverage"]["measured"] == 3
+    assert r["coverage"]["measured"] == 4
     assert any("Elektriksel testler" in w for w in r["warnings"])
 
 
@@ -176,3 +177,33 @@ def test_elektriksel_agirligi_yagdan_yuksek():
     kotu_sargi = hi.compute(risk_condition=1, paper=paper(10),
                             oil_overall="iyi", electrical_overall="kötü")
     assert kotu_sargi["raw_score"] < kotu_yag["raw_score"]
+
+
+# --- Beşinci boyut: fiziksel gözlem (Faz 9.5) ---------------------------
+
+def test_fiziksel_gozlem_en_dusuk_agirlikta():
+    """Öznel bir boyut; ağırlığı en düşük olmalı.
+
+    Değeri hassasiyetinde değil KAPSAMINDA: cihaz gerektirmediği için
+    sık yapılabilir ve başka hiçbir yöntemin göremediğini görür.
+    """
+    assert hi.DIMENSIONS["physical"]["weight"] == 1.0
+    assert all(hi.DIMENSIONS["physical"]["weight"] <= hi.DIMENSIONS[k]["weight"]
+               for k in hi.DIMENSION_ORDER)
+
+
+def test_kritik_fiziksel_bulgu_tavan_uygular():
+    """Yağ kaçağı ya da arızalı koruma, diğer boyutlar iyi olsa bile
+    varlığı incelemeye sokmalı."""
+    r = hi.compute(risk_condition=1, oil_overall="iyi", paper=paper(5),
+                   electrical_overall="iyi", physical_overall="kötü")
+    assert r["capped"] is True
+    assert "Fiziksel gözlem" in r["critical_dimensions"]
+    assert r["raw_score"] > hi.CRITICAL_CAP
+
+
+def test_gozlem_yoksa_kapsama_eksik_kalir():
+    r = hi.compute(risk_condition=1, oil_overall="iyi", paper=paper(0),
+                   electrical_overall="iyi")
+    assert r["coverage"]["level"] == "partial"
+    assert any("Fiziksel gözlem" in w for w in r["warnings"])

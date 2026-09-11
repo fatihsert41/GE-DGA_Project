@@ -110,7 +110,16 @@ public record TransformerRisk(
     string? LifecyclePhase = null,
 
     /// <summary>Periyodik izleme kapsamında mı?</summary>
-    bool LifecycleMonitored = true);
+    bool LifecycleMonitored = true,
+
+    // --- Faz 9.5: fiziksel saha gözlemi -------------------------------
+    /// <summary>Saha kontrol listesi hükmü: iyi / kabul / kötü.</summary>
+    string? PhysicalOverall = null,
+
+    /// <summary>Kritik bulgular (yağ kaçağı, soğutma, koruma...).</summary>
+    List<string>? PhysicalFindings = null,
+
+    bool HasInspection = false);
 
 /// <summary>Filo özeti — Python'daki /fleet/overview cevabının "summary" kısmı.</summary>
 public record FleetSummary(

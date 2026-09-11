@@ -53,7 +53,10 @@ public static class TestData
         double assetWeight = 0.7,
         string? lifecyclePhase = "field",
         string? lifecycleStatus = "in_service",
-        bool lifecycleMonitored = true)
+        bool lifecycleMonitored = true,
+        string? physicalOverall = "iyi",
+        List<string>? physicalFindings = null,
+        bool hasInspection = true)
         => new(
             Id: id,
             Name: $"Trafo {id}",
@@ -89,7 +92,10 @@ public static class TestData
             AssetWeight: assetWeight,
             LifecycleStatus: lifecycleStatus,
             LifecyclePhase: lifecyclePhase,
-            LifecycleMonitored: lifecycleMonitored);
+            LifecycleMonitored: lifecycleMonitored,
+            PhysicalOverall: physicalOverall,
+            PhysicalFindings: physicalFindings,
+            HasInspection: hasInspection);
 
     public static FleetOverview Fleet(params TransformerRisk[] transformers)
         => new(

@@ -192,6 +192,54 @@ FLEET = [
 ]
 
 
+# Fiziksel gözlem senaryoları (Faz 9.5). Elle seçildi: her biri
+# "gözün gördüğünü cihaz göremez" savını bir vakayla kanıtlıyor.
+#
+#   TR-06  radyatör tıkalı + silikajel doymuş -> DGA henüz sakin ama
+#          sıcaklık yükseliyor; kağıt hızlanarak yaşlanıyor olabilir.
+#   TR-09  yağ kaçağı + korozyon -> 30 yaşında, liman (tuzlu nem),
+#          SPT hattı kapalı, ihmal edilmiş varlık profili.
+#   TR-03  kozmetik bulgular (boya, gürültü) -> tek başına acil değil.
+#   Diğerleri temiz.
+PHYSICAL_SCENARIOS = {
+    "TR-01": {"oil_leak": "iyi", "oil_level": "iyi", "silica_gel": "iyi",
+              "cooling": "iyi", "bushings": "iyi", "protection": "iyi",
+              "grounding": "iyi", "noise_vibration": "iyi",
+              "corrosion": "iyi", "tap_changer": "iyi"},
+    "TR-02": {"oil_leak": "iyi", "oil_level": "iyi", "silica_gel": "iyi",
+              "cooling": "iyi", "bushings": "iyi", "protection": "iyi",
+              "grounding": "iyi", "noise_vibration": "iyi",
+              "corrosion": "iyi", "tap_changer": "iyi"},
+    "TR-03": {"oil_leak": "iyi", "oil_level": "iyi", "silica_gel": "dikkat",
+              "cooling": "iyi", "bushings": "iyi", "protection": "iyi",
+              "grounding": "iyi", "noise_vibration": "dikkat",
+              "corrosion": "kötü", "tap_changer": "iyi"},
+    "TR-04": {"oil_leak": "iyi", "oil_level": "iyi", "silica_gel": "iyi",
+              "cooling": "iyi", "bushings": "iyi", "protection": "iyi",
+              "grounding": "iyi", "noise_vibration": "iyi",
+              "corrosion": "dikkat", "tap_changer": "dikkat"},
+    "TR-05": {"oil_leak": "iyi", "oil_level": "iyi", "silica_gel": "iyi",
+              "cooling": "iyi", "bushings": "iyi", "protection": "iyi",
+              "grounding": "iyi", "noise_vibration": "iyi",
+              "corrosion": "iyi", "tap_changer": "iyi"},
+    "TR-06": {"oil_leak": "iyi", "oil_level": "iyi", "silica_gel": "kötü",
+              "cooling": "kötü", "bushings": "iyi", "protection": "iyi",
+              "grounding": "dikkat", "noise_vibration": "dikkat",
+              "corrosion": "dikkat", "tap_changer": "iyi"},
+    "TR-08": {"oil_leak": "iyi", "oil_level": "iyi", "silica_gel": "iyi",
+              "cooling": "iyi", "bushings": "iyi", "protection": "iyi",
+              "grounding": "iyi", "noise_vibration": "iyi",
+              "corrosion": "iyi", "tap_changer": "iyi"},
+    "TR-09": {"oil_leak": "kötü", "oil_level": "dikkat",
+              "silica_gel": "kötü", "cooling": "dikkat",
+              "bushings": "dikkat", "protection": "iyi",
+              "grounding": "dikkat", "noise_vibration": "iyi",
+              "corrosion": "kötü", "tap_changer": "dikkat"},
+    # TR-07 kasten YOK: hiç saha gözlemi yapılmamış varlık.
+    # TR-10 fabrikada, saha gözlemi anlamsız.
+}
+
+
 # Elektriksel test senaryoları (Faz 8.6). Rastgele DEĞİL, elle seçildi:
 # her biri sistemin bir yeteneğini kanıtlıyor. Çoğunluk sağlıklı olmalı,
 # yoksa demo inandırıcılığını yitirir.
@@ -222,6 +270,7 @@ def _reset() -> None:
     """Tabloları oluştur ve eski demo kayıtları temizle (temiz başlangıç)."""
     database.init_db()
     with sqlite3.connect(database.DB_PATH) as conn:
+        conn.execute("DELETE FROM physical_inspections")
         conn.execute("DELETE FROM lifecycle_events")
         conn.execute("DELETE FROM electrical_tests")
         conn.execute("DELETE FROM oil_tests")
@@ -328,6 +377,24 @@ def seed() -> None:
                     unit["id"], values, tested_at=tested.isoformat(),
                     tested_by="Demo Saha Ekibi")
 
+        # --- Fiziksel gözlem (Faz 9.5) --------------------------------
+        # DGA'dan daha SIK yapılabilir: cihaz gerektirmez, teknisyen
+        # zaten sahada. Demo filoda son iki tur kaydediliyor.
+        obs = PHYSICAL_SCENARIOS.get(unit["id"])
+        if obs:
+            for k, months_ago in enumerate((8, 2)):
+                when = (datetime.now(timezone.utc)
+                        - timedelta(days=30 * months_ago))
+                # Eski turda bulgular daha hafif: sorunlar zamanla gelişir.
+                round_obs = obs if k == 1 else {
+                    key: ("dikkat" if v == "kötü" else v)
+                    for key, v in obs.items()
+                }
+                database.save_physical_inspection(
+                    unit["id"], round_obs, inspected_at=when.isoformat(),
+                    recorded_by={"employee_no": "10247",
+                                 "name": "Demo Saha Ekibi"})
+
         flag = " ⚠ uzman incelemesi" if last["review"]["needed"] else ""
         gecikme = f" ⏰ {lag} ay geçti" if lag else ""
         oncelik = assets.priority_score(last["risk"]["condition"],
@@ -355,6 +422,18 @@ def seed() -> None:
                   f"{'; '.join(r['problems'])}")
     if fleet_el["never_tested"]:
         print(f"  hic test edilmemis: {', '.join(fleet_el['never_tested'])}")
+
+    from ..services import physical as ph_service
+    fleet_ph = ph_service.fleet_summary()
+    print(f"Fiziksel gozlem: {fleet_ph['inspected']} trafo, "
+          f"durum dagilimi {dict(fleet_ph['condition_counts'])}")
+    for r in fleet_ph["items"]:
+        if r["overall"] != "iyi":
+            print(f"  {r['transformer_id']}  {r['overall']}: "
+                  f"{'; '.join(r['problems'])}")
+    if fleet_ph["never_inspected"]:
+        print(f"  hic gozlem yapilmamis: "
+              f"{', '.join(fleet_ph['never_inspected'])}")
 
     print("En yasli kagitlar:")
     for r in fleet_oil["most_aged_paper"]:
