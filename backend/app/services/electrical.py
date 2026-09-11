@@ -87,6 +87,12 @@ def _summaries(transformer_id: str,
             "data_suspect": bool(ttr.get("data_suspect")),
             "voided": bool(t.get("voided_at")),
             "void_reason": t.get("void_reason"),
+            # Kim girdi / kim geçersiz saydı (Faz 9.0c). Denetim izinin
+            # görünür olması gerekir; veritabanında durup ekranda
+            # görünmeyen bir iz, iz sayılmaz.
+            "recorded_by_id": t.get("recorded_by_id"),
+            "recorded_by_name": t.get("recorded_by_name"),
+            "voided_by_name": t.get("voided_by_name"),
         })
     return rows
 

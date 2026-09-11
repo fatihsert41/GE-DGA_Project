@@ -906,3 +906,67 @@ td.num, span.num, b.num {
   font-variant-numeric: tabular-nums; margin-top: 3px;
 }
 .el-readout-suffix { font-size: 0.7rem; margin-top: 2px; }
+
+/* ---------------------------------------------------------------------
+   Faz 9.0d — Giriş ekranı ve kimlik
+   ------------------------------------------------------------------- */
+
+.login-wrap {
+  min-height: 100vh; display: flex; align-items: center;
+  justify-content: center; padding: 32px 16px;
+}
+.login-card { max-width: 440px; width: 100%; }
+
+.login-brand {
+  display: flex; align-items: center; gap: 14px; margin-bottom: 18px;
+}
+.login-mark {
+  width: 36px; height: 36px; border-radius: 8px; flex: none;
+  background: var(--ink);
+  /* Trafo çekirdeği izlenimi: iki yatay çizgi (sargılar). */
+  background-image: linear-gradient(var(--paper) 0 0),
+                    linear-gradient(var(--paper) 0 0);
+  background-size: 20px 2px, 20px 2px;
+  background-position: 8px 13px, 8px 21px;
+  background-repeat: no-repeat;
+}
+.login-title {
+  margin: 0; font-size: 1.4rem; letter-spacing: -0.02em;
+  border: none; padding: 0;
+}
+.login-sub { font-size: 0.78rem; }
+.login-why { margin: 0 0 16px; }
+.login-error { margin-bottom: 14px; }
+
+.login-card .primary { margin-top: 18px; }
+
+.login-demo {
+  margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--rule);
+  font-size: 0.82rem;
+}
+.login-accounts { margin-top: 8px; }
+.login-accounts td { padding: 5px 10px; font-size: 0.8rem; }
+
+.login-scope { margin-top: 16px; font-size: 0.82rem; }
+.login-scope summary {
+  cursor: pointer; color: var(--accent); text-underline-offset: 2px;
+}
+.login-scope-body {
+  margin-top: 10px; padding: 12px 14px; border-radius: 8px;
+  background: var(--surface-2); line-height: 1.55;
+}
+.login-scope-body p { margin: 0 0 9px; }
+.login-scope-body p:last-child { margin-bottom: 0; }
+
+/* Üst çubukta aktif kullanıcı */
+.top-right { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.who { text-align: right; line-height: 1.25; }
+.who-name { font-size: 0.86rem; font-weight: 600; }
+.who-meta {
+  font-size: 0.72rem; color: var(--muted);
+  font-family: var(--mono); font-variant-numeric: tabular-nums;
+}
+.me-chip {
+  margin-left: 7px; font-size: 0.66rem; padding: 1px 7px;
+  border-radius: 999px; background: var(--surface-2); color: var(--ink-soft);
+}
