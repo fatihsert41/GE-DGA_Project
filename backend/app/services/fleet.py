@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 from typing import Dict, List, Optional
 
 from .. import database
-from ..core import assets, health_index, nameplate
+from ..core import assets, health_index, lifecycle, nameplate
 from ..core.gases import (FAULT_FAMILY, FAULT_GROUP, FAULT_LABELS_TR,
                           SEVERE_FAULTS, total_combustible)
 from ..core.risk import RISK_LEVELS_TR, RISK_ORDER
@@ -49,11 +49,24 @@ def _to_card(row: Dict) -> Dict:
     # Numune aralığı sınıfa göre değişir: LPT 6 ay, MPT 12, SPT 24.
     interval_days = int(cls["sampling_months"]) * 30
 
-    # ÜÇ AYRI DURUM. Önceden yalnızca iki vardı ve "veri yok" ile "güncel"
-    # aynı sayılıyordu: hiç numune alınmamış bir trafo sampling_overdue=False
-    # döndürüyor, yani hiçbir uyarı üretmiyordu. Oysa hiç numune alınmamış
-    # varlık, numune alma açısından EN ACİL olandır.
-    if days is None:
+    # Yaşam döngüsü durumu (Faz 9.35) — numune kuralından ÖNCE gelir.
+    life = lifecycle.summary(row.get("lifecycle_status"))
+
+    # DÖRT DURUM. Önceden üç vardı ve hepsi varlığın nerede olduğunu
+    # görmezden geliyordu.
+    #
+    # ⚠ YAŞANAN HATA: fabrikada sevkiyat bekleyen bir ünite "hiç numune
+    # alınmamış" sayılıp numune alma iş emri üretiyordu. Henüz
+    # enerjilenmemiş, yağında gaz üretmesi fiziksel olarak mümkün
+    # olmayan bir trafo için. Kural yanlış değildi; kurala verilen
+    # varlık kümesi yanlıştı.
+    #
+    # Kural tek bir soru soruyor: bu varlık İZLENİYOR mu? Durumların
+    # tek tek sayılmaması bilinçli — yeni bir durum eklendiğinde
+    # buraya dokunmak gerekmesin diye (bkz. core/lifecycle.py).
+    if not life["monitored"]:
+        sampling_status = "not_monitored"
+    elif days is None:
         sampling_status = "never_sampled"
     elif days > interval_days:
         sampling_status = "overdue"
@@ -77,6 +90,14 @@ def _to_card(row: Dict) -> Dict:
         }),
         # Öncelik = IEEE kondisyonu × varlık ağırlığı. Açıklanabilir olsun
         # diye bileşenleri de gönderiliyor; arayüz formülü gösterebiliyor.
+        "lifecycle": life,
+        "lifecycle_status": life["code"],
+        # Bakım servisinin (.NET) okuduğu DÜZ alanlar. İç içe nesneyi
+        # ayrıştırmak yerine düz alan taşımak, servisler arası sınırda
+        # daha dayanıklı: karşı taraf iç yapıyı bilmek zorunda kalmıyor.
+        "lifecycle_phase": life["phase"],
+        "lifecycle_monitored": life["monitored"],
+        "lifecycle_changed_at": row.get("lifecycle_changed_at"),
         "priority": assets.priority_score(condition, cls["code"]),
         "asset_weight": cls["weight"],
         "sampling_months": cls["sampling_months"],
@@ -119,6 +140,15 @@ def _severity_key(card: Dict) -> tuple:
     return (-card.get("priority", 0.0),
             -RISK_ORDER.get(card["risk_level"], 0),
             card["id"])
+
+
+def _lifecycle_distribution(cards: List[Dict]) -> Dict[str, int]:
+    """Yaşam döngüsü durumlarına göre sayım (yalnızca dolu olanlar)."""
+    counts: Dict[str, int] = {}
+    for c in cards:
+        code = c.get("lifecycle_status") or lifecycle.DEFAULT_STATE
+        counts[code] = counts.get(code, 0) + 1
+    return counts
 
 
 def build_overview(rows: List[Dict],
@@ -190,6 +220,12 @@ def build_overview(rows: List[Dict],
             "sampling_overdue": sum(1 for c in cards if c["sampling_overdue"]),
             "never_sampled": sum(1 for c in cards
                                  if c["sampling_status"] == "never_sampled"),
+            # İzlenmeyen varlıklar (fabrikada, yolda, yedek, hizmet dışı)
+            # ayrıca sayılır: filoda kaç ünitenin henüz işletmede
+            # olmadığı, yönetim için ayrı bir bilgidir.
+            "not_monitored": sum(1 for c in cards
+                                 if c["sampling_status"] == "not_monitored"),
+            "lifecycle_distribution": _lifecycle_distribution(cards),
             # Sağlık endeksi filo özeti. Ortalamanın yanında `unknown`
             # da veriliyor: kaç varlığın durumunu BİLMEDİĞİMİZ, ortalama
             # kadar önemli bir yönetim bilgisidir.

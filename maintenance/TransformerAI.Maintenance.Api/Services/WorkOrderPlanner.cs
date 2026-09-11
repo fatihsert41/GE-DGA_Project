@@ -246,6 +246,21 @@ public class WorkOrderPlanner
                                           HashSet<(string, WorkOrderKind)> openPairs,
                                           List<Suggestion> output)
     {
+        // Faz 9.35 — SAHADA OLMAYAN varlığa saha işi planlanmaz.
+        //
+        // Fabrikada sevkiyat bekleyen bir üniteye "temel çizgi elektriksel
+        // testi" iş emri açmak, henüz teslim alınmamış bir varlık için
+        // saha ekibi göndermek demektir. Fabrika testleri üreticinin
+        // sorumluluğunda; bizim kayıtlarımıza devreye alma sırasında
+        // girer.
+        //
+        // Python tarafındaki numune kuralı da aynı sebeple düzeltildi:
+        // kural yanlış değildi, kurala verilen varlık kümesi yanlıştı.
+        if (t.LifecyclePhase is "factory" or "transit" or "retired")
+        {
+            return;
+        }
+
         // KURAL 6 — Ölçüm şüpheli: önce testi tekrarla.
         //
         // SIRASI ÖNEMLİ: bulgu kuralından ÖNCE gelir. Ölçüm fiziksel

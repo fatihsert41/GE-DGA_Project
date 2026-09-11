@@ -10,6 +10,7 @@ import NameplatePanel from './NameplatePanel'
 import OilQualityPanel from './OilQualityPanel'
 import HealthPanel from './HealthPanel'
 import ElectricalPanel from './ElectricalPanel'
+import LifecyclePanel from './LifecyclePanel'
 
 /* Faz 5.4 — tek trafonun detayı.
  *
@@ -193,6 +194,8 @@ export default function TransformerDetail({ id, meta, onBack }) {
         onClick={() => setTab('health')}>Sağlık Endeksi</button>
       <button type="button" className={tab === 'nameplate' ? 'active' : ''}
         onClick={() => setTab('nameplate')}>Künye</button>
+      <button type="button" className={tab === 'lifecycle' ? 'active' : ''}
+        onClick={() => setTab('lifecycle')}>Yaşam Döngüsü</button>
     </div>
   )
 
@@ -203,6 +206,17 @@ export default function TransformerDetail({ id, meta, onBack }) {
       <div>
         <div className="panel">{header}{tabs}</div>
         <div style={{ marginTop: 16 }}><NameplatePanel id={id} /></div>
+      </div>
+    )
+  }
+
+  // Yaşam döngüsü ölçümden tamamen bağımsız: henüz hiç ölçümü olmayan
+  // bir fabrika ünitesinin de durumu vardır.
+  if (tab === 'lifecycle') {
+    return (
+      <div>
+        <div className="panel">{header}{tabs}</div>
+        <div style={{ marginTop: 16 }}><LifecyclePanel id={id} /></div>
       </div>
     )
   }

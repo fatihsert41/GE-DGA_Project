@@ -95,7 +95,22 @@ public record TransformerRisk(
     /// ayrı almak, "elektriksel arıza da kritik kondisyondur" demeyi
     /// mümkün kılıyor.
     /// </remarks>
-    double AssetWeight = 1.0);
+    double AssetWeight = 1.0,
+
+    // --- Faz 9.35: yaşam döngüsü -------------------------------------
+    /// <summary>in_service, awaiting_transport, on_site…</summary>
+    string? LifecycleStatus = null,
+
+    /// <summary>factory / transit / field / retired.</summary>
+    /// <remarks>
+    /// Kurallar tek tek duruma değil EVREYE bakar. Python tarafında da
+    /// aynı tercih yapıldı: yeni bir durum eklendiğinde kuralları gözden
+    /// geçirmek gerekmesin diye.
+    /// </remarks>
+    string? LifecyclePhase = null,
+
+    /// <summary>Periyodik izleme kapsamında mı?</summary>
+    bool LifecycleMonitored = true);
 
 /// <summary>Filo özeti — Python'daki /fleet/overview cevabının "summary" kısmı.</summary>
 public record FleetSummary(

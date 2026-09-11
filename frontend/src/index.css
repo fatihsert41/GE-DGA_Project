@@ -1053,3 +1053,52 @@ td.num, span.num, b.num {
   display: flex; flex-direction: column; gap: 1px; margin-top: 3px;
   font-size: 0.72rem;
 }
+
+/* ---------------------------------------------------------------------
+   Faz 9.35 — Yaşam döngüsü
+   ------------------------------------------------------------------- */
+
+.lc-current {
+  display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+  margin: 14px 0 4px;
+}
+.lc-since { font-size: 0.8rem; }
+
+.lc-monitor {
+  margin-top: 14px; padding: 12px 16px; border-radius: 8px;
+  background: var(--surface-2); font-size: 0.84rem; line-height: 1.55;
+  border-left: 3px solid var(--rule-strong);
+}
+.lc-monitor.on { border-left-color: var(--low); }
+.lc-monitor.off { border-left-color: var(--medium); }
+
+/* Yaşam döngüsü şeridi. Renk tek başına anlam taşımasın diye her
+   adımın adı yazılı; geçilmiş adımlar ayrıca soluk. */
+.lc-track {
+  list-style: none; padding: 0; margin: 20px 0 0;
+  display: flex; flex-wrap: wrap; gap: 0;
+}
+.lc-step {
+  flex: 1 1 90px; min-width: 90px; position: relative;
+  padding-top: 20px; text-align: center; font-size: 0.72rem;
+}
+.lc-step::before {
+  content: ''; position: absolute; top: 6px; left: 0; right: 0;
+  height: 2px; background: var(--rule);
+}
+.lc-step:first-child::before { left: 50%; }
+.lc-step:last-child::before { right: 50%; }
+.lc-step.done::before { background: var(--rule-strong); }
+.lc-dot {
+  position: absolute; top: 1px; left: 50%; transform: translateX(-50%);
+  width: 12px; height: 12px; border-radius: 50%;
+  background: var(--surface); border: 2px solid var(--rule-strong);
+}
+.lc-step.done .lc-dot { background: var(--rule-strong); }
+.lc-step.now .lc-dot {
+  background: var(--ink); border-color: var(--ink);
+  width: 14px; height: 14px; top: 0;
+}
+.lc-step.todo { color: var(--muted); }
+.lc-step.now .lc-label { font-weight: 700; }
+.lc-label { display: block; padding: 0 4px; }
