@@ -193,9 +193,9 @@ yarısı**. Eksikler ve değerlendirmesi:
 | Boyut | Durum | Yorum |
 |---|---|---|
 | tan δ | ✅ elektriksel içinde | Var |
-| Kademe değiştirici | 🟡 kısmen (sargı direnci) | Ayrı boyut olabilir: işletme sayacı, yağ, revizyon tarihi |
-| Buşing | ❌ | Trafo arızalarının önemli bir kısmı buşing kaynaklı |
-| Fiziksel gözlem | ❌ | Kaçak, korozyon, silikajel, radyatör — **ucuz ve etkili** |
+| Kademe değiştirici | ✅ Faz 9.4 | İşletme sayacı, revizyon süresi, kademe yağı |
+| Buşing | ✅ Faz 9.4 | Kapasitans sapması + güç faktörü |
+| Fiziksel gözlem | ✅ Faz 9.5 | Kaçak, korozyon, silikajel, radyatör |
 | Yük geçmişi | ❌ | IEEE C57.91 termal model bunu ister |
 | Bakım geçmişi | ❌ | .NET'te var ama endekse girmiyor |
 | Yaş | 🟡 bilinçli olarak dışarıda | Kağıt DP'sinin içinde sayılıyor; gerekçeli |
@@ -449,8 +449,8 @@ dil gerektirecek.
 9.3  Yönetici ekranı           (React)    ✅ TAMAM
 9.35 Varlık yaşam döngüsü      (Py+React) ✅ TAMAM
 9.5  Fiziksel gözlem           (Python)   ✅ TAMAM
-9.4  Buşing + OLTC             (Python)   ⭐ ŞİMDİ
-9.6  Trafo şeması              (React)
+9.4  Buşing + OLTC             (Python)   ✅ TAMAM
+9.6  Trafo şeması              (React)    ⭐ ŞİMDİ
 9.7  Kurumsal görünüm cilası   (React)
 ```
 

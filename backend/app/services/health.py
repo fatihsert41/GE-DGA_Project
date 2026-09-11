@@ -16,6 +16,7 @@ from .. import database
 from ..core import assets, health_index
 from . import electrical as electrical_service
 from . import oil as oil_service
+from . import components as component_service
 from . import physical as physical_service
 
 
@@ -44,6 +45,10 @@ def transformer_health(transformer_id: str) -> Dict[str, object]:
     phys = physical_service.physical_card(
         inspections[-1] if inspections else None)
 
+    comp_tests = database.get_component_tests(transformer_id)
+    comp = component_service.component_card(
+        transformer_id, comp_tests[-1] if comp_tests else None)
+
     cls = assets.get(record.get("asset_class"))
     result = health_index.compute(
         risk_condition=(latest_dga or {}).get("risk_condition"),
@@ -51,6 +56,7 @@ def transformer_health(transformer_id: str) -> Dict[str, object]:
         paper=oil.get("paper"),
         electrical_overall=el.get("electrical_overall"),
         physical_overall=phys.get("physical_overall"),
+        component_overall=comp.get("component_overall"),
         asset_weight=float(cls["weight"]),   # type: ignore[arg-type]
     )
 
@@ -74,6 +80,8 @@ def transformer_health(transformer_id: str) -> Dict[str, object]:
             "electrical_test_count": len(el_tests),
             "physical_inspected_at": phys.get("physical_inspected_at"),
             "inspection_count": len(inspections),
+            "component_tested_at": comp.get("component_tested_at"),
+            "component_test_count": len(comp_tests),
         },
     }
 

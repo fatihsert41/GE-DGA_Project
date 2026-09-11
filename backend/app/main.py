@@ -10,7 +10,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from . import database
 from .ml import predictor
-from .routers import (compare, electrical, explain, fleet, health_index,
+from .routers import (compare, components, electrical, explain, fleet,
+                      health_index,
                       lifecycle, oil, physical, predict, transformers,
                       trend)
 
@@ -42,6 +43,7 @@ app.include_router(health_index.router)
 app.include_router(electrical.router)
 app.include_router(lifecycle.router)
 app.include_router(physical.router)
+app.include_router(components.router)
 
 
 @app.on_event("startup")

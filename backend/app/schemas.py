@@ -152,3 +152,28 @@ class VoidTestIn(BaseModel):
 class UnvoidTestIn(BaseModel):
     """Geçersiz işaretini kaldırma (yanlışlıkla işaretlendiyse)."""
     reason: None = None
+
+
+class ComponentTestIn(BaseModel):
+    """Buşing ve kademe değiştirici testi girişi. (Faz 9.4)
+
+    Buşing kapasitansı girilirken KÜNYE değeri de istenir: ölçüt mutlak
+    değer değil, künyeden sapmadır (uç nokta kontrol ediyor).
+    """
+    bushing_a_pf_pct: Optional[float] = Field(None, ge=0, le=20)
+    bushing_a_cap_pf: Optional[float] = Field(None, gt=0)
+    bushing_a_cap_rated_pf: Optional[float] = Field(None, gt=0)
+    bushing_b_pf_pct: Optional[float] = Field(None, ge=0, le=20)
+    bushing_b_cap_pf: Optional[float] = Field(None, gt=0)
+    bushing_b_cap_rated_pf: Optional[float] = Field(None, gt=0)
+    bushing_c_pf_pct: Optional[float] = Field(None, ge=0, le=20)
+    bushing_c_cap_pf: Optional[float] = Field(None, gt=0)
+    bushing_c_cap_rated_pf: Optional[float] = Field(None, gt=0)
+
+    oltc_operations: Optional[int] = Field(None, ge=0)
+    oltc_ops_since_overhaul: Optional[int] = Field(None, ge=0)
+    oltc_years_since_overhaul: Optional[float] = Field(None, ge=0, le=60)
+    oltc_oil_bdv_kv: Optional[float] = Field(None, ge=0)
+
+    tested_at: Optional[str] = None
+    notes: Optional[str] = Field(None, max_length=500)

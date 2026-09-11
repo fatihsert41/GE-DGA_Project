@@ -12,6 +12,7 @@ import HealthPanel from './HealthPanel'
 import ElectricalPanel from './ElectricalPanel'
 import LifecyclePanel from './LifecyclePanel'
 import InspectionPanel from './InspectionPanel'
+import ComponentsPanel from './ComponentsPanel'
 
 /* Faz 5.4 — tek trafonun detayı.
  *
@@ -191,6 +192,8 @@ export default function TransformerDetail({ id, meta, onBack }) {
         onClick={() => setTab('oil')}>Yağ Kalitesi</button>
       <button type="button" className={tab === 'electrical' ? 'active' : ''}
         onClick={() => setTab('electrical')}>Elektriksel</button>
+      <button type="button" className={tab === 'components' ? 'active' : ''}
+        onClick={() => setTab('components')}>Buşing / Kademe</button>
       <button type="button" className={tab === 'inspection' ? 'active' : ''}
         onClick={() => setTab('inspection')}>Saha Gözlemi</button>
       <button type="button" className={tab === 'health' ? 'active' : ''}
@@ -209,6 +212,16 @@ export default function TransformerDetail({ id, meta, onBack }) {
       <div>
         <div className="panel">{header}{tabs}</div>
         <div style={{ marginTop: 16 }}><NameplatePanel id={id} /></div>
+      </div>
+    )
+  }
+
+  // Bileşen testleri eklentileri ölçer; aktif kısım verisinden bağımsız.
+  if (tab === 'components') {
+    return (
+      <div>
+        <div className="panel">{header}{tabs}</div>
+        <div style={{ marginTop: 16 }}><ComponentsPanel id={id} /></div>
       </div>
     )
   }

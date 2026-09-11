@@ -56,7 +56,10 @@ public static class TestData
         bool lifecycleMonitored = true,
         string? physicalOverall = "iyi",
         List<string>? physicalFindings = null,
-        bool hasInspection = true)
+        bool hasInspection = true,
+        string? componentOverall = "iyi",
+        List<string>? componentProblems = null,
+        bool hasComponentTest = true)
         => new(
             Id: id,
             Name: $"Trafo {id}",
@@ -95,7 +98,10 @@ public static class TestData
             LifecycleMonitored: lifecycleMonitored,
             PhysicalOverall: physicalOverall,
             PhysicalFindings: physicalFindings,
-            HasInspection: hasInspection);
+            HasInspection: hasInspection,
+            ComponentOverall: componentOverall,
+            ComponentProblems: componentProblems,
+            HasComponentTest: hasComponentTest);
 
     public static FleetOverview Fleet(params TransformerRisk[] transformers)
         => new(

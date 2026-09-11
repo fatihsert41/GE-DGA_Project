@@ -100,6 +100,43 @@ def init_db() -> None:
             """
         )
 
+        # Bileşen testleri: buşing + kademe değiştirici (Faz 9.4).
+        # Sütun tercih edildi (JSON değil): değerler SAYISAL ve zamanla
+        # karşılaştırılıyor — kapasitans sapmasının seyri, işletme
+        # sayacının artışı. Fiziksel gözlemde JSON seçilmişti çünkü orada
+        # değerler kategorik ve bütün olarak okunuyor.
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS component_tests (
+                id             INTEGER PRIMARY KEY AUTOINCREMENT,
+                transformer_id TEXT NOT NULL,
+                tested_at      TEXT NOT NULL,
+                bushing_a_pf_pct        REAL,
+                bushing_a_cap_pf        REAL,
+                bushing_a_cap_rated_pf  REAL,
+                bushing_b_pf_pct        REAL,
+                bushing_b_cap_pf        REAL,
+                bushing_b_cap_rated_pf  REAL,
+                bushing_c_pf_pct        REAL,
+                bushing_c_cap_pf        REAL,
+                bushing_c_cap_rated_pf  REAL,
+                oltc_operations             INTEGER,
+                oltc_ops_since_overhaul     INTEGER,
+                oltc_years_since_overhaul   REAL,
+                oltc_oil_bdv_kv             REAL,
+                notes          TEXT,
+                created_at     TEXT NOT NULL,
+                recorded_by_id   TEXT,
+                recorded_by_name TEXT,
+                FOREIGN KEY (transformer_id) REFERENCES transformers(id)
+            )
+            """
+        )
+        conn.execute(
+            """CREATE INDEX IF NOT EXISTS idx_component_transformer
+               ON component_tests(transformer_id, tested_at DESC)"""
+        )
+
         # Fiziksel gözlem turları (Faz 9.5). Maddeler JSON olarak
         # saklanıyor: liste zamanla değişebilir ve her madde için ayrı
         # sütun açmak şemayı kırılgan yapardı. Yağ/elektriksel testlerde
@@ -178,6 +215,14 @@ OIL_TEST_FIELDS = [
 # Elektriksel test sütunları (Faz 8.6). ``tap_position`` ölçüm değil
 # BAĞLAMDIR: beklenen sarım oranı kademeye göre değişir, kademeyi bilmeden
 # TTR sonucu yorumlanamaz.
+# Bileşen testi sütunları (Faz 9.4).
+COMPONENT_TEST_FIELDS = [
+    *[f"bushing_{p}_{s}" for p in ("a", "b", "c")
+      for s in ("pf_pct", "cap_pf", "cap_rated_pf")],
+    "oltc_operations", "oltc_ops_since_overhaul",
+    "oltc_years_since_overhaul", "oltc_oil_bdv_kv",
+]
+
 ELECTRICAL_TEST_FIELDS = [
     "tap_position",
     "ttr_a", "ttr_b", "ttr_c",
@@ -815,3 +860,56 @@ def latest_physical_inspections() -> Dict[str, Dict]:
         d["observations"] = json.loads(d.pop("observations_json"))
         out[d["transformer_id"]] = d
     return out
+
+
+# ---------------------------------------------------------------------------
+# Bileşen testleri (Faz 9.4)
+# ---------------------------------------------------------------------------
+
+def save_component_test(transformer_id: str, values: Dict[str, object],
+                        tested_at: Optional[str] = None,
+                        notes: Optional[str] = None,
+                        recorded_by: Optional[Dict[str, str]] = None) -> int:
+    """Bir buşing/OLTC testini kaydeder."""
+    rec = recorded_by or {}
+    known = {k: values.get(k) for k in COMPONENT_TEST_FIELDS}
+    columns = ["transformer_id", "tested_at", *COMPONENT_TEST_FIELDS,
+               "notes", "created_at", "recorded_by_id", "recorded_by_name"]
+    row = [transformer_id, _normalize_ts(tested_at) or _now(),
+           *[known[k] for k in COMPONENT_TEST_FIELDS],
+           notes, _now(), rec.get("employee_no"), rec.get("name")]
+
+    with _connect() as conn:
+        cur = conn.execute(
+            f"""INSERT INTO component_tests ({", ".join(columns)})
+                VALUES ({", ".join("?" for _ in columns)})""",
+            row,
+        )
+        return int(cur.lastrowid)
+
+
+def get_component_tests(transformer_id: str) -> List[Dict]:
+    with _connect() as conn:
+        rows = conn.execute(
+            """SELECT * FROM component_tests WHERE transformer_id = ?
+               ORDER BY tested_at ASC, id ASC""",
+            (transformer_id,)).fetchall()
+    return [dict(r) for r in rows]
+
+
+def latest_component_tests() -> Dict[str, Dict]:
+    with _connect() as conn:
+        rows = conn.execute(
+            """
+            WITH ranked AS (
+                SELECT c.*,
+                       ROW_NUMBER() OVER (
+                           PARTITION BY c.transformer_id
+                           ORDER BY c.tested_at DESC, c.id DESC
+                       ) AS rn
+                FROM component_tests c
+            )
+            SELECT * FROM ranked WHERE rn = 1
+            """
+        ).fetchall()
+    return {r["transformer_id"]: dict(r) for r in rows}
