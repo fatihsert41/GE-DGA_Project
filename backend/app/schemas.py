@@ -136,3 +136,19 @@ class ElectricalTestIn(BaseModel):
     tested_at: Optional[str] = Field(None, description="ISO tarih")
     tested_by: Optional[str] = Field(None, max_length=100)
     notes: Optional[str] = Field(None, max_length=500)
+
+
+class VoidTestIn(BaseModel):
+    """Bir test kaydını geçersiz işaretleme isteği. (Faz 8.6)
+
+    Gerekçe ZORUNLUDUR. Gerekçesiz bir "geçersiz" damgası, silmekten pek
+    farklı olmazdı: kayıt durur ama neden güvenilmediği bilinmez. Asıl
+    değer gerekçede — aynı hata tekrarlanıyorsa bunu ancak o gösterir.
+    """
+    reason: str = Field(..., min_length=5, max_length=300,
+                        description="Neden geçersiz? (ör. basamak hatası)")
+
+
+class UnvoidTestIn(BaseModel):
+    """Geçersiz işaretini kaldırma (yanlışlıkla işaretlendiyse)."""
+    reason: None = None

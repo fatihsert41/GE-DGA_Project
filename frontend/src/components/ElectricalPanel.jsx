@@ -89,8 +89,10 @@ function TurnsRatio({ section }) {
               <td><b>{p.phase}</b></td>
               <td className="num">{p.measured ?? '—'}</td>
               <td className={p.condition === 'kötü' ? 'over-limit num' : 'num'}>
+                {/* İşaret her zaman yüzdenin ÖNÜNDE: eksi değerlerde
+                    "%-0.028" gibi karışık bir dizi oluşuyordu. */}
                 {p.deviation_pct == null ? '—'
-                  : `${p.deviation_pct > 0 ? '+' : ''}%${p.deviation_pct}`}
+                  : `${p.deviation_pct >= 0 ? '+' : '−'}%${Math.abs(p.deviation_pct)}`}
               </td>
               <td><Badge condition={p.condition} /></td>
             </tr>
@@ -98,12 +100,17 @@ function TurnsRatio({ section }) {
         </tbody>
       </table>
 
-      {/* Asıl tanı burada: sapmanın DESENİ, büyüklüğünden çok şey söyler. */}
+      {/* Asıl tanı burada: sapmanın DESENİ, büyüklüğünden çok şey söyler.
+          Ama önce verinin geçerli olup olmadığı sorulur — geçersiz bir
+          sayıyı yorumlamaya çalışmak yanlış teşhis üretir. */}
       {section.note && (
-        <div className="el-note warn"><b>Yorum.</b> {section.note}</div>
+        <div className={`el-note ${section.data_suspect ? 'stop' : 'warn'}`}>
+          <b>{section.data_suspect ? 'Veri şüpheli.' : 'Yorum.'}</b>
+          {' '}{section.note}
+        </div>
       )}
 
-      {section.spread_pct != null && (
+      {section.spread_pct != null && !section.data_suspect && (
         <p className="note">
           Fazlar arası yayılım <b>%{section.spread_pct}</b>. Üç faz birlikte
           kaymışsa sebep genellikle kademe pozisyonudur; tek faz ayrışmışsa
@@ -314,6 +321,78 @@ function TanDelta({ section }) {
   )
 }
 
+/** Test geçmişi: her kayıt seçilebilir.
+ *
+ * Panel ilk hâlinde YALNIZCA son testi gösteriyordu; kullanıcı kendi
+ * girdiği bir testin sonucuna bir daha ulaşamıyordu. Sahada geçmiş
+ * testler tam olarak karşılaştırma yapmak için tutulur — hangi
+ * dengesizliğin ne zaman başladığı, tek bir ölçümden daha değerlidir.
+ */
+function TestHistory({ summaries, selectedId, onSelect, onVoid, onUnvoid }) {
+  if (!summaries?.length) return null
+  const rows = [...summaries].reverse()      // en yeni üstte
+
+  return (
+    <div className="panel">
+      <h2>Test Geçmişi <span className="count-pill">{rows.length}</span></h2>
+      <table className="compare el-history">
+        <thead>
+          <tr>
+            <th>Tarih</th><th>Test eden</th><th>Bölüm</th>
+            <th>Hüküm</th><th>Bulgu</th><th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r, i) => (
+            <tr key={r.id}
+              className={[r.id === selectedId ? 'selected' : '',
+                r.voided ? 'voided' : ''].filter(Boolean).join(' ')}>
+              <td>
+                <button type="button" className="link-like"
+                  onClick={() => onSelect(r.id)}>
+                  {fmtDate(r.tested_at)}
+                  {i === 0 && <span className="muted"> · son</span>}
+                </button>
+              </td>
+              <td className="muted">{r.tested_by || '—'}</td>
+              <td className="muted">{r.sections_measured}/4</td>
+              <td>
+                <Badge condition={r.overall} />
+                {r.data_suspect && (
+                  <span className="suspect-chip" title="Ölçüm fiziksel olarak mümkün değil">
+                    veri şüpheli
+                  </span>
+                )}
+              </td>
+              <td className="muted el-finding">
+                {r.voided
+                  ? <span title={r.void_reason}>geçersiz: {r.void_reason}</span>
+                  : r.problems.length ? r.problems[0] : 'bulgu yok'}
+              </td>
+              <td>
+                {r.voided
+                  ? <button type="button" className="link-like"
+                      onClick={() => onUnvoid(r.id)}>geri al</button>
+                  : <button type="button" className="link-like"
+                      onClick={() => onVoid(r.id)}>geçersiz işaretle</button>}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p className="note">
+        Tarihe tıklayınca o testin tam değerlendirmesi aşağıda açılır.
+        <b> Kayıt silme yoktur</b> — hatalı bir ölçüm "geçersiz"
+        işaretlenir, gerekçesiyle birlikte listede kalır ama hüküm
+        üretmez. Sahada da böyle yapılır: yanlış çıkan bir test raporu
+        imha edilmez, üzerine damga vurulur. "Ölçüm yapılmadı" ile
+        "yapıldı ama hatalıydı" farklı bilgilerdir — ikincisi, aynı hata
+        tekrar ediyorsa bunu gösteren tek kayıttır.
+      </p>
+    </div>
+  )
+}
+
 /* --- Veri giriş formu -------------------------------------------------- */
 
 /** Sahada girilen sayının beklenen değere göre sapmasını ANINDA gösterir.
@@ -385,6 +464,11 @@ function ElectricalTestForm({ transformerId, schema, onSaved, onCancel }) {
       </p>
 
       {error && <div className="np-problems"><b>{String(error)}</b></div>}
+
+      <p className="note decimal-hint">
+        <b>Ondalık ayırıcı nokta:</b> <code>1.842</code> = bir tam 842
+        (Türkçe yazımla <i>1,842</i>). Sayı kutuları virgül kabul etmez.
+      </p>
 
       {/* --- TTR --- */}
       <h3>Sarım Oranı (TTR)</h3>
@@ -511,6 +595,8 @@ export default function ElectricalPanel({ id }) {
   const [schema, setSchema] = useState(null)
   const [error, setError] = useState(null)
   const [adding, setAdding] = useState(false)
+  // null = en son test. Kullanıcı geçmişten seçtiğinde o testin id'si.
+  const [selectedId, setSelectedId] = useState(null)
 
   const load = useCallback(() => {
     setError(null)
@@ -519,52 +605,92 @@ export default function ElectricalPanel({ id }) {
       .catch((e) => setError(e?.response?.data?.detail || e.message))
   }, [id])
 
-  useEffect(() => { setData(null); load() }, [id, load])
+  useEffect(() => { setData(null); setSelectedId(null); load() }, [id, load])
   useEffect(() => {
     api.electricalSchema().then(setSchema).catch(() => setSchema(null))
   }, [])
+
+  // Gerekçe ZORUNLU: gerekçesiz bir "geçersiz" damgası silmekten pek
+  // farklı olmaz — kayıt durur ama neden güvenilmediği bilinmez.
+  const handleVoid = (testId) => {
+    const reason = window.prompt(
+      'Bu kaydı neden geçersiz işaretliyorsunuz? \n' +
+      '(ör. "C fazı basamak hatasıyla girildi")')
+    if (!reason || reason.trim().length < 5) return
+    api.voidElectricalTest(id, testId, reason.trim())
+      .then(() => { setSelectedId(null); load() })
+      .catch((e) => setError(e?.response?.data?.detail || e.message))
+  }
+
+  const handleUnvoid = (testId) => {
+    api.unvoidElectricalTest(id, testId)
+      .then(() => { setSelectedId(null); load() })
+      .catch((e) => setError(e?.response?.data?.detail || e.message))
+  }
 
   if (error) return <div className="panel"><p className="empty">Hata: {error}</p></div>
 
   if (adding) {
     return (
       <ElectricalTestForm transformerId={id} schema={schema}
-        onSaved={() => { setAdding(false); load() }}
+        onSaved={() => { setAdding(false); setSelectedId(null); load() }}
         onCancel={() => setAdding(false)} />
     )
   }
 
   if (!data) return <div className="panel"><p className="empty">Yükleniyor…</p></div>
 
+  // Eylem düğmesi çipten AYRILDI: çipler filtre/etiket için kullanılıyor,
+  // bu ise bir eylem. İkisi aynı görünürse kullanıcı eylemi bulamıyor —
+  // ilk denemede tam olarak bu oldu.
   const addButton = (
-    <button type="button" className="chip" onClick={() => setAdding(true)}>
-      + Test gir
+    <button type="button" className="btn-add" onClick={() => setAdding(true)}>
+      + Yeni elektriksel test
     </button>
   )
 
   if (!data.available) {
     return (
-      <div className="panel">
-        <div className="np-head">
-          <h2>Elektriksel Testler</h2>
-          {addButton}
-        </div>
-        <p className="empty">{data.message}</p>
+      <div>
+        <div className="panel">
+          <div className="np-head">
+            <h2>Elektriksel Testler</h2>
+            {addButton}
+          </div>
+          <p className="empty">{data.message}</p>
         <p className="note">
           Bu bir eksiklik işareti değil, olağan durum olabilir: elektriksel
           testler trafo <b>enerjisizken</b> yapılır, yani planlı kesinti
           gerektirir. Tipik olarak devreye alma ve büyük bakımlarda alınır.
           Yine de hiç temel çizgi ölçümü olmaması, ileride bir sapmayı
           neye göre değerlendireceğimizi belirsiz bırakır.
-        </p>
+          </p>
+        </div>
+
+        {/* Tümü geçersizse bile geçmiş GÖRÜNÜR: neyin neden
+            güvenilmez sayıldığı, kaydın kendisi kadar bilgidir. */}
+        <TestHistory summaries={data.summaries} selectedId={null}
+          onSelect={() => {}} onVoid={handleVoid} onUnvoid={handleUnvoid} />
       </div>
     )
   }
 
-  const a = data.latest_assessment
+  // Seçilen test yoksa GEÇERLİ sonuncusu gösterilir.
+  //
+  // ⚠ Burada bir hata yapılmıştı: varsayılan olarak listenin son kaydı
+  // alınıyordu, ama o kayıt geçersiz işaretlenmiş olabilir. Ekranın
+  // başlığı geçersiz kaydın bulgusunu "son test" diye gösteriyordu —
+  // yani geçersiz işaretlemenin tüm amacı boşa çıkıyordu.
+  const valid = data.tests.filter((t) => !t.voided_at)
+  const latestValid = valid[valid.length - 1] || data.tests[data.tests.length - 1]
+  const shown = (selectedId != null
+    && data.tests.find((t) => t.id === selectedId)) || latestValid
+  const isLatest = shown.id === latestValid.id
+
+  const a = data.assessments?.[shown.id] || data.latest_assessment
   const s = a.sections
   const ctx = a.context
-  const latest = data.tests[data.tests.length - 1]
+  const latest = shown
 
   return (
     <div>
@@ -581,11 +707,53 @@ export default function ElectricalPanel({ id }) {
           <span>{fmtDate(latest.tested_at)}
             {latest.tested_by && <span className="muted"> · {latest.tested_by}</span>}
           </span>
-          <span className="k">Geçmiş</span><span>{data.n_tests} test</span>
+          <span className="k">Geçmiş</span>
+          <span>{data.n_tests} test
+            {data.n_valid !== data.n_tests && (
+              <span className="muted"> · {data.n_tests - data.n_valid} geçersiz</span>
+            )}
+          </span>
           <span className="k">Anma sarım oranı</span>
           <span className="num">{ctx.rated_turns_ratio ?? '—'}</span>
           <span className="k">Sargı malzemesi</span>
           <span>{ctx.winding_material === 'Al' ? 'Alüminyum' : 'Bakır'}</span>
+        </div>
+
+        {/* Ölçülen DEĞERLER de en üstte: hüküm okumadan önce "ne
+            ölçüldü?" sorusu geliyor. Aşağıdaki bölümler bunları
+            yorumluyor, ama özet bir bakışta görünmeli. */}
+        <div className="el-readout">
+          {[
+            { label: 'TTR (A/B/C)',
+              value: [latest.ttr_a, latest.ttr_b, latest.ttr_c],
+              suffix: latest.tap_position != null
+                ? `kademe ${latest.tap_position > 0 ? '+' : ''}${latest.tap_position}` : null },
+            { label: 'Sargı direnci (Ω)',
+              value: [latest.rw_a_ohm, latest.rw_b_ohm, latest.rw_c_ohm],
+              suffix: latest.winding_temp_c != null ? `${latest.winding_temp_c} °C` : null },
+            { label: 'Yalıtım (1dk/10dk MΩ)',
+              value: [latest.ir_1min_mohm, latest.ir_10min_mohm],
+              suffix: latest.insulation_temp_c != null ? `${latest.insulation_temp_c} °C` : null },
+            { label: 'tan δ (%)',
+              value: [latest.tan_delta_pct],
+              suffix: latest.tan_delta_temp_c != null ? `${latest.tan_delta_temp_c} °C` : null },
+          ].map((row) => {
+            const measured = row.value.filter((v) => v != null)
+            return (
+              <div key={row.label}
+                className={`el-readout-cell${measured.length ? '' : ' empty-cell'}`}>
+                <div className="k">{row.label}</div>
+                <div className="el-readout-value">
+                  {measured.length
+                    ? row.value.map((v) => v == null ? '—' : v).join(' / ')
+                    : <span className="muted">ölçülmedi</span>}
+                </div>
+                {row.suffix && measured.length > 0 && (
+                  <div className="muted el-readout-suffix">{row.suffix}</div>
+                )}
+              </div>
+            )
+          })}
         </div>
 
         {a.problems.length > 0 && (
@@ -601,6 +769,18 @@ export default function ElectricalPanel({ id }) {
           diğerlerinin iyiliği bunu telafi etmez.
         </p>
       </div>
+
+      <TestHistory summaries={data.summaries} selectedId={shown.id}
+        onSelect={setSelectedId} onVoid={handleVoid} onUnvoid={handleUnvoid} />
+
+      {!isLatest && (
+        <div className="panel el-note stop" style={{ marginBottom: 0 }}>
+          <b>Geçmiş bir test görüntüleniyor</b> ({fmtDate(shown.tested_at)}).
+          Trafonun güncel durumu bu değil.{' '}
+          <button type="button" className="link-like"
+            onClick={() => setSelectedId(null)}>Son teste dön</button>
+        </div>
+      )}
 
       <TurnsRatio section={s.turns_ratio} />
       <WindingResistance section={s.winding_resistance}

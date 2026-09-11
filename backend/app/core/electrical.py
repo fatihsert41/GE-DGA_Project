@@ -45,6 +45,20 @@ PHASES = ("A", "B", "C")
 TTR_GOOD_PCT = 0.5        # bu sapmanın altı kabul edilir
 TTR_ACCEPT_PCT = 1.0      # arası şüpheli, üstü arıza
 
+# Bu sapmanın ötesi ARIZA DEĞİL, ÖLÇÜM/GİRİŞ HATASIDIR.
+#
+# Fizik: binlerce sarımlık bir sargıda birkaç spirin kısa devre olması
+# %0.1-1 mertebesinde sapma yapar. %10'luk bir sapma, sargının onda
+# birinin yok olması demektir — böyle bir trafo zaten enerjilenemez,
+# ölçüm cihazına kadar da gelemezdi.
+#
+# Ayrımı yapmamak tehlikelidir: sistem bir yazım hatasını "devreden
+# çıkar" diye raporlarsa, iki şey birden olur — boşuna kesinti planlanır
+# ve zamanla uyarılara güven kaybolur. Bu kural, kullanıcı C fazını
+# 3.1631 yerine 1.1631 yazdığında sistemin "kısa devre spir" demesiyle
+# ortaya çıktı.
+TTR_IMPLAUSIBLE_PCT = 10.0
+
 # --- 2) Sargı direnci -----------------------------------------------------
 # Fazlar arası dengesizlik: IEEE C57.152 %2'yi eşik alır. Mutlak değer
 # değil DENGESİZLİK bakılır, çünkü mutlak direnç sıcaklığa ve tasarıma
@@ -164,12 +178,23 @@ def assess_turns_ratio(measured: Dict[str, Optional[float]],
 
     overall = _worst([str(p["condition"]) for p in phases])
 
+    # Fiziksel olarak imkânsız büyüklükteki sapmalar ayrı ele alınır.
+    implausible = [p for p in known
+                   if abs(float(p["deviation_pct"])) > TTR_IMPLAUSIBLE_PCT]
+
     problems: List[str] = []
     for p in known:
         if p["condition"] != "iyi":
-            problems.append(
-                f"{p['phase']} fazı beklenenden %{abs(float(p['deviation_pct'])):.2f} "
-                f"{p['direction']} (tolerans ±%{TTR_GOOD_PCT})")
+            mag = abs(float(p["deviation_pct"]))
+            if mag > TTR_IMPLAUSIBLE_PCT:
+                problems.append(
+                    f"{p['phase']} fazı beklenenden %{mag:.2f} {p['direction']} "
+                    f"— bu büyüklük bir sargı arızasıyla açıklanamaz, "
+                    f"ölçüm veya giriş hatası olmalı")
+            else:
+                problems.append(
+                    f"{p['phase']} fazı beklenenden %{mag:.2f} "
+                    f"{p['direction']} (tolerans ±%{TTR_GOOD_PCT})")
 
     # Fazlar arası yayılım: üçü de aynı yönde kaymışsa bu genellikle
     # kademe pozisyonunun yanlış girilmesidir (ölçüm hatası), bir faz
@@ -180,6 +205,20 @@ def assess_turns_ratio(measured: Dict[str, Optional[float]],
     if len(known) == len(PHASES):
         devs = [float(p["deviation_pct"]) for p in known]
         spread = round(max(devs) - min(devs), 3)
+
+    # Sıra önemli: veri geçerli DEĞİLSE onu yorumlamaya çalışmak
+    # yanlıştır. Önce "bu sayı gerçek olabilir mi?" sorulur.
+    if implausible:
+        phases_tr = ", ".join(str(p["phase"]) for p in implausible)
+        note = (f"DURUN — bu ölçüm fiziksel olarak mümkün değil. "
+                f"{phases_tr} fazında %{TTR_IMPLAUSIBLE_PCT:g}'den büyük "
+                f"sapma var; birkaç spirin kısa devre olması %1'in altında "
+                f"sapma yapar. Bu büyüklükteki bir kayıpla trafo zaten "
+                f"enerjilenemezdi. Önce şunları kontrol edin: değer doğru "
+                f"girildi mi (basamak atlanmış olabilir), kademe pozisyonu "
+                f"doğru mu, cihaz bağlantıları ve künyedeki bağlantı grubu "
+                f"doğru mu? Sargı arızası teşhisi bundan SONRA gelir.")
+    elif len(known) == len(PHASES):
         if overall != "iyi" and spread <= TTR_GOOD_PCT:
             note = ("Üç faz da aynı yönde ve birbirine yakın sapıyor. Bu "
                     "genellikle sargı arızası değil, KADEME POZİSYONUNUN "
@@ -199,6 +238,9 @@ def assess_turns_ratio(measured: Dict[str, Optional[float]],
         "problems": problems,
         "spread_pct": spread,
         "note": note,
+        # Arayüz bunu ayrı göstermeli: "arıza var" ile "veri şüpheli"
+        # farklı eylemler gerektirir.
+        "data_suspect": bool(implausible),
         "tolerance_pct": TTR_GOOD_PCT,
         "standard": "IEEE C57.12.00 / IEC 60076-1",
     }

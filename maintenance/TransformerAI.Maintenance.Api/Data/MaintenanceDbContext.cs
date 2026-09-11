@@ -86,6 +86,16 @@ public class MaintenanceDbContext : DbContext
         tech.Property(t => t.Region).HasMaxLength(50).IsRequired();
         tech.Property(t => t.Specialty).HasConversion<string>().HasMaxLength(20);
 
+        // Sicil numarası ve rol (Faz 9.0).
+        tech.Property(t => t.EmployeeNo).HasMaxLength(20).IsRequired();
+        tech.Property(t => t.Role).HasConversion<string>().HasMaxLength(20);
+
+        // BENZERSİZ indeks: aynı sicil iki kişide olamaz. Veritabanı
+        // seviyesinde zorlamak şart — uygulama katmanındaki kontrol,
+        // iki istek aynı anda gelirse yetersiz kalır. (İş emri sıra
+        // numarasında da aynı gerekçeyle unique index kullanılmıştı.)
+        tech.HasIndex(t => t.EmployeeNo).IsUnique();
+
         // --- İlişki: bir teknisyenin ÇOK iş emri olur (one-to-many) ------
         tech.HasMany(t => t.WorkOrders)      // teknisyenin iş emirleri
             .WithOne(o => o.Technician)      // her iş emrinin bir teknisyeni
@@ -103,23 +113,29 @@ public class MaintenanceDbContext : DbContext
         // kurulursa kurulsun bu kayıtlar hazır gelir.
         // (Python tarafında bunu ml/seed.py ile elle yapıyorduk.)
         tech.HasData(
-            new Technician { Id = "TK-01", Name = "Ahmet Yılmaz",
+            new Technician { Id = "TK-01", EmployeeNo = "10247", Name = "Ahmet Yılmaz",
                 Region = "Marmara", Specialty = Specialty.Electrical,
+                Role = PersonnelRole.Technician,
                 MaxOpenOrders = 3, IsActive = true },
-            new Technician { Id = "TK-02", Name = "Elif Demir",
+            new Technician { Id = "TK-02", EmployeeNo = "10318", Name = "Elif Demir",
                 Region = "Marmara", Specialty = Specialty.Thermal,
+                Role = PersonnelRole.Engineer,
                 MaxOpenOrders = 3, IsActive = true },
-            new Technician { Id = "TK-03", Name = "Mehmet Kaya",
+            new Technician { Id = "TK-03", EmployeeNo = "10455", Name = "Mehmet Kaya",
                 Region = "Marmara", Specialty = Specialty.Sampling,
+                Role = PersonnelRole.Technician,
                 MaxOpenOrders = 5, IsActive = true },
-            new Technician { Id = "TK-04", Name = "Zeynep Şahin",
+            new Technician { Id = "TK-04", EmployeeNo = "10502", Name = "Zeynep Şahin",
                 Region = "Ege", Specialty = Specialty.General,
+                Role = PersonnelRole.Supervisor,
                 MaxOpenOrders = 4, IsActive = true },
-            new Technician { Id = "TK-05", Name = "Burak Aydın",
+            new Technician { Id = "TK-05", EmployeeNo = "10611", Name = "Burak Aydın",
                 Region = "İç Anadolu", Specialty = Specialty.General,
+                Role = PersonnelRole.Technician,
                 MaxOpenOrders = 4, IsActive = true },
-            new Technician { Id = "TK-06", Name = "Selin Öztürk",
+            new Technician { Id = "TK-06", EmployeeNo = "10740", Name = "Selin Öztürk",
                 Region = "Akdeniz", Specialty = Specialty.Sampling,
+                Role = PersonnelRole.Engineer,
                 MaxOpenOrders = 4, IsActive = true });
     }
 }

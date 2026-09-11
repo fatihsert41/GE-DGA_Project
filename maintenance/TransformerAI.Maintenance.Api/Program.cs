@@ -181,6 +181,45 @@ app.MapGet("/workorders", async (WorkOrderRepository repo,
 // Teknisyenler
 // ---------------------------------------------------------------------------
 
+// --- Kimlik (Faz 9.0) ------------------------------------------------------
+//
+// ⚠ BU BİR KİMLİK DOĞRULAMA DEĞİLDİR. Parola yoktur; sicil numarasını
+// bilen herkes o kişi olarak sisteme girebilir. Amaç GÜVENLİK değil
+// İZLENEBİLİRLİK: bir kaydın sorumlusunu belirlemek.
+//
+// Neden yine de değerli? Çünkü veri modelinin doğru kurulmasını sağlıyor.
+// Kayıtlar bugünden itibaren "kim girdi" bilgisi taşıyor. Gerçek oturum
+// açma sonradan bunun ÜSTÜNE takılabilir. Tersi mümkün değil: kimliksiz
+// kurulan bir modelde geçmiş kayıtlar sonsuza kadar sahipsiz kalır.
+app.MapGet("/personnel/by-employee-no/{employeeNo}",
+    async (MaintenanceDbContext db, string employeeNo, CancellationToken ct) =>
+{
+    var person = await db.Technicians
+        .AsNoTracking()
+        .FirstOrDefaultAsync(t => t.EmployeeNo == employeeNo, ct);
+
+    if (person is null)
+        return Results.NotFound(new { message = $"Sicil bulunamadı: {employeeNo}" });
+
+    if (!person.IsActive)
+        return Results.BadRequest(new
+        {
+            message = $"{person.Name} ({employeeNo}) pasif durumda; " +
+                      "sisteme giriş yapamaz."
+        });
+
+    return Results.Ok(new
+    {
+        person.Id,
+        person.EmployeeNo,
+        person.Name,
+        person.Region,
+        role = person.Role.ToString(),
+        specialty = person.Specialty.ToString(),
+    });
+})
+.WithSummary("Sicil numarasıyla personel bulur (giriş ekranı için).");
+
 app.MapGet("/technicians", async (TechnicianRepository repo, CancellationToken ct) =>
 {
     var workloads = await repo.WorkloadsAsync(ct);
@@ -193,8 +232,10 @@ app.MapGet("/technicians", async (TechnicianRepository repo, CancellationToken c
         items = workloads.Select(w => new
         {
             w.Technician.Id,
+            w.Technician.EmployeeNo,
             w.Technician.Name,
             w.Technician.Region,
+            role = w.Technician.Role.ToString(),
             specialty = w.Technician.Specialty.ToString(),
             w.Technician.MaxOpenOrders,
             w.Technician.IsActive,
