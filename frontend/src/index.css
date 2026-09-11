@@ -1,38 +1,66 @@
 /* ============================================================
-   TransformerAI — görsel dil: "endüstriyel kontrol odası"
-   Kağıt zemin, mürekkep metin, saç teli cetvel çizgileri,
-   Tipografi: Plus Jakarta Sans (geometrik grotesk) — başlıklar kalın ve
-   büyük. Monospace SADECE rakamlarda kullanılır ki ölçüm değerleri alt alta
-   hizalansın; etiketler sans kalır, aksi halde arayüz terminal gibi okunur.
+   TransformerAI — görsel dil: "kurumsal izleme platformu"
+   (Faz 9.7'de yenilendi.)
+
+   ÖNCEKİ DİL "endüstriyel kontrol odası" idi: sıcak kağıt zemin,
+   yuvarlak paneller, geniş boşluk. Kullanıcı geri bildirimi: ekran
+   "AI yapımı" duruyor, kurumsal platformlara benzemiyor.
+
+   NE DEĞİŞTİ VE NEDEN:
+   * Yüzeyler SOĞUK NÖTR griye çevrildi. Sıcak krem, tasarlanmış bir
+     tercih olduğunu belli eder; kurumsal yazılım nötr kalır ve rengi
+     yalnızca ANLAM için harcar.
+   * Köşe yarıçapı 12px -> 4px. Yuvarlak köşe tüketici yazılımının
+     dili; veri yoğun arayüzler kare durur.
+   * Üst sekme şeridi -> SOL KENAR ÇUBUĞU. Kurumsal yazılımın en
+     belirgin yapısal işareti budur: gezinme solda kalıcı, içerik
+     sağda değişir.
+   * Paneller başlık şeritli, sınırları ince; boşluk azaltıldı.
+     Veri yoğunluğu arttı.
+
+   NE DEĞİŞMEDİ — bilinçli:
+   * Risk rampası ve seri paleti AYNI. Renk körlüğü doğrulamasından
+     geçmişlerdi; görsel moda için doğrulanmış bir paleti bozmak
+     yanlış olur. Nötr krom soğuk, anlam renkleri sıcak — bu ayrım
+     kurumsal arayüzlerde zaten yaygın.
+   * Monospace SADECE rakamlarda; etiketler sans kalır.
+
    Renkler src/theme.js ile AYNI tutulmalı.
    ============================================================ */
 
 :root {
-  /* Yüzeyler */
-  --paper: #f5f2ea;         /* sayfa zemini (sıcak kağıt) */
-  --surface: #fffdf8;       /* panel yüzeyi */
-  --surface-2: #efebe1;     /* gömme alanlar, tablo başlıkları */
-  --rule: #d8d2c6;          /* saç teli çizgi */
-  --rule-strong: #b9b1a1;
+  /* Yüzeyler — soğuk nötr */
+  --paper: #eceef1;         /* uygulama zemini */
+  --surface: #ffffff;       /* panel yüzeyi */
+  --surface-2: #f3f5f7;     /* gömme alanlar, tablo başlıkları */
+  --surface-3: #e3e7eb;     /* kenar çubuğu, başlık şeritleri */
+  --rule: #d3d8de;
+  --rule-strong: #a8b2bc;
 
   /* Mürekkep */
-  --ink: #1c1a17;
-  --ink-soft: #4a453d;
-  --muted: #7a736a;
+  --ink: #16191d;
+  --ink-soft: #3d454e;
+  --muted: #6b757f;
 
-  /* Risk rampası — sıralı veri, tek hüzme (doğrulayıcıdan geçti) */
+  /* Kenar çubuğu — koyu, içerikten net ayrılsın */
+  --nav: #1d232b;
+  --nav-soft: #2a323c;
+  --nav-text: #c6ced7;
+
+  /* Risk rampası — DEĞİŞMEDİ (renk körlüğü doğrulamasından geçti) */
   --low: #cda760;
   --medium: #c08a35;
   --high: #a05c1c;
   --critical: #78380f;
 
-  /* Kategorik seriler */
+  /* Kategorik seriler — DEĞİŞMEDİ */
   --s1: #1b6ca8;
   --s2: #4f7a1f;
   --s3: #8b4a9c;
   --s4: #0d8a7a;
 
-  --accent: #1b4965;        /* etkileşim (seçili sekme, odak) */
+  --accent: #1b6ca8;        /* etkileşim (bağlantı, odak) */
+  --radius: 4px;            /* kurumsal: kare durur */
   --mono: "JetBrains Mono", ui-monospace, "Cascadia Mono", monospace;
   --sans: "Plus Jakarta Sans", "Segoe UI", system-ui, sans-serif;
 }
@@ -44,11 +72,18 @@ body {
   font-family: var(--sans);
   background: var(--paper);
   color: var(--ink);
-  line-height: 1.55;
+  line-height: 1.5;
+  font-size: 14px;
   -webkit-font-smoothing: antialiased;
 }
 
-.app { max-width: 1180px; margin: 0 auto; padding: 28px 24px 60px; }
+/* Uygulama kabuğu: solda kalıcı gezinme, sağda içerik.
+   Kurumsal yazılımın en belirgin yapısal işareti. */
+.app { display: flex; min-height: 100vh; }
+.app-main {
+  flex: 1; min-width: 0; padding: 0 22px 48px;
+  max-width: 1320px;
+}
 
 /* ---------- Başlık künyesi ---------- */
 header.top {
@@ -81,15 +116,27 @@ header.top .sub {
 .panel {
   background: var(--surface);
   border: 1px solid var(--rule);
-  border-radius: 12px;
-  padding: 22px 24px;
+  border-radius: var(--radius);
+  padding: 16px 18px 18px;
+  margin-bottom: 14px;
 }
+
+/* Panel başlığı artık bir ŞERİT: içerikten çizgiyle değil, zeminle
+   ayrılıyor. Veri yoğun arayüzlerde bölüm sınırları net olmalı. */
 .panel h2 {
-  font-size: 1.05rem; margin: 0 0 18px; font-weight: 700;
-  letter-spacing: -0.02em; color: var(--ink);
-  padding-bottom: 10px; border-bottom: 1px solid var(--rule);
+  margin: -16px -18px 14px; padding: 9px 18px;
+  font-size: 0.86rem; font-weight: 700; letter-spacing: 0.02em;
+  text-transform: uppercase;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--rule);
+  border-radius: var(--radius) var(--radius) 0 0;
+  color: var(--ink-soft);
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
 }
+
 .panel h3 {
+  font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.02em;
+  color: var(--ink-soft);
   font-size: 0.8rem; color: var(--muted); font-weight: 600;
   margin: 26px 0 10px; letter-spacing: 0;
 }
@@ -1170,3 +1217,148 @@ td.num, span.num, b.num {
 }
 
 .sch-legend { margin-top: 12px; }
+
+/* ============================================================
+   Faz 9.7 — Kurumsal kabuk: kenar çubuğu + uygulama çubuğu
+   ============================================================ */
+
+.sidebar {
+  width: 216px; flex: none; background: var(--nav); color: var(--nav-text);
+  display: flex; flex-direction: column; position: sticky; top: 0;
+  height: 100vh;
+}
+
+.sidebar-brand {
+  display: flex; align-items: center; gap: 10px;
+  padding: 16px 16px 14px; border-bottom: 1px solid var(--nav-soft);
+}
+.sidebar-mark {
+  width: 28px; height: 28px; border-radius: 3px; flex: none;
+  background: #fff;
+  /* Trafo çekirdeği: iki yatay sargı çizgisi. */
+  background-image: linear-gradient(var(--nav) 0 0),
+                    linear-gradient(var(--nav) 0 0);
+  background-size: 16px 2px, 16px 2px;
+  background-position: 6px 10px, 6px 16px;
+  background-repeat: no-repeat;
+}
+.sidebar-name {
+  font-size: 0.92rem; font-weight: 700; color: #fff; line-height: 1.1;
+}
+.sidebar-sub {
+  font-size: 0.66rem; color: #8794a1; letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.sidebar-nav { padding: 10px 0; flex: 1; overflow-y: auto; }
+.sidebar-section {
+  padding: 12px 16px 5px; font-size: 0.62rem; letter-spacing: 0.09em;
+  text-transform: uppercase; color: #7b8794;
+}
+.sidebar-nav button {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 8px; width: 100%; text-align: left;
+  padding: 8px 16px; border: none; background: none; cursor: pointer;
+  color: var(--nav-text); font: inherit; font-size: 0.86rem;
+  border-left: 3px solid transparent;
+}
+.sidebar-nav button:hover { background: var(--nav-soft); color: #fff; }
+/* Seçili öğe: renk TEK BAŞINA ayırt etmiyor — sol kenarda kalın şerit
+   ve kalın yazı da var. */
+.sidebar-nav button.active {
+  background: var(--nav-soft); color: #fff; font-weight: 600;
+  border-left-color: var(--accent);
+}
+.sidebar-count {
+  font-family: var(--mono); font-size: 0.7rem; font-weight: 600;
+  padding: 1px 6px; border-radius: 9px; background: var(--high);
+  color: #fff; font-variant-numeric: tabular-nums;
+}
+
+.sidebar-foot {
+  padding: 12px 16px; border-top: 1px solid var(--nav-soft);
+  font-size: 0.74rem;
+}
+.sidebar-user { color: #fff; font-weight: 600; }
+.sidebar-role {
+  font-family: var(--mono); font-size: 0.68rem; color: #8794a1;
+  font-variant-numeric: tabular-nums;
+}
+.sidebar-logout {
+  margin-top: 8px; width: 100%; padding: 5px 10px;
+  background: none; border: 1px solid #3c4753; border-radius: var(--radius);
+  color: var(--nav-text); font: inherit; font-size: 0.76rem; cursor: pointer;
+}
+.sidebar-logout:hover { border-color: #6b7785; color: #fff; }
+
+/* --- Uygulama çubuğu: bağlam + durum ------------------------------- */
+.appbar {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 14px; flex-wrap: wrap;
+  padding: 12px 0 11px; margin-bottom: 14px;
+  border-bottom: 1px solid var(--rule);
+}
+.appbar-title { font-size: 1.05rem; font-weight: 700; margin: 0; }
+.appbar-sub { font-size: 0.76rem; color: var(--muted); }
+.appbar-right { display: flex; align-items: center; gap: 10px; }
+
+/* --- Yoğun tablolar ------------------------------------------------ */
+table.compare th {
+  position: sticky; top: 0; z-index: 1;
+  background: var(--surface-2);
+  font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.04em;
+  padding: 7px 10px;
+}
+table.compare td { padding: 6px 10px; }
+/* Zebra: veri yoğun tabloda satır takibi gözle yapılır. */
+table.compare tbody tr:nth-child(even) { background: var(--surface-2); }
+table.compare tbody tr:hover { background: #e8edf2; }
+
+/* Rozetler kare: yuvarlak hap tüketici dili. */
+.badge { border-radius: 3px; padding: 2px 8px; font-size: 0.7rem; }
+.badge.sm { border-radius: 3px; padding: 1px 7px; font-size: 0.66rem; }
+.chip { border-radius: var(--radius); }
+.btn-add { border-radius: var(--radius); }
+.bell { border-radius: var(--radius); }
+.kpi { border-radius: var(--radius); }
+
+/* Dar ekran: kenar çubuğu üste taşınır. */
+@media (max-width: 860px) {
+  .app { flex-direction: column; }
+  .sidebar { width: 100%; height: auto; position: static; }
+  .sidebar-nav { display: flex; flex-wrap: wrap; padding: 6px; }
+  .sidebar-nav button { width: auto; border-left: none; border-bottom: 3px solid transparent; }
+  .sidebar-nav button.active { border-left: none; border-bottom-color: var(--accent); }
+  .sidebar-section { display: none; }
+  .app-main { padding: 0 14px 32px; }
+}
+
+/* Başlık şeridi, h2'nin esnek bir satır İÇİNDE kullanıldığı yerlerde
+   çalışmaz (yanında düğme ya da rozet var). O bağlamlarda h2 sıradan
+   bir başlığa döner ve şeridi kapsayıcı üstlenir. */
+.np-head, .el-head { margin: -16px -18px 14px; padding: 9px 18px;
+  background: var(--surface-2); border-bottom: 1px solid var(--rule);
+  border-radius: var(--radius) var(--radius) 0 0; }
+.np-head h2, .el-head h2 {
+  margin: 0; padding: 0; background: none; border: none;
+  border-radius: 0; text-transform: uppercase;
+}
+.el-head { align-items: flex-start; }
+.el-head .el-meaning { margin-top: 4px; }
+
+/* Giriş ekranı kabuk dışında; kenar çubuğu yok. */
+.login-wrap { background: var(--paper); }
+.login-title { text-transform: none; }
+.login-card h2 { text-transform: uppercase; }
+
+/* KPI kutuları: kurumsal yoğunluk */
+.kpi { padding: 10px 12px; }
+.kpi-label {
+  font-size: 0.66rem; text-transform: uppercase; letter-spacing: 0.05em;
+}
+.kpi-value { font-size: 1.5rem; }
+.kpi-hint { font-size: 0.68rem; }
+
+/* Sekme şeridi (trafo detayı) — kurumsal: alt çizgi ince, yazı küçük */
+.tabs button { font-size: 0.82rem; padding: 8px 13px; }
+.detail-tabs { margin-bottom: 4px; }

@@ -78,8 +78,21 @@ cd C:\Users\Esma\Desktop\Python\GE-DGA_Project
 
 Arayüz: http://localhost:5173 · API: http://localhost:8000/docs
 
-**Durum:** Faz 0-7 bitti, Faz 8 devam ediyor (8.1-8.6 tamam).
-**195 test** (145 Python + 50 .NET).
+**Durum:** Faz 0-9 BİTTİ. **291 test** (216 Python + 75 .NET).
+Üç servis: Python :8000 · .NET :5080 · React :5173.
+
+**Giriş gerekli** (Faz 9.0): sicil + PIN. Demo hesapları —
+`10247`/`0247` Ahmet Yılmaz (Teknisyen) · `10318`/`0318` Elif Demir
+(Mühendis) · `10502`/`0502` Zeynep Şahin (**Süpervizör**, yönetim
+ekranını görür). PIN = sicilin son 4 hanesi.
+
+**Sağlık endeksi ALTI boyutlu:** DGA ×4 · kağıt ×3 · elektriksel ×3 ·
+buşing/kademe ×2 · yağ ×2 · fiziksel gözlem ×1 (payda 15).
+
+⚠ Uvicorn `--reload` Windows'ta değişiklikleri KAÇIRIYOR; kod
+değişince servisi yeniden başlat. Ayrıca arka planda birden çok
+uvicorn kalabiliyor (port 8000'i üç süreç dinledi) — şüphede
+`netstat -ano | grep :8000` ile kontrol et.
 
 **BEKLEYEN İSTEK (kullanıcı 11 Eyl'de söyledi):** Arayüz hâlâ "AI yapımı"
 duruyor; **.NET/kurumsal platform görünümüne** çekilmesi isteniyor.

@@ -148,36 +148,72 @@ export default function App() {
 
   return (
     <div className="app">
-      <header className="top">
-        <div>
-          <h1>TransformerAI</h1>
-          <div className="sub">
-            DGA arıza izleme · açıklanabilir ML · klasik yöntem karşılaştırma
+      {/* Faz 9.7 — Kurumsal kabuk: gezinme SOLDA kalıcı, içerik sağda
+          değişir. Kurumsal yazılımın en belirgin yapısal işareti bu;
+          üst sekme şeridi tüketici uygulamalarının dili. */}
+      <nav className="sidebar" aria-label="Ana gezinme">
+        <div className="sidebar-brand">
+          <span className="sidebar-mark" aria-hidden="true" />
+          <div>
+            <div className="sidebar-name">TransformerAI</div>
+            <div className="sidebar-sub">Varlık İzleme</div>
           </div>
         </div>
-        <div className="top-right">
-          <span className={`status-pill ${trained ? 'ok' : 'warn'}`}>
-            {health == null ? 'API bağlantısı yok'
-              : trained ? `Model hazır: ${health.model_name || 'ML'}`
-                : 'Model eğitilmemiş (klasik mod)'}
-          </span>
-          <div className="who">
-            <div className="who-name">{user.name}</div>
-            <div className="who-meta">
-              <span className="num">{user.employeeNo}</span>
-              {' · '}{ROLE_TR[user.role] || user.role}
+
+        <div className="sidebar-nav">
+          <div className="sidebar-section">İzleme</div>
+          {VIEWS.filter((v) => !v.roles || v.roles.includes(user.role))
+            .map((v) => (
+              <button key={v.id} type="button"
+                className={view === v.id ? 'active' : ''}
+                aria-current={view === v.id ? 'page' : undefined}
+                onClick={() => {
+                  setView(v.id); setSelected(null); setCreating(false)
+                }}>
+                {v.label}
+              </button>
+            ))}
+
+          <div className="sidebar-section">Bana gelen</div>
+          <button type="button"
+            className={view === 'notifications' ? 'active' : ''}
+            aria-current={view === 'notifications' ? 'page' : undefined}
+            onClick={() => { setView('notifications'); setSelected(null) }}>
+            Bildirimler
+            {unread > 0 && <span className="sidebar-count">{unread}</span>}
+          </button>
+        </div>
+
+        <div className="sidebar-foot">
+          <div className="sidebar-user">{user.name}</div>
+          <div className="sidebar-role">
+            {user.employeeNo} · {ROLE_TR[user.role] || user.role}
+          </div>
+          <button type="button" className="sidebar-logout" onClick={logout}>
+            Çıkış
+          </button>
+        </div>
+      </nav>
+
+      <div className="app-main">
+        <header className="appbar">
+          <div>
+            <h1 className="appbar-title">
+              {VIEWS.find((v) => v.id === view)?.label
+                || (view === 'notifications' ? 'Bildirimler' : 'TransformerAI')}
+            </h1>
+            <div className="appbar-sub">
+              DGA arıza izleme · açıklanabilir ML · bakım planlama
             </div>
           </div>
-          <button type="button"
-            className={`bell${unread ? ' has-unread' : ''}`}
-            onClick={() => { setView('notifications'); setSelected(null) }}
-            aria-label={`Bildirimler${unread ? `, ${unread} okunmamış` : ''}`}>
-            Bildirimler
-            {unread > 0 && <span className="bell-count">{unread}</span>}
-          </button>
-          <button type="button" className="chip" onClick={logout}>Çıkış</button>
-        </div>
-      </header>
+          <div className="appbar-right">
+            <span className={`status-pill ${trained ? 'ok' : 'warn'}`}>
+              {health == null ? 'API bağlantısı yok'
+                : trained ? `Model hazır: ${health.model_name || 'ML'}`
+                  : 'Model eğitilmemiş (klasik mod)'}
+            </span>
+          </div>
+        </header>
 
       {error && (
         <div className="panel"
@@ -185,16 +221,6 @@ export default function App() {
           <b>Hata:</b> {String(error)}
         </div>
       )}
-
-      <div className="tabs view-switch">
-        {VIEWS.filter((v) => !v.roles || v.roles.includes(user.role)).map((v) => (
-          <button key={v.id}
-            className={view === v.id ? 'active' : ''}
-            onClick={() => {
-              setView(v.id); setSelected(null); setCreating(false)
-            }}>{v.label}</button>
-        ))}
-      </div>
 
       {view === 'fleet' && (
         creating
@@ -275,6 +301,7 @@ export default function App() {
         Veriler tamamen sentetiktir (IEC 60599 / Duval / IEEE C57.104 temelli).
         Gerçek saha verisi kullanılmaz. — GE Vernova Staj Projesi
       </p>
+      </div>
     </div>
   )
 }

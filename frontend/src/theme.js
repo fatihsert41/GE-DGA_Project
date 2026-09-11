@@ -8,12 +8,15 @@
  *  - SEVERITY: tek hüzmeli sıralı rampa (kehribar→pas), monoton açıklık.
  *  - SERIES:   kategorik palet; renk körlüğünde komşu ayrımı ΔE >= 9.
  */
-export const ink = '#1c1a17'
-export const inkSoft = '#4a453d'
-export const muted = '#7a736a'
-export const rule = '#d8d2c6'
-export const surface = '#fffdf8'
-export const paper = '#f5f2ea'
+// Faz 9.7: nötr yüzeyler soğuk griye çevrildi (kurumsal görünüm).
+// Risk rampası ve seri paleti DEĞİŞMEDİ — renk körlüğü doğrulamasından
+// geçmişlerdi; görsel moda için doğrulanmış bir paleti bozmak yanlış olur.
+export const ink = '#16191d'
+export const inkSoft = '#3d454e'
+export const muted = '#6b757f'
+export const rule = '#d3d8de'
+export const surface = '#ffffff'
+export const paper = '#eceef1'
 
 /** Risk seviyesi -> renk. Sıralı veri olduğu için tek hüzmeli rampa. */
 export const SEVERITY = {
@@ -41,7 +44,7 @@ export const tooltip = {
     color: ink,
     fontSize: 12,
     fontFamily: "'JetBrains Mono', monospace",
-    boxShadow: '0 2px 10px rgba(28,26,23,0.10)',
+    boxShadow: '0 2px 10px rgba(22,25,29,0.12)',
   },
   labelStyle: { color: muted },
 }

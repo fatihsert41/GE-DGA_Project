@@ -167,10 +167,10 @@ stratejisi), **Reliability Analysis** ve **Configuration Templates**
 | Kestirimci bakım | ✅ trend + kalan süre | Örtüşüyor |
 | Sağlık endeksi | ✅ 4 boyut | Örtüşüyor ama **dar** (aşağı bak) |
 | Varlık kritikliği | ✅ LPT/MPT/SPT ağırlığı | Örtüşüyor |
-| **Rol bazlı ekranlar** | ❌ tek ekran herkese | **BOŞLUK** |
+| **Rol bazlı ekranlar** | ✅ Faz 9.3 | Yönetim ekranı süpervizör/mühendise |
 | **Dijital ikiz** | ❌ | Kapsam dışı (fiziksel model gerekir) |
 | **Varlık stratejisi yönetimi** | ❌ | Boşluk, orta vadeli |
-| **Bildirim / iş akışı** | ❌ | **BOŞLUK** |
+| **Bildirim / iş akışı** | ✅ Faz 9.1-9.2 | Bulgu → iş emri → bildirim |
 
 APM'nin hitap ettiği roller açıkça sayılıyor: **operatör, güvenilirlik/
 performans mühendisi, süpervizör** ve varlık programlarından sorumlu
@@ -450,8 +450,10 @@ dil gerektirecek.
 9.35 Varlık yaşam döngüsü      (Py+React) ✅ TAMAM
 9.5  Fiziksel gözlem           (Python)   ✅ TAMAM
 9.4  Buşing + OLTC             (Python)   ✅ TAMAM
-9.6  Trafo şeması              (React)    ⭐ ŞİMDİ
-9.7  Kurumsal görünüm cilası   (React)
+9.6  Trafo şeması              (React)    ✅ TAMAM
+9.7  Kurumsal görünüm cilası   (React)    ✅ TAMAM
+
+🏁 FAZ 9 BİTTİ.
 ```
 
 **9.0 neden ertelenemez:** kimlik, veri modelinin parçasıdır. Bugün
