@@ -14,6 +14,7 @@ import TestsOverview from './components/TestsOverview'
 import LoginScreen from './components/LoginScreen'
 import PersonnelPanel from './components/PersonnelPanel'
 import NotificationsPanel from './components/NotificationsPanel'
+import ManagerDashboard from './components/ManagerDashboard'
 
 const TABS = [
   { id: 'diagnosis', label: 'Tanı' },
@@ -22,8 +23,21 @@ const TABS = [
   { id: 'trend', label: 'Trend Tahmini' },
 ]
 
+// `roles` alanı olan görünümler YALNIZCA o rollere gösterilir.
+//
+// Faz 9.0'da eklenen Role alanı burada ilk kez gerçek bir iş yapıyor:
+// yönetim ekranı süpervizör ve mühendise açık, teknisyene kapalı.
+// Sebep yetki kısıtlamak değil — teknisyenin işine yaramayan bir ekran
+// onun için gürültüdür. GE Vernova'nın APM ürünü de ekranlarını bu
+// üç rol üzerinden ayırıyor.
+//
+// ⚠ Bu bir GÜVENLİK sınırı DEĞİLDİR: uç noktalar hâlâ herkese açık.
+// Gerçek yetkilendirme sunucu tarafında yapılmalı; arayüzde gizlemek
+// yalnızca ekranı sadeleştirir.
 const VIEWS = [
   { id: 'fleet', label: 'Filo' },
+  { id: 'manager', label: 'Yönetim',
+    roles: ['Supervisor', 'Engineer'] },
   { id: 'analysis', label: 'Numune Analizi' },
   // Filo geneli test durumu: "hangi trafo bozuk" değil, "nerede eksiğim".
   { id: 'tests', label: 'Testler' },
@@ -173,7 +187,7 @@ export default function App() {
       )}
 
       <div className="tabs view-switch">
-        {VIEWS.map((v) => (
+        {VIEWS.filter((v) => !v.roles || v.roles.includes(user.role)).map((v) => (
           <button key={v.id}
             className={view === v.id ? 'active' : ''}
             onClick={() => {
@@ -207,6 +221,13 @@ export default function App() {
       )}
 
       {view === 'maintenance' && <MaintenancePanel />}
+
+      {view === 'manager' && (
+        selected
+          ? <TransformerDetail id={selected.id} meta={selected}
+              onBack={() => setSelected(null)} />
+          : <ManagerDashboard onSelect={setSelected} />
+      )}
 
       {view === 'personnel' && <PersonnelPanel currentUser={user} />}
 
