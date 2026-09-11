@@ -970,3 +970,14 @@ td.num, span.num, b.num {
   margin-left: 7px; font-size: 0.66rem; padding: 1px 7px;
   border-radius: 999px; background: var(--surface-2); color: var(--ink-soft);
 }
+
+/* Öneri kaynağı rozeti (Faz 9.1): bulgunun hangi ölçümden geldiği.
+   Renk tek başına anlam taşımıyor — etiket her zaman yazılı. */
+.src-chip {
+  margin-left: 7px; font-size: 0.64rem; padding: 2px 8px;
+  border-radius: 999px; background: var(--surface-2); color: var(--ink-soft);
+  white-space: nowrap;
+}
+.src-chip.elec { background: var(--high); color: #fffdf8; }
+.src-chip.paper { background: var(--medium); color: #1c1205; }
+.src-chip.health { background: var(--accent); color: #fffdf8; }

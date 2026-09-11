@@ -165,14 +165,20 @@ def electrical_card(transformer_id: str,
     """Filo kartına eklenecek kısa özet (test yoksa da güvenli)."""
     if not test:
         return {"has_electrical_test": False, "electrical_overall": None,
-                "electrical_tested_at": None, "electrical_problems": []}
+                "electrical_tested_at": None, "electrical_problems": [],
+                "electrical_data_suspect": False}
 
     assessment = assess_test(transformer_id, test)
+    ttr = assessment["sections"]["turns_ratio"]
     return {
         "has_electrical_test": True,
         "electrical_overall": assessment["overall"],
         "electrical_tested_at": test.get("tested_at"),
         "electrical_problems": assessment["problems"],
+        # Ölçümün kendisi şüpheliyse yapılacak iş "trafoya git" değil
+        # "testi tekrarla"dır. İki farklı iş emri türü; bakım servisinin
+        # bunu ayırt edebilmesi için karta taşınıyor. (Faz 9.1)
+        "electrical_data_suspect": bool(ttr.get("data_suspect")),
     }
 
 

@@ -44,7 +44,58 @@ public record TransformerRisk(
     int? DaysSinceSample,
     int SamplingMonths,
     int MeasurementCount,
-    bool HasData);
+    bool HasData,
+
+    // --- Faz 9.1: DGA DIŞINDAKİ bulgular -----------------------------
+    //
+    // Faz 8 boyunca sisteme dört bağımsız duyu eklendi (DGA, yağ, kağıt,
+    // elektriksel) ama iş emri üreten kurallar yalnızca DGA'ya
+    // bakıyordu. Sistem gördüğünü söylüyor ama yapılacak işe
+    // çeviremiyordu — bir izleme sisteminin yapabileceği en sessiz hata.
+    //
+    // Bu alanlar Python'un /fleet/overview cevabında ZATEN vardı;
+    // .NET onları okumuyordu. Yeni bir uç nokta gerekmedi.
+
+    /// <summary>Elektriksel test genel hükmü: iyi / kabul / kötü.</summary>
+    string? ElectricalOverall = null,
+
+    /// <summary>Elektriksel bulgular — iş emri açıklamasına girer.</summary>
+    List<string>? ElectricalProblems = null,
+
+    bool HasElectricalTest = false,
+
+    /// <summary>Ölçümün kendisi şüpheli mi? (fiziksel olarak imkânsız değer)</summary>
+    /// <remarks>
+    /// Ayrı bir alan olmasının sebebi, YAPILACAK İŞİN farklı olması:
+    /// bulgu gerçekse "trafoya git", ölçüm şüpheliyse "testi tekrarla".
+    /// İkisini aynı iş emri saymak, boş yere kesinti planlatır.
+    /// </remarks>
+    bool ElectricalDataSuspect = false,
+
+    /// <summary>Yağ kalitesi genel hükmü.</summary>
+    string? OilOverall = null,
+
+    /// <summary>Kağıdın tüketilen ömrü (%). Geri dönüşsüz.</summary>
+    double? LifeConsumedPct = null,
+
+    string? PaperBand = null,
+
+    /// <summary>Sağlık endeksi 0-100. Null: hesaplanamadı.</summary>
+    double? HealthScore = null,
+
+    /// <summary>excellent / good / fair / poor / critical</summary>
+    string? HealthBand = null,
+
+    /// <summary>Varlık sınıfı ağırlığı (LPT 1.0 / MPT 0.7 / SPT 0.45).</summary>
+    /// <remarks>
+    /// DGA dışı kuralların önceliği hesaplaması için gerekli.
+    /// <c>Priority</c> = IEEE kondisyonu × ağırlık formülünden geliyor,
+    /// yani DGA'ya bağlı. DGA'sı sakin ama sargısı bozuk bir trafoda
+    /// Priority düşüktür ve o iş emrini listenin dibine atardı. Ağırlığı
+    /// ayrı almak, "elektriksel arıza da kritik kondisyondur" demeyi
+    /// mümkün kılıyor.
+    /// </remarks>
+    double AssetWeight = 1.0);
 
 /// <summary>Filo özeti — Python'daki /fleet/overview cevabının "summary" kısmı.</summary>
 public record FleetSummary(

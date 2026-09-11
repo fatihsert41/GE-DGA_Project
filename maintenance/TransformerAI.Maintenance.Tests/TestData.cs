@@ -36,7 +36,21 @@ public static class TestData
         string? samplingStatus = "current",
         int? daysSinceSample = 30,
         int samplingMonths = 12,
-        bool hasData = true)
+        bool hasData = true,
+        // --- Faz 9.1: DGA disi bulgular --------------------------------
+        // Varsayilanlar "bulgu yok" demeli ki eski testler etkilenmesin;
+        // ama hasElectricalTest varsayilani TRUE, yoksa her eski test
+        // istemeden "temel cizgi yok" onerisi uretirdi.
+        string? electricalOverall = "iyi",
+        List<string>? electricalProblems = null,
+        bool hasElectricalTest = true,
+        bool electricalDataSuspect = false,
+        string? oilOverall = "iyi",
+        double? lifeConsumedPct = 10.0,
+        string? paperBand = "saglikli",
+        double? healthScore = 90.0,
+        string? healthBand = "excellent",
+        double assetWeight = 0.7)
         => new(
             Id: id,
             Name: $"Trafo {id}",
@@ -59,7 +73,17 @@ public static class TestData
             DaysSinceSample: daysSinceSample,
             SamplingMonths: samplingMonths,
             MeasurementCount: 12,
-            HasData: hasData);
+            HasData: hasData,
+            ElectricalOverall: electricalOverall,
+            ElectricalProblems: electricalProblems,
+            HasElectricalTest: hasElectricalTest,
+            ElectricalDataSuspect: electricalDataSuspect,
+            OilOverall: oilOverall,
+            LifeConsumedPct: lifeConsumedPct,
+            PaperBand: paperBand,
+            HealthScore: healthScore,
+            HealthBand: healthBand,
+            AssetWeight: assetWeight);
 
     public static FleetOverview Fleet(params TransformerRisk[] transformers)
         => new(
