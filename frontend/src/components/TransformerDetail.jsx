@@ -13,6 +13,7 @@ import ElectricalPanel from './ElectricalPanel'
 import LifecyclePanel from './LifecyclePanel'
 import InspectionPanel from './InspectionPanel'
 import ComponentsPanel from './ComponentsPanel'
+import SchematicPanel from './SchematicPanel'
 
 /* Faz 5.4 — tek trafonun detayı.
  *
@@ -188,6 +189,8 @@ export default function TransformerDetail({ id, meta, onBack }) {
     <div className="tabs detail-tabs">
       <button type="button" className={tab === 'measurements' ? 'active' : ''}
         onClick={() => setTab('measurements')}>Ölçümler ve Trend</button>
+      <button type="button" className={tab === 'schematic' ? 'active' : ''}
+        onClick={() => setTab('schematic')}>Şema</button>
       <button type="button" className={tab === 'oil' ? 'active' : ''}
         onClick={() => setTab('oil')}>Yağ Kalitesi</button>
       <button type="button" className={tab === 'electrical' ? 'active' : ''}
@@ -212,6 +215,19 @@ export default function TransformerDetail({ id, meta, onBack }) {
       <div>
         <div className="panel">{header}{tabs}</div>
         <div style={{ marginTop: 16 }}><NameplatePanel id={id} /></div>
+      </div>
+    )
+  }
+
+  // Şema tüm boyutları tek görselde birleştirir; parçaya tıklayınca
+  // ilgili ölçüm sekmesine geçer.
+  if (tab === 'schematic') {
+    return (
+      <div>
+        <div className="panel">{header}{tabs}</div>
+        <div style={{ marginTop: 16 }}>
+          <SchematicPanel id={id} onOpenTab={setTab} />
+        </div>
       </div>
     )
   }
