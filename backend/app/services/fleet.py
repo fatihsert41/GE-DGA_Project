@@ -18,6 +18,7 @@ from ..core import assets, health_index, nameplate
 from ..core.gases import (FAULT_FAMILY, FAULT_GROUP, FAULT_LABELS_TR,
                           SEVERE_FAULTS, total_combustible)
 from ..core.risk import RISK_LEVELS_TR, RISK_ORDER
+from . import electrical as electrical_service
 from . import oil as oil_service
 from .diagnosis import CONFIDENCE_THRESHOLD
 
@@ -121,25 +122,32 @@ def _severity_key(card: Dict) -> tuple:
 
 
 def build_overview(rows: List[Dict],
-                   oil_tests: Optional[Dict[str, Dict]] = None) -> Dict:
+                   oil_tests: Optional[Dict[str, Dict]] = None,
+                   electrical_tests: Optional[Dict[str, Dict]] = None) -> Dict:
     """Saf hesaplama: DB satırlarını özet + kart listesine çevirir.
 
     Veritabanına dokunmaz, bu yüzden sahte satırlarla test edilebilir.
     """
     oil_tests = oil_tests or {}
+    electrical_tests = electrical_tests or {}
     cards: List[Dict] = []
     for r in rows:
         card = _to_card(r)
         # Yağ özeti karta eklenir; testi olmayan trafo için güvenli boş değer.
         card.update(oil_service.oil_card(card["id"],
                                          oil_tests.get(card["id"])))
-        # Sağlık endeksi (Faz 8.5): üç boyutu tek skorda birleştirir.
+        # Elektriksel test özeti (Faz 8.6). Çoğu trafoda YOKTUR ve bu
+        # normaldir: testler enerjisizken yapılır.
+        card.update(electrical_service.electrical_card(
+            card["id"], electrical_tests.get(card["id"])))
+        # Sağlık endeksi (Faz 8.5/8.6): dört boyutu tek skorda birleştirir.
         # `priority` ACİLİYETİ ölçer (bugün kime koşayım), `health` DURUMU
         # (bu varlık genel olarak ne hâlde) — ikisi farklı sorulardır.
         card["health"] = health_index.compute(
             risk_condition=card.get("risk_condition"),
             oil_overall=card.get("oil_overall"),
             paper=card.pop("paper", None),
+            electrical_overall=card.get("electrical_overall"),
             asset_weight=card.get("asset_weight"),
         )
         card["health_score"] = card["health"].get("score")
@@ -195,4 +203,5 @@ def build_overview(rows: List[Dict],
 def overview() -> Dict:
     """I/O katmanı: satırları DB'den çeker, hesabı build_overview'a bırakır."""
     return build_overview(database.latest_measurements(),
-                          database.latest_oil_tests())
+                          database.latest_oil_tests(),
+                          database.latest_electrical_tests())

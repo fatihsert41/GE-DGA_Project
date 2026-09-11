@@ -74,6 +74,7 @@ def init_db() -> None:
             _ensure_column(conn, "transformers", col, coltype)
 
         _init_oil_tests(conn)
+        _init_electrical_tests(conn)
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS measurements (
@@ -97,6 +98,17 @@ def init_db() -> None:
 OIL_TEST_FIELDS = [
     "water_ppm", "bdv_kv", "acidity_mgkoh_g", "ift_mn_m",
     "furan_2fal_mgl", "color_astm",
+]
+
+# Elektriksel test sütunları (Faz 8.6). ``tap_position`` ölçüm değil
+# BAĞLAMDIR: beklenen sarım oranı kademeye göre değişir, kademeyi bilmeden
+# TTR sonucu yorumlanamaz.
+ELECTRICAL_TEST_FIELDS = [
+    "tap_position",
+    "ttr_a", "ttr_b", "ttr_c",
+    "rw_a_ohm", "rw_b_ohm", "rw_c_ohm", "winding_temp_c",
+    "ir_1min_mohm", "ir_10min_mohm", "insulation_temp_c",
+    "tan_delta_pct", "tan_delta_temp_c",
 ]
 
 
@@ -138,6 +150,46 @@ def _init_oil_tests(conn: sqlite3.Connection) -> None:
     conn.execute(
         """CREATE INDEX IF NOT EXISTS idx_oil_tests_transformer
            ON oil_tests(transformer_id, sampled_at DESC)"""
+    )
+
+
+def _init_electrical_tests(conn: sqlite3.Connection) -> None:
+    """Elektriksel test tablosu (Faz 8.6).
+
+    Yağ testlerinden AYRI bir tablo, çünkü bu testler farklı bir dünyaya
+    ait: trafo **enerjisizken** yapılırlar, sıklıkları çok daha düşüktür
+    (devreye alma + büyük bakım) ve birimleri tamamen farklıdır. Aynı
+    tabloya sıkıştırmak her satırın yarısını boş bırakırdı.
+    """
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS electrical_tests (
+            id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+            transformer_id     TEXT NOT NULL,
+            tested_at          TEXT NOT NULL,
+            tap_position       INTEGER,
+            ttr_a              REAL,
+            ttr_b              REAL,
+            ttr_c              REAL,
+            rw_a_ohm           REAL,
+            rw_b_ohm           REAL,
+            rw_c_ohm           REAL,
+            winding_temp_c     REAL,
+            ir_1min_mohm       REAL,
+            ir_10min_mohm      REAL,
+            insulation_temp_c  REAL,
+            tan_delta_pct      REAL,
+            tan_delta_temp_c   REAL,
+            tested_by          TEXT,
+            notes              TEXT,
+            created_at         TEXT NOT NULL,
+            FOREIGN KEY (transformer_id) REFERENCES transformers(id)
+        )
+        """
+    )
+    conn.execute(
+        """CREATE INDEX IF NOT EXISTS idx_electrical_tests_transformer
+           ON electrical_tests(transformer_id, tested_at DESC)"""
     )
 
 
@@ -412,3 +464,62 @@ def latest_measurements() -> List[Dict]:
         out.append(d)
     return out
 
+
+
+# ---------------------------------------------------------------------------
+# Elektriksel testler (Faz 8.6)
+# ---------------------------------------------------------------------------
+
+def save_electrical_test(transformer_id: str, values: Dict[str, object],
+                         tested_at: Optional[str] = None,
+                         tested_by: Optional[str] = None,
+                         notes: Optional[str] = None) -> int:
+    """Bir elektriksel test kaydeder ve id'sini döndürür."""
+    known = {k: values.get(k) for k in ELECTRICAL_TEST_FIELDS}
+    columns = ["transformer_id", "tested_at", *ELECTRICAL_TEST_FIELDS,
+               "tested_by", "notes", "created_at"]
+    row = [transformer_id, tested_at or _now(),
+           *[known[k] for k in ELECTRICAL_TEST_FIELDS],
+           tested_by, notes, _now()]
+
+    with _connect() as conn:
+        cur = conn.execute(
+            f"""INSERT INTO electrical_tests ({", ".join(columns)})
+                VALUES ({", ".join("?" for _ in columns)})""",
+            row,
+        )
+        return int(cur.lastrowid)
+
+
+def get_electrical_tests(transformer_id: str) -> List[Dict]:
+    """Bir trafonun tüm elektriksel testleri, eskiden yeniye."""
+    with _connect() as conn:
+        rows = conn.execute(
+            """SELECT * FROM electrical_tests WHERE transformer_id = ?
+               ORDER BY tested_at ASC""",
+            (transformer_id,),
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def latest_electrical_tests() -> Dict[str, Dict]:
+    """Her trafonun EN SON elektriksel testi — filo görünümü için.
+
+    ``latest_measurements`` ve ``latest_oil_tests`` ile aynı desen:
+    pencere fonksiyonu ile trafo başına tek satır.
+    """
+    with _connect() as conn:
+        rows = conn.execute(
+            """
+            WITH ranked AS (
+                SELECT e.*,
+                       ROW_NUMBER() OVER (
+                           PARTITION BY e.transformer_id
+                           ORDER BY e.tested_at DESC, e.id DESC
+                       ) AS rn
+                FROM electrical_tests e
+            )
+            SELECT * FROM ranked WHERE rn = 1
+            """
+        ).fetchall()
+    return {r["transformer_id"]: dict(r) for r in rows}

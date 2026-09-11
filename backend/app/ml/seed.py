@@ -17,10 +17,11 @@ import sqlite3
 from datetime import datetime, timedelta, timezone
 
 from .. import database
-from ..core import assets
+from ..core import assets, nameplate
 from ..core.gases import GASES
 from ..services.diagnosis import diagnose
 from .synth import make_aging_series
+from .synth_electrical import make_electrical_test
 from .synth_oil import make_oil_test
 
 # Demo filosu. Sözlük kullanılıyor çünkü alan sayısı arttıkça konumsal
@@ -164,10 +165,37 @@ FLEET = [
 ]
 
 
+# Elektriksel test senaryoları (Faz 8.6). Rastgele DEĞİL, elle seçildi:
+# her biri sistemin bir yeteneğini kanıtlıyor. Çoğunluk sağlıklı olmalı,
+# yoksa demo inandırıcılığını yitirir.
+#
+# En önemli üçü:
+#   TR-04  DGA "T1" (düşük sıcaklıkta ısınma) diyor, sargı direnci kademe
+#          kontağında aşınma gösteriyor → İKİ BAĞIMSIZ KAYNAK AYNI ŞEYİ
+#          SÖYLÜYOR. Tek kaynağın iki kez söylemesinden çok daha değerli.
+#   TR-05  Yağı temiz, DGA'sı sakin, ama TTR'de tek fazda spir kaybı →
+#          YAĞIN GÖREMEDİĞİ ARIZA. Bu fazın var oluş sebebi.
+#   TR-02  Yalıtımı çok kuru; PI düşük görünüyor ama bu arıza DEĞİL.
+#          Sistem bunu bilmeli, yoksa en sağlam trafoyu suçlar.
+ELECTRICAL_SCENARIOS = {
+    "TR-01": "healthy",
+    "TR-02": "very_dry",           # tuzak: düşük PI ama arıza yok
+    "TR-03": "healthy",
+    "TR-04": "tap_wear",           # DGA'daki T1 ile örtüşür
+    "TR-05": "shorted_turn",       # yağın göremediği arıza
+    "TR-06": "wet_insulation",     # 2003 yapımı, kraft, darbeli yük
+    "TR-07": "aged_insulation",    # filonun en eskisi (1998)
+    "TR-08": "healthy",
+    # TR-09 kasten YOK: hiç elektriksel testi olmayan varlık senaryosu.
+    # Elektriksel test seyrek yapılır; "veri yok" istisna değil KURALDIR.
+}
+
+
 def _reset() -> None:
     """Tabloları oluştur ve eski demo kayıtları temizle (temiz başlangıç)."""
     database.init_db()
     with sqlite3.connect(database.DB_PATH) as conn:
+        conn.execute("DELETE FROM electrical_tests")
         conn.execute("DELETE FROM oil_tests")
         conn.execute("DELETE FROM measurements")
         conn.execute("DELETE FROM transformers")
@@ -236,6 +264,28 @@ def seed() -> None:
                                    sampled_at=sampled.isoformat(),
                                    lab="Demo Laboratuvarı")
 
+        # --- Elektriksel testler (Faz 8.6) ----------------------------
+        # DGA'dan ÇOK daha seyrek: trafo enerjisizken yapılır, yani
+        # planlı kesinti gerektirir. Tipik olarak devreye alma + büyük
+        # bakım. Demo filoda son bir test yeterli.
+        scenario_el = ELECTRICAL_SCENARIOS.get(unit["id"])
+        if scenario_el:
+            expected = nameplate.rated_turns_ratio(np_fields)
+            if expected:
+                values = make_electrical_test(
+                    expected_ratio=expected,
+                    scenario=scenario_el,
+                    age_years=float(age or 10),
+                    base_resistance_ohm=0.35 + 0.004 * float(unit["mva"]),
+                    seed=idx * 200 + 7,
+                )
+                values["tap_position"] = 0
+                tested = (datetime.now(timezone.utc)
+                          - timedelta(days=int(180 + idx * 90)))
+                database.save_electrical_test(
+                    unit["id"], values, tested_at=tested.isoformat(),
+                    tested_by="Demo Saha Ekibi")
+
         flag = " ⚠ uzman incelemesi" if last["review"]["needed"] else ""
         gecikme = f" ⏰ {lag} ay geçti" if lag else ""
         oncelik = assets.priority_score(last["risk"]["condition"],
@@ -253,6 +303,17 @@ def seed() -> None:
     print(f"Toplam {len(FLEET)} trafo, {total} DGA olcumu kaydedildi.")
     print(f"Yag kalitesi: {fleet_oil['tested']} trafo test edildi, "
           f"durum dagilimi {dict(fleet_oil['condition_counts'])}")
+    from ..services import electrical as el_service
+    fleet_el = el_service.fleet_summary()
+    print(f"Elektriksel test: {fleet_el['tested']} trafo test edildi, "
+          f"durum dagilimi {dict(fleet_el['condition_counts'])}")
+    for r in fleet_el["items"]:
+        if r["overall"] != "iyi":
+            print(f"  {r['transformer_id']}  {r['overall']}: "
+                  f"{'; '.join(r['problems'])}")
+    if fleet_el["never_tested"]:
+        print(f"  hic test edilmemis: {', '.join(fleet_el['never_tested'])}")
+
     print("En yasli kagitlar:")
     for r in fleet_oil["most_aged_paper"]:
         print(f"  {r['transformer_id']}  DP={r['dp_estimate']}  "
