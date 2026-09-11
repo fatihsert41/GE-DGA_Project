@@ -78,7 +78,7 @@ export default function App() {
     api.me()
       .then((me) => setUser({
         employeeNo: me.employeeNo, name: me.name, role: me.role,
-        region: me.region, specialty: me.specialty,
+        specialty: me.specialty,
       }))
       .catch(() => { session.clear(); setUser(null) })
   }, [])

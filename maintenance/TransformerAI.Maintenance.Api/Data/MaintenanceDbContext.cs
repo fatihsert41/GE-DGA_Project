@@ -87,7 +87,6 @@ public class MaintenanceDbContext : DbContext
         tech.HasKey(t => t.Id);
         tech.Property(t => t.Id).HasMaxLength(20);
         tech.Property(t => t.Name).HasMaxLength(100).IsRequired();
-        tech.Property(t => t.Region).HasMaxLength(50).IsRequired();
         tech.Property(t => t.Specialty).HasConversion<string>().HasMaxLength(20);
 
         // Sicil numarası ve rol (Faz 9.0).
@@ -182,27 +181,27 @@ public class MaintenanceDbContext : DbContext
         // (Python tarafında bunu ml/seed.py ile elle yapıyorduk.)
         tech.HasData(
             new Technician { Id = "TK-01", EmployeeNo = "10247", Name = "Ahmet Yılmaz",
-                Region = "Marmara", Specialty = Specialty.Electrical,
+                Specialty = Specialty.Electrical,
                 Role = PersonnelRole.Technician,
                 MaxOpenOrders = 3, IsActive = true },
             new Technician { Id = "TK-02", EmployeeNo = "10318", Name = "Elif Demir",
-                Region = "Marmara", Specialty = Specialty.Thermal,
+                Specialty = Specialty.Thermal,
                 Role = PersonnelRole.Engineer,
                 MaxOpenOrders = 3, IsActive = true },
             new Technician { Id = "TK-03", EmployeeNo = "10455", Name = "Mehmet Kaya",
-                Region = "Marmara", Specialty = Specialty.Sampling,
+                Specialty = Specialty.Sampling,
                 Role = PersonnelRole.Technician,
                 MaxOpenOrders = 5, IsActive = true },
             new Technician { Id = "TK-04", EmployeeNo = "10502", Name = "Zeynep Şahin",
-                Region = "Ege", Specialty = Specialty.General,
+                Specialty = Specialty.General,
                 Role = PersonnelRole.Supervisor,
                 MaxOpenOrders = 4, IsActive = true },
             new Technician { Id = "TK-05", EmployeeNo = "10611", Name = "Burak Aydın",
-                Region = "İç Anadolu", Specialty = Specialty.General,
+                Specialty = Specialty.General,
                 Role = PersonnelRole.Technician,
                 MaxOpenOrders = 4, IsActive = true },
             new Technician { Id = "TK-06", EmployeeNo = "10740", Name = "Selin Öztürk",
-                Region = "Akdeniz", Specialty = Specialty.Sampling,
+                Specialty = Specialty.Sampling,
                 Role = PersonnelRole.Engineer,
                 MaxOpenOrders = 4, IsActive = true });
     }

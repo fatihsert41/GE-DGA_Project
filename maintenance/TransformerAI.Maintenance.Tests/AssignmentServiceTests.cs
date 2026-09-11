@@ -10,29 +10,6 @@ public class AssignmentServiceTests
     private readonly AssignmentService _assigner = new();
 
     [Theory]
-    [InlineData("İstanbul-Avrupa", "Marmara")]
-    [InlineData("İstanbul-Anadolu", "Marmara")]
-    [InlineData("Kocaeli", "Marmara")]
-    [InlineData("İzmir", "Ege")]
-    [InlineData("Ankara", "İç Anadolu")]
-    [InlineData("Mersin", "Akdeniz")]
-    public void KonumdanBolge_DogruCikarilir(string location, string expected)
-    {
-        Assert.Equal(expected, AssignmentService.RegionOf(location));
-    }
-
-    [Theory]
-    [InlineData(null)]
-    [InlineData("")]
-    [InlineData("Bilinmeyen Şehir")]
-    public void TaninmayanKonum_NullDoner(string? location)
-    {
-        // Bilinmeyen konum hata FIRLATMAMALI: atama bölge puanı olmadan
-        // yine de yapılabilmeli.
-        Assert.Null(AssignmentService.RegionOf(location));
-    }
-
-    [Theory]
     [InlineData(WorkOrderKind.Sampling, "Deşarj", Specialty.Sampling)]
     [InlineData(WorkOrderKind.Inspection, "Deşarj", Specialty.Electrical)]
     [InlineData(WorkOrderKind.Inspection, "Termal", Specialty.Thermal)]
@@ -46,26 +23,31 @@ public class AssignmentServiceTests
     }
 
     [Fact]
-    public void BolgeEslesmesi_UzmanliktanDahaAgirBasar()
+    public void Uzman_genelciden_once_gelir()
     {
-        // Bölge +10, uzmanlık +5. Yol süresi en pahalı kalem olduğu için
-        // uzak bir uzman yerine yakın bir genelci tercih edilir.
-        var uzakUzman = Load(Tech("TK-U", "Ege", Specialty.Electrical), 0);
-        var yakinGenel = Load(Tech("TK-Y", "Marmara", Specialty.General), 0);
+        // Uzmanlık +5, genel uzmanlık +1.
+        //
+        // ⚠ Burada eskiden "bölge eşleşmesi +10 uzmanlıktan ağır basar"
+        // testi vardı. Bölge kuralı kaldırıldı: bu kurulumdaki personelin
+        // tamamı aynı bölgede olduğu için kural ayrım üretmiyor, üstelik
+        // trafo konumları farklı olduğundan bazı varlıkları sessizce
+        // kayırıyordu. Çok bölgeli bir işletmede geri gelmesi gerekir.
+        var genelci = Load(Tech("TK-Y", Specialty.General), 0);
+        var uzman = Load(Tech("TK-U", Specialty.Electrical), 0);
 
-        var result = _assigner.Choose([uzakUzman, yakinGenel],
+        var result = _assigner.Choose([genelci, uzman],
                                       WorkOrderKind.Inspection,
                                       "İstanbul-Avrupa", "Deşarj");
 
         Assert.NotNull(result);
-        Assert.Equal("TK-Y", result.Technician.Id);
+        Assert.Equal("TK-U", result!.Technician.Id);
     }
 
     [Fact]
     public void AyniBolgede_UzmanGenelciyeTercihEdilir()
     {
-        var genel = Load(Tech("TK-G", "Marmara", Specialty.General), 0);
-        var uzman = Load(Tech("TK-E", "Marmara", Specialty.Electrical), 0);
+        var genel = Load(Tech("TK-G", Specialty.General), 0);
+        var uzman = Load(Tech("TK-E", Specialty.Electrical), 0);
 
         var result = _assigner.Choose([genel, uzman],
                                       WorkOrderKind.Inspection,
@@ -79,8 +61,8 @@ public class AssignmentServiceTests
     public void PuanEsitse_YukuAzOlanKazanir()
     {
         // İşin dağılmasını sağlayan kural.
-        var yuklu = Load(Tech("TK-1", "Marmara", Specialty.Electrical), 2);
-        var bos = Load(Tech("TK-2", "Marmara", Specialty.Electrical), 0);
+        var yuklu = Load(Tech("TK-1", Specialty.Electrical), 2);
+        var bos = Load(Tech("TK-2", Specialty.Electrical), 0);
 
         var result = _assigner.Choose([yuklu, bos],
                                       WorkOrderKind.Inspection,
@@ -92,8 +74,8 @@ public class AssignmentServiceTests
     [Fact]
     public void KapasitesiDolanlar_AdayDegildir()
     {
-        var dolu = Load(Tech("TK-1", "Marmara", Specialty.Electrical, maxOpen: 2), 2);
-        var uzakBos = Load(Tech("TK-2", "Ege", Specialty.General), 0);
+        var dolu = Load(Tech("TK-1", Specialty.Electrical, maxOpen: 2), 2);
+        var uzakBos = Load(Tech("TK-2", Specialty.General), 0);
 
         var result = _assigner.Choose([dolu, uzakBos],
                                       WorkOrderKind.Inspection,
@@ -106,9 +88,9 @@ public class AssignmentServiceTests
     [Fact]
     public void PasifTeknisyen_AdayDegildir()
     {
-        var pasif = Load(Tech("TK-1", "Marmara", Specialty.Electrical,
+        var pasif = Load(Tech("TK-1", Specialty.Electrical,
                               active: false), 0);
-        var aktif = Load(Tech("TK-2", "Ege", Specialty.General), 0);
+        var aktif = Load(Tech("TK-2", Specialty.General), 0);
 
         var result = _assigner.Choose([pasif, aktif],
                                       WorkOrderKind.Inspection,
@@ -122,8 +104,8 @@ public class AssignmentServiceTests
     {
         // Uç nokta bunu 409 Conflict'e çevirir. Sessizce yanlış kişiye
         // atamak yerine "uygun kimse yok" demek doğrusu.
-        var dolu1 = Load(Tech("TK-1", "Marmara", Specialty.Electrical, maxOpen: 1), 1);
-        var dolu2 = Load(Tech("TK-2", "Ege", Specialty.General, maxOpen: 1), 1);
+        var dolu1 = Load(Tech("TK-1", Specialty.Electrical, maxOpen: 1), 1);
+        var dolu2 = Load(Tech("TK-2", Specialty.General, maxOpen: 1), 1);
 
         var result = _assigner.Choose([dolu1, dolu2],
                                       WorkOrderKind.Inspection,
@@ -144,8 +126,8 @@ public class AssignmentServiceTests
     {
         // Her şey eşitse aynı girdi aynı çıktıyı vermeli; yoksa arayüzde
         // atama her yenilemede değişiyormuş gibi görünür.
-        var a = Load(Tech("TK-B", "Marmara", Specialty.General), 0);
-        var b = Load(Tech("TK-A", "Marmara", Specialty.General), 0);
+        var a = Load(Tech("TK-B", Specialty.General), 0);
+        var b = Load(Tech("TK-A", Specialty.General), 0);
 
         var ilk = _assigner.Choose([a, b], WorkOrderKind.Inspection,
                                    "Bursa", "Normal");

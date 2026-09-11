@@ -131,7 +131,7 @@ public class AuthService
 
         return (new LoginResponse(
             token, expiresAt, person.EmployeeNo, person.Name,
-            person.Role.ToString(), person.Region,
+            person.Role.ToString(),
             person.Specialty.ToString()), null);
     }
 

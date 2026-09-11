@@ -16,8 +16,7 @@ public class TechnicianRepository
     public async Task<List<Technician>> ListAsync(CancellationToken ct = default)
     {
         return await _db.Technicians
-            .OrderBy(t => t.Region)
-            .ThenBy(t => t.Id)
+            .OrderBy(t => t.Id)
             .ToListAsync(ct);
     }
 
@@ -54,8 +53,7 @@ public class TechnicianRepository
                 return new TechnicianWorkload(t, open,
                                               open < t.MaxOpenOrders);
             })
-            .OrderBy(w => w.Technician.Region)
-            .ThenBy(w => w.Technician.Id)
+            .OrderBy(w => w.Technician.Id)
             .ToList();
     }
 

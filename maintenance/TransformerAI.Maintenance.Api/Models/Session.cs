@@ -55,7 +55,6 @@ public record LoginResponse(
     string EmployeeNo,
     string Name,
     string Role,
-    string Region,
     string Specialty);
 
 /// <summary>Giriş reddi — sebebiyle birlikte.</summary>

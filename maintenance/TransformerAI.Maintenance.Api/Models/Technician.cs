@@ -59,9 +59,6 @@ public class Technician
     /// <summary>Sistemdeki rolü — ne görür, neyi onaylar. (Faz 9.0)</summary>
     public PersonnelRole Role { get; set; } = PersonnelRole.Technician;
 
-    /// <summary>Sorumlu olduğu bölge, ör. "Marmara".</summary>
-    public string Region { get; set; } = string.Empty;
-
     public Specialty Specialty { get; set; }
 
     /// <summary>Aynı anda üstlenebileceği açık iş sayısı.</summary>
