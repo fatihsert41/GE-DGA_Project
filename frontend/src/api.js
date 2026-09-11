@@ -48,6 +48,14 @@ export const api = {
   createOilTest: (id, payload) =>
     client.post(`/transformers/${id}/oil-tests`, payload).then((r) => r.data),
 
+  // --- Sağlık endeksi (Faz 8.5) -------------------------------------------
+  // Ağırlıklar ve bantlar backend'den gelir; arayüze sabit yazmak formül
+  // değiştiğinde ekranın yalan söylemesine yol açardı.
+  healthSchema: () => client.get('/health-index/schema').then((r) => r.data),
+  healthFleet: () => client.get('/health-index/fleet').then((r) => r.data),
+  transformerHealth: (id) =>
+    client.get(`/transformers/${id}/health`).then((r) => r.data),
+
   // --- Bakım planlama servisi (.NET) ---------------------------------------
   maintenance: {
     health: () => maint.get('/health').then((r) => r.data),

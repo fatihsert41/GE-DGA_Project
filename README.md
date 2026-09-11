@@ -6,7 +6,7 @@
 > sonucu **bakım iş emrine** dönüştüren polyglot bir sistem.
 
 **Üç servis:** Python (ML) · .NET (bakım planlama) · React (arayüz).
-**145 test** (95 Python + 50 .NET).
+**159 test** (109 Python + 50 .NET).
 
 ---
 
@@ -23,6 +23,7 @@
 | **D — Belirsizlik** | Model emin değilse **söyler** ve vaka uzmana gider | `review` alanı, her tanıda |
 | **E — Eyleme dönüşüm** | Risk → iş emri → teknisyen ataması | .NET servisi |
 | **F — Kalan ömür** | Furan → DP → kağıdın tüketilen ömrü (DGA'nın göremediği) | `GET /transformers/{id}/oil-tests` |
+| **G — Tek skor** | Üç boyut (DGA · kağıt · yağ) → 0-100 sağlık endeksi, formülü açık | `GET /transformers/{id}/health` |
 
 ---
 
@@ -147,7 +148,7 @@ Vite iki servise birden yönlendirir: `/api` → :8000, `/maint` → :5080.
 ## Testler
 
 ```powershell
-cd backend      ; pytest -q            # 95 test
+cd backend      ; pytest -q            # 109 test
 cd maintenance  ; dotnet test          # 50 test
 ```
 
@@ -164,8 +165,9 @@ sınıflarda tutulduğu için doğrudan test edilebiliyor.
 | **Numune Analizi** | Elle gaz girişi → tanı, SHAP grafiği, Duval üçgeni, yöntem karşılaştırması, gerçeklik kontrolü paneli |
 | **Bakım Planlama** | İş emirleri, sistemin ürettiği öneriler, teknisyen yük tablosu, atama |
 
-Trafo detayı üç sekmeden oluşur: **Ölçümler ve Trend** (DGA) · **Yağ
+Trafo detayı dört sekmeden oluşur: **Ölçümler ve Trend** (DGA) · **Yağ
 Kalitesi** (nem, BDV, asitlik, arayüzey gerilimi + kağıt yaşlanması) ·
+**Sağlık Endeksi** (üç boyutun birleşimi, skorun aritmetiği satır satır) ·
 **Künye** (nameplate, türetilmiş değerlerle).
 
 ---
@@ -183,6 +185,31 @@ gaz analizi olasılığı verir, **sonucu varlık sınıfı verir**:
 
 Sonuç: yüksek riskli bir LPT (3.00), kritik riskli bir MPT'nin (2.80)
 önüne geçer.
+
+**Sağlık endeksi: tek skor, ama kara kutu değil.** DGA riski, kağıt DP'si
+ve yağ kalitesi ortak bir 0-100 ölçeğine çevrilip ağırlıklı ortalaması
+alınır (DGA ×4, kağıt ×3, yağ ×2):
+
+```
+Sağlık = Σ(ağırlık × puan) ÷ Σ(ağırlık)
+```
+
+Üç kural formülü dürüst tutuyor:
+
+| Kural | Neden |
+|---|---|
+| Bilinmeyen boyut ortalamadan **çıkarılır** | Yağ testi olmayan trafo, yağı iyi olanla aynı skoru alamaz |
+| Bir boyut en kötü seviyedeyse skor **45'i aşamaz** | İki iyi boyut, ark yapan bir trafoyu gizleyemez |
+| **Yaş ayrı boyut değil** | Etkisi zaten kağıt DP'sinin içinde; iki kez saymak olurdu |
+
+Skorun yanında onu **en çok aşağı çeken boyut** da bildirilir. Demo
+filodaki TR-09 bunun tam örneği: DGA'sı sakin, yağı kabul edilebilir, ama
+kağıdının %82'si tüketilmiş — skor "Orta" (65) çıkıyor ve tek başına
+bakıldığında asıl sorun görünmüyor.
+
+Ayrıca iki farklı öncelik ayrı tutuldu: filo sıralamasındaki `priority`
+**aciliyeti** ölçer (bugün kime koşayım), `renewal_priority` ise
+**durumu** (bu yıl hangi ünitenin bütçesini ayırayım).
 
 **Belirsizlik ürüne girdi — ve eşiğin kökeni açık.** Sistem güveni düşük
 tahminleri işaretler ve iş emri önerisi üretir. Eşiğin dayanağı her tanı
