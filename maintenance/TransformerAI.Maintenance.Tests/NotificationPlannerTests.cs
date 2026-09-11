@@ -19,7 +19,7 @@ public class NotificationPlannerTests
         => new()
         {
             Id = id, EmployeeNo = employeeNo, Name = name, Role = role,
-            Region = "Marmara", IsActive = active,
+            IsActive = active,
         };
 
     private static readonly Technician Tech =

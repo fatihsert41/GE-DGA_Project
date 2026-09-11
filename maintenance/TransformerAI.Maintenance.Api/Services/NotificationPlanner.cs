@@ -53,7 +53,7 @@ public class NotificationPlanner
         // haber verilir ki atamayı biri yapsın.
         if (assignee is null)
         {
-            foreach (var person in ByRegion(active, order))
+            foreach (var person in DecisionMakers(active))
                 targets.Add(new Target(person,
                     "Bu iş emri henüz kimseye atanmadı."));
         }
@@ -73,15 +73,13 @@ public class NotificationPlanner
         return targets;
     }
 
-    /// <summary>Atama yapılmamış iş için bölge sorumluları.</summary>
+    /// <summary>Atama yapılmamış iş için karar verebilecek roller.</summary>
     /// <remarks>
-    /// Bölge bilgisi iş emrinde yok (trafoda var, o da Python tarafında).
-    /// Bu yüzden mühendis ve süpervizörlerin tamamına gidiyor: az sayıda
-    /// kişi, ve "kimse görmedi" riski "fazla kişi gördü" riskinden ağır
-    /// basıyor. Bölge eşleşmesi, iş emrine konum eklendiğinde daraltılır.
+    /// Mühendis ve süpervizörlerin tamamına gidiyor: az sayıda kişi, ve
+    /// "kimse görmedi" riski "fazla kişi gördü" riskinden ağır basıyor.
     /// </remarks>
-    private static IEnumerable<Technician> ByRegion(
-        IReadOnlyList<Technician> active, WorkOrder order)
+    private static IEnumerable<Technician> DecisionMakers(
+        IReadOnlyList<Technician> active)
         => active.Where(p => p.Role is PersonnelRole.Engineer
                                     or PersonnelRole.Supervisor)
                  .OrderBy(p => p.EmployeeNo);

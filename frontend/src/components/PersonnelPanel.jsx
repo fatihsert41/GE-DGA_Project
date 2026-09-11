@@ -105,7 +105,7 @@ export default function PersonnelPanel({ currentUser }) {
           <thead>
             <tr>
               <th>Sicil</th><th>Ad</th><th>Rol</th><th>Uzmanlık</th>
-              <th>Bölge</th><th>Yük</th><th>Durum</th>
+              <th>Yük</th><th>Durum</th>
             </tr>
           </thead>
           <tbody>
@@ -127,7 +127,6 @@ export default function PersonnelPanel({ currentUser }) {
                   <td className="muted">
                     {SPECIALTY_TR[p.specialty] || p.specialty}
                   </td>
-                  <td className="muted">{p.region}</td>
                   <td className="num">
                     <span className={full ? 'over-limit' : ''}>
                       {p.openOrders}
@@ -149,6 +148,14 @@ export default function PersonnelPanel({ currentUser }) {
           yapabilir". Bir teknisyen termal uzmanı olabilir ama süpervizör
           olmayabilir. Otomatik atama uzmanlığa bakar; ekran yetkileri
           role bakar.
+        </p>
+        <p className="note">
+          Bu kurulumdaki personelin tamamı aynı bölgede çalışıyor, bu
+          yüzden bölge alanı kaldırıldı. Otomatik atamada bir de "bölge
+          eşleşmesi" kuralı vardı; tek bölgede ayrım üretmediği ve trafo
+          konumları farklı olduğu için bazı varlıkları sessizce kayırdığı
+          fark edilince o kural da kaldırıldı. Çok bölgeli bir işletmede
+          geri gelmesi gerekir.
         </p>
       </div>
 

@@ -146,14 +146,14 @@ function TechnicianTable({ technicians }) {
       <h2>Teknisyenler</h2>
       <table className="compare">
         <thead>
-          <tr><th>Ad</th><th>Bölge</th><th>Uzmanlık</th><th>Yük</th></tr>
+          <tr><th>Sicil</th><th>Ad</th><th>Uzmanlık</th><th>Yük</th></tr>
         </thead>
         <tbody>
           {technicians.items.map((t) => (
             <tr key={t.id}>
-              <td><b>{t.name}</b> <span className="muted">{t.id}</span></td>
-              <td>{t.region}</td>
-              <td>{t.specialty}</td>
+              <td className="num">{t.employeeNo}</td>
+              <td><b>{t.name}</b></td>
+              <td className="muted">{t.specialty}</td>
               <td>
                 <span className={t.hasCapacity ? '' : 'over-limit'}>
                   {t.openOrders} / {t.maxOpenOrders}

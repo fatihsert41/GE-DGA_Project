@@ -102,13 +102,12 @@ public static class TestData
             Status = status,
         };
 
-    public static Technician Tech(string id, string region, Specialty specialty,
+    public static Technician Tech(string id, Specialty specialty,
                                   int maxOpen = 3, bool active = true)
         => new()
         {
             Id = id,
             Name = $"Teknisyen {id}",
-            Region = region,
             Specialty = specialty,
             MaxOpenOrders = maxOpen,
             IsActive = active,

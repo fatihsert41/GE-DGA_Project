@@ -12,38 +12,8 @@ namespace TransformerAI.Maintenance.Api.Services;
 /// </remarks>
 public class AssignmentService
 {
-    /// <summary>Şehir → bölge eşlemesi.</summary>
-    /// <remarks>
-    /// Trafo konumu "İstanbul-Avrupa" gibi gelir; teknisyen bölgesi
-    /// "Marmara" olarak tutulur. Eşleme burada, tek yerde.
-    /// </remarks>
-    private static readonly Dictionary<string, string> CityToRegion = new()
-    {
-        ["İstanbul"] = "Marmara",
-        ["Kocaeli"] = "Marmara",
-        ["Bursa"] = "Marmara",
-        ["Gebze"] = "Marmara",
-        ["Çanakkale"] = "Marmara",
-        ["İzmir"] = "Ege",
-        ["Ankara"] = "İç Anadolu",
-        ["Mersin"] = "Akdeniz",
-    };
-
     /// <summary>Seçim ve gerekçesi.</summary>
     public record Assignment(Technician Technician, int Score, string Reason);
-
-    /// <summary>Konumdan bölge çıkarır; bilinmiyorsa null.</summary>
-    public static string? RegionOf(string? location)
-    {
-        if (string.IsNullOrWhiteSpace(location))
-        {
-            return null;
-        }
-
-        // "İstanbul-Avrupa" -> "İstanbul". Split('-') ilk parçayı verir.
-        var city = location.Split('-')[0].Trim();
-        return CityToRegion.GetValueOrDefault(city);
-    }
 
     /// <summary>Arıza ailesine göre hangi uzmanlık gerekir?</summary>
     public static Specialty RequiredSpecialty(WorkOrderKind kind, string? family)
@@ -76,7 +46,6 @@ public class AssignmentService
                               string? location,
                               string? family)
     {
-        var region = RegionOf(location);
         var needed = RequiredSpecialty(kind, family);
 
         // Kapasitesi dolu ve pasif olanlar elenir.
@@ -90,21 +59,21 @@ public class AssignmentService
         }
 
         // Puanlama: yüksek puan daha iyi.
-        //   bölge eşleşmesi     +10  (yol süresi en pahalı kalem)
         //   uzmanlık eşleşmesi   +5
         //   genel uzmanlık       +1  (her işi yapar ama uzman tercih edilir)
         // Puan eşitse yükü az olan kazanır — böylece iş dağılır.
+        //
+        // ⚠ KALDIRILAN KURAL: burada bir de "bölge eşleşmesi +10" vardı
+        // (yol süresi en pahalı kalemdir). Bu kurulumdaki tüm personel
+        // aynı bölgede olduğu için kural artık ayrım üretmiyordu —
+        // üstelik trafo konumları farklı olduğundan bazı varlıkları
+        // sessizce kayırıyordu. Çok bölgeli bir işletmede geri gelmesi
+        // gereken bir kuraldır; tek bölgede yanlış çalışır.
         var scored = candidates
             .Select(w =>
             {
                 var score = 0;
                 var reasons = new List<string>();
-
-                if (region is not null && w.Technician.Region == region)
-                {
-                    score += 10;
-                    reasons.Add($"bölge eşleşti ({region})");
-                }
 
                 if (w.Technician.Specialty == needed)
                 {

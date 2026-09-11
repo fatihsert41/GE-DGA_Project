@@ -33,7 +33,6 @@ export default function LoginScreen({ onLogin }) {
         employeeNo: result.employeeNo,
         name: result.name,
         role: result.role,
-        region: result.region,
         specialty: result.specialty,
         expiresAt: result.expiresAt,
       }
