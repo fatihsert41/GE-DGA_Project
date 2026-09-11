@@ -1145,3 +1145,28 @@ td.num, span.num, b.num {
 }
 
 .insp-why { font-size: 0.74rem; max-width: 46ch; }
+
+/* ---------------------------------------------------------------------
+   Faz 9.6 — Trafo şeması
+   ------------------------------------------------------------------- */
+
+.sch-wrap {
+  margin-top: 16px; background: var(--paper);
+  border: 1px solid var(--rule); border-radius: 10px;
+  padding: 10px; overflow-x: auto;
+}
+.sch-svg { width: 100%; min-width: 520px; height: auto; display: block; }
+
+.sch-part { cursor: pointer; }
+.sch-part:hover { opacity: 0.88; }
+.sch-part:focus { outline: none; }
+.sch-part:focus-visible rect,
+.sch-part:focus-visible circle,
+.sch-part:focus-visible ellipse { stroke: var(--accent); stroke-width: 3; }
+
+.sch-label {
+  font-family: var(--sans); font-size: 11px; font-weight: 600;
+  pointer-events: none;
+}
+
+.sch-legend { margin-top: 12px; }

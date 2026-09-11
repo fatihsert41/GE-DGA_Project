@@ -132,6 +132,12 @@ export const api = {
     client.delete(`/transformers/${id}/electrical-tests/${testId}/void`)
       .then((r) => r.data),
 
+  // --- Trafo şeması (Faz 9.6) ---------------------------------------------
+  // Parça renklerini belirleyen kurallar BACKEND'de; arayüz yalnızca
+  // çizer. Kuralı iki yerde tutmak, iki farklı gerçek yaratırdı.
+  schematic: (id) =>
+    client.get(`/transformers/${id}/schematic`).then((r) => r.data),
+
   // --- Buşing ve kademe değiştirici (Faz 9.4) -----------------------------
   componentsSchema: () => client.get('/components/schema').then((r) => r.data),
   componentsFleet: () => client.get('/components/fleet').then((r) => r.data),

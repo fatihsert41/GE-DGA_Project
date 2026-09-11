@@ -12,8 +12,8 @@ from . import database
 from .ml import predictor
 from .routers import (compare, components, electrical, explain, fleet,
                       health_index,
-                      lifecycle, oil, physical, predict, transformers,
-                      trend)
+                      lifecycle, oil, physical, predict, schematic,
+                      transformers, trend)
 
 app = FastAPI(
     title="TransformerAI - DGA Fault Prediction API",
@@ -44,6 +44,7 @@ app.include_router(electrical.router)
 app.include_router(lifecycle.router)
 app.include_router(physical.router)
 app.include_router(components.router)
+app.include_router(schematic.router)
 
 
 @app.on_event("startup")
