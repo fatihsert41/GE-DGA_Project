@@ -768,3 +768,62 @@ button.tcard:hover .tcard-go { color: var(--accent); }
 .hstrip-bar .high { background: var(--high); }
 .hstrip-bar .critical { background: var(--critical); }
 .hstrip-why { margin-top: 4px; font-size: 0.72rem; }
+
+/* ---------------------------------------------------------------------
+   Faz 8.6 — Elektriksel testler
+   ------------------------------------------------------------------- */
+
+.el-head {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 16px; flex-wrap: wrap;
+}
+.el-head h2 { border-bottom: none; padding-bottom: 0; }
+.el-meaning { margin-top: 4px; max-width: 60ch; }
+.el-standard {
+  font-size: 0.7rem; color: var(--muted); white-space: nowrap;
+  background: var(--surface-2); border-radius: 999px; padding: 3px 10px;
+}
+
+.el-expected {
+  margin: 14px 0 10px; padding: 10px 14px; border-radius: 8px;
+  background: var(--surface-2); font-size: 0.86rem;
+}
+.el-expected .k { color: var(--muted); margin-right: 8px; }
+
+.el-metric {
+  display: flex; gap: 40px; flex-wrap: wrap; margin: 16px 0 4px;
+}
+.el-metric .k { font-size: 0.76rem; color: var(--muted); }
+.el-big {
+  display: block; font-family: var(--mono); font-size: 1.9rem;
+  font-weight: 600; line-height: 1.2; font-variant-numeric: tabular-nums;
+}
+.el-big.low { color: var(--low); }
+.el-big.medium { color: var(--medium); }
+.el-big.high { color: var(--high); }
+.el-big.critical { color: var(--critical); }
+
+.el-note {
+  margin-top: 14px; padding: 12px 16px; border-radius: 8px;
+  background: var(--surface-2); border-left: 3px solid var(--rule-strong);
+  font-size: 0.84rem; line-height: 1.55;
+}
+.el-note.warn { border-left-color: var(--medium); }
+
+.el-target { background: var(--surface-2); padding: 10px 14px;
+  border-radius: 8px; margin-top: 4px; }
+.el-target.warn { border-left: 3px solid var(--medium); }
+
+/* Formda canlı sapma: teknisyen sayıyı YAZARKEN hedefi görsün. */
+.el-live {
+  float: right; font-family: var(--mono); font-size: 0.74rem;
+  font-variant-numeric: tabular-nums; padding: 1px 7px; border-radius: 999px;
+  color: #fffdf8;
+}
+.el-live.low { background: var(--low); color: #241a08; }
+.el-live.medium { background: var(--medium); color: #1c1205; }
+.el-live.critical { background: var(--critical); }
+
+td.num, span.num, b.num {
+  font-family: var(--mono); font-variant-numeric: tabular-nums;
+}

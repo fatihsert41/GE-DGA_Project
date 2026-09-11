@@ -14,6 +14,7 @@ from typing import Dict
 
 from .. import database
 from ..core import assets, health_index
+from . import electrical as electrical_service
 from . import oil as oil_service
 
 
@@ -29,11 +30,16 @@ def transformer_health(transformer_id: str) -> Dict[str, object]:
     tests = database.get_oil_tests(transformer_id)
     oil = oil_service.oil_card(transformer_id, tests[-1] if tests else None)
 
+    el_tests = database.get_electrical_tests(transformer_id)
+    el = electrical_service.electrical_card(
+        transformer_id, el_tests[-1] if el_tests else None)
+
     cls = assets.get(record.get("asset_class"))
     result = health_index.compute(
         risk_condition=(latest_dga or {}).get("risk_condition"),
         oil_overall=oil.get("oil_overall"),
         paper=oil.get("paper"),
+        electrical_overall=el.get("electrical_overall"),
         asset_weight=float(cls["weight"]),   # type: ignore[arg-type]
     )
 
@@ -51,8 +57,10 @@ def transformer_health(transformer_id: str) -> Dict[str, object]:
             "dga_sampled_at": (latest_dga or {}).get("sampled_at"),
             "dga_prediction": (latest_dga or {}).get("prediction"),
             "oil_sampled_at": oil.get("oil_sampled_at"),
+            "electrical_tested_at": el.get("electrical_tested_at"),
             "measurement_count": len(measurements),
             "oil_test_count": len(tests),
+            "electrical_test_count": len(el_tests),
         },
     }
 
@@ -78,6 +86,13 @@ def fleet_health() -> Dict[str, object]:
             "coverage": c["health"].get("coverage", {}).get("level"),
             "critical_dimensions": c["health"].get("critical_dimensions", []),
             "renewal_priority": c["health"].get("renewal_priority"),
+            # Ham skor da taşınıyor: tavan kuralı birden çok trafoyu aynı
+            # değere (45.0) yığabiliyor ve sıralama bilgisi kayboluyor.
+            # Tavan HÜKMÜ doğru — "bu trafo en azından incelenmeli" — ama
+            # ikisi arasında hangisinin daha kötü durumda olduğunu ham
+            # ortalama hâlâ biliyor.
+            "raw_score": c["health"].get("raw_score"),
+            "capped": c["health"].get("capped", False),
         }
         for c in cards
     ]
@@ -85,7 +100,8 @@ def fleet_health() -> Dict[str, object]:
     # Skoru olmayanlar en SONA değil, ayrı bir kovaya: bilinmeyen durum
     # "iyi" de değildir "kötü" de. Listede görünsün ki gözden kaçmasın.
     scored = sorted([i for i in items if i["score"] is not None],
-                    key=lambda i: (i["score"], i["transformer_id"]))
+                    key=lambda i: (i["score"], i["raw_score"] or 0.0,
+                                   i["transformer_id"]))
     unknown = sorted([i for i in items if i["score"] is None],
                      key=lambda i: str(i["transformer_id"]))
 

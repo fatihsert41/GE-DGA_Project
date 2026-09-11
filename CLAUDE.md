@@ -78,8 +78,13 @@ cd C:\Users\Esma\Desktop\Python\GE-DGA_Project
 
 Arayüz: http://localhost:5173 · API: http://localhost:8000/docs
 
-**Durum:** Faz 0-7 bitti, Faz 8 devam ediyor (8.1-8.5 tamam).
-**159 test** (109 Python + 50 .NET).
+**Durum:** Faz 0-7 bitti, Faz 8 devam ediyor (8.1-8.6 tamam).
+**195 test** (145 Python + 50 .NET).
+
+**BEKLEYEN İSTEK (kullanıcı 11 Eyl'de söyledi):** Arayüz hâlâ "AI yapımı"
+duruyor; **.NET/kurumsal platform görünümüne** çekilmesi isteniyor.
+Kullanıcı "sonraya bırakalım" dedi, ama bu bir sonraki cila turunun
+konusu olmalı. (Görsel dil bölümüne bak: kağıt zemin + mürekkep.)
 
 **Faz 8.5 — Sağlık Endeksi TAMAM** (kullanıcı B'yi seçti).
 `core/health_index.py` üç boyutu (DGA kondisyonu ×4, kağıt DP ×3, yağ
@@ -100,12 +105,59 @@ Uç noktalar: `/health-index/schema`, `/health-index/fleet`,
 detayda dördüncü sekme `HealthPanel` (formülü satır satır gösterir).
 Testler: `tests/test_health_index.py` (14 test) — toplam 109 Python.
 
-**Sıradaki:** (A) Elektriksel testler — TTR (sarım oranı) öncelikli.
-Künye zaten beklenen oranı hesaplıyor (`core/nameplate.rated_turns_ratio`,
-kademe için `turns_ratio_at_tap`); ölçüleni girip sapmayı değerlendirmek
-kalıyor. Sargı direnci, yalıtım direnci/PI, tan δ da eklenebilir. Kural
-tabanlı ve açıklanabilir. **Kullanıcının kendi fikri.** Eklendiğinde
-sağlık endeksine dördüncü boyut olarak girebilir.
+**Faz 8.6 — Elektriksel testler TAMAM** (kullanıcının kendi fikriydi).
+`core/electrical.py`: TTR, sargı direnci, yalıtım direnci/PI, tan δ.
+Bu faz sisteme **bağımsız bir duyu** ekledi: şimdiye kadarki her ölçüt
+yağdan okunuyordu, bunlar trafo ENERJİSİZKEN ölçülür.
+
+Üç önemli tasarım kararı (hepsi "kolay ama yanlış" olanı reddediyor):
+* **TTR'de sapmanın DESENİ tanı koydurur**, sadece büyüklüğü değil.
+  Tek faz ayrışmışsa "kısa devre spir → devreden çıkar"; üçü birlikte
+  kaymışsa "KADEME POZİSYONU yanlış girilmiş, önce onu doğrula". Bu
+  ayrım olmadan sistem bir kağıt hatasını devreden çıkarma sebebi gibi
+  raporlardı.
+* **PI'ın anlamını yitirdiği bölge tanınıyor** (IR > 5000 MΩ,
+  IEEE C57.152). Naif kod, filonun EN KURU trafosunu "ıslak" ilan
+  ederdi. Demo filoda TR-02 tam olarak bu tuzak vakası.
+* **tan δ'da sıcaklık düzeltmesi UYGULANMIYOR** — yalıtım tipine bağlı
+  ampirik tablo gerekir, elimizde yok. Uydurmak yerine sınırı söylüyoruz.
+
+Sargı direncinde ölçüt **mutlak ohm değil DENGESİZLİK**: mutlak direnç
+künyede yazmaz ama üç faz birbirinin doğal referansıdır.
+
+Uç nokta kuralları (ikisi de gerçek saha hatası): kademeli trafoda TTR
+girerken kademe zorunlu (400); sadece kademe girip kaydetmek yasak (400).
+
+Demo filo senaryoları elle seçildi (`ml/synth_electrical.py`,
+`ml/seed.py::ELECTRICAL_SCENARIOS`) — rastgele üretim "yağı temiz ama
+sargısı bozuk" gibi bir hikâye üretemezdi:
+* **TR-05** yağı temiz + DGA sakin ama B fazında spir kaybı →
+  YAĞIN GÖREMEDİĞİ ARIZA (bu fazın var oluş sebebi)
+* **TR-04** DGA "T1" diyor + sargı direnci kademe kontağında aşınma
+  gösteriyor → İKİ BAĞIMSIZ KAYNAK AYNI ŞEYİ SÖYLÜYOR
+* **TR-06** PD + PI 1.06 (ıslak yalıtım)
+* **TR-02** tuzak: PI 1.30 ama IR 32967 MΩ → hüküm "iyi"
+* **TR-09** kasten testsiz (elektriksel test seyrektir, "veri yok" kural)
+
+**Sağlık endeksine DÖRDÜNCÜ boyut olarak girdi** (ağırlık 3, yağdan
+yüksek: kötü yağ filtrelenebilir, bozuk sargı sarılmak zorundadır).
+Payda 9 → 12. TR-05 bunun kanıtı: ham ortalama 77 ("İyi") ama tavan
+kuralı 45'e indiriyor. Tavan birden çok trafoyu 45'te yığdığı için
+`fleet_health` sıralaması ham skoru ikincil ölçüt olarak kullanıyor.
+
+Uç noktalar: `/electrical/schema`, `/electrical/fleet`,
+`/transformers/{id}/electrical-tests` (GET+POST),
+`/transformers/{id}/expected-ratio` (form ölçüm GİRİLİRKEN hedefi
+göstersin diye ayrı). Arayüz: `ElectricalPanel.jsx`, detayda 5. sekme,
+formda canlı sapma göstergesi.
+Testler: `tests/test_electrical.py` (20) + `tests/test_electrical_api.py`
+(12) + sağlık endeksine 4 test → toplam **145 Python**.
+
+**Sıradaki seçenekler:**
+* Arayüz cilası (yukarıdaki bekleyen istek) — .NET/kurumsal görünüm.
+* Elektriksel testleri .NET bakım planlayıcısına bağlamak: şu an iş
+  emri önerileri yalnızca DGA'ya bakıyor, oysa "B fazında spir kaybı"
+  en az kritik risk kadar acil.
 
 **Sonra gelecek işler (sırasız):**
 * Kalibrasyon katmanı (`docs/FAZ6-IYILESTIRME-YOL-HARITASI.md` 1. sıra) —

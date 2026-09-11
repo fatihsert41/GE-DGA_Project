@@ -134,3 +134,45 @@ def test_en_zayif_boyut_bildirilir():
     r = hi.compute(risk_condition=1, oil_overall="kabul", paper=paper(82))
     assert r["weakest"]["key"] == "paper"
     assert r["weakest"]["score"] == 18.0
+
+
+# --- Dördüncü boyut: elektriksel testler (Faz 8.6) -----------------------
+
+def test_elektriksel_boyut_ortalamaya_girer():
+    """Dört boyut ölçülüyse payda 12 olmalı (4+3+3+2)."""
+    r = hi.compute(risk_condition=1, oil_overall="iyi", paper=paper(0),
+                   electrical_overall="iyi")
+    assert r["weight_sum"] == 12.0
+    assert r["coverage"]["level"] == "full"
+    assert r["score"] == 100.0
+
+
+def test_elektriksel_test_yoksa_kapsama_eksik():
+    """Elektriksel test seyrek yapılır; eksikliği GÖRÜNÜR olmalı."""
+    r = hi.compute(risk_condition=1, oil_overall="iyi", paper=paper(0))
+    assert r["coverage"]["level"] == "partial"
+    assert r["coverage"]["measured"] == 3
+    assert any("Elektriksel testler" in w for w in r["warnings"])
+
+
+def test_bozuk_sargi_tek_basina_tavan_uygular():
+    """Yağı temiz, kağıdı yeni, DGA'sı sakin — ama sargıda spir kaybı var.
+
+    Demo filodaki TR-05 senaryosu. Ağırlıklı ortalama bu trafoyu "İyi"
+    gösterirdi; tavan kuralı buna izin vermemeli.
+    """
+    r = hi.compute(risk_condition=1, oil_overall="iyi", paper=paper(10),
+                   electrical_overall="kötü")
+    assert r["raw_score"] > hi.CRITICAL_CAP
+    assert r["capped"] is True
+    assert "Elektriksel testler" in r["critical_dimensions"]
+    assert r["weakest"]["key"] == "electrical"
+
+
+def test_elektriksel_agirligi_yagdan_yuksek():
+    """Bozuk sargı, bozuk yağdan daha çok düşürmeli: yağ değiştirilebilir."""
+    kotu_yag = hi.compute(risk_condition=1, paper=paper(10),
+                          oil_overall="kötü", electrical_overall="iyi")
+    kotu_sargi = hi.compute(risk_condition=1, paper=paper(10),
+                            oil_overall="iyi", electrical_overall="kötü")
+    assert kotu_sargi["raw_score"] < kotu_yag["raw_score"]

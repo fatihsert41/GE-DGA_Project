@@ -9,6 +9,7 @@ import { RISK_TR } from '../constants'
 import NameplatePanel from './NameplatePanel'
 import OilQualityPanel from './OilQualityPanel'
 import HealthPanel from './HealthPanel'
+import ElectricalPanel from './ElectricalPanel'
 
 /* Faz 5.4 — tek trafonun detayı.
  *
@@ -186,6 +187,8 @@ export default function TransformerDetail({ id, meta, onBack }) {
         onClick={() => setTab('measurements')}>Ölçümler ve Trend</button>
       <button type="button" className={tab === 'oil' ? 'active' : ''}
         onClick={() => setTab('oil')}>Yağ Kalitesi</button>
+      <button type="button" className={tab === 'electrical' ? 'active' : ''}
+        onClick={() => setTab('electrical')}>Elektriksel</button>
       <button type="button" className={tab === 'health' ? 'active' : ''}
         onClick={() => setTab('health')}>Sağlık Endeksi</button>
       <button type="button" className={tab === 'nameplate' ? 'active' : ''}
@@ -200,6 +203,17 @@ export default function TransformerDetail({ id, meta, onBack }) {
       <div>
         <div className="panel">{header}{tabs}</div>
         <div style={{ marginTop: 16 }}><NameplatePanel id={id} /></div>
+      </div>
+    )
+  }
+
+  // Elektriksel testler trafo ENERJİSİZKEN yapılır; DGA'dan tamamen
+  // bağımsızdır, o yüzden ölçüm verisi beklemeden açılabilir.
+  if (tab === 'electrical') {
+    return (
+      <div>
+        <div className="panel">{header}{tabs}</div>
+        <div style={{ marginTop: 16 }}><ElectricalPanel id={id} /></div>
       </div>
     )
   }

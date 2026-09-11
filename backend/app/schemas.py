@@ -97,3 +97,42 @@ class OilTestIn(BaseModel):
     sampled_at: Optional[str] = Field(None, description="ISO tarih")
     lab: Optional[str] = Field(None, max_length=100)
     notes: Optional[str] = Field(None, max_length=500)
+
+
+class ElectricalTestIn(BaseModel):
+    """Elektriksel test girişi — tüm ölçümler opsiyonel. (Faz 8.6)
+
+    Sahada dört testin dördü birden nadiren yapılır: TTR ve sargı direnci
+    aynı cihazla hızlıca alınır, yalıtım direnci 10 dakika bekler, tan δ
+    ayrı bir köprü cihazı ister. Hepsini zorunlu tutmak, elindeki kısmi
+    raporu girmek isteyen kullanıcıyı engellerdi.
+
+    ``tap_position`` ölçüm değil BAĞLAMDIR: beklenen sarım oranı kademeye
+    göre kayar, bu yüzden TTR girilirken birlikte verilmelidir.
+    """
+    tap_position: Optional[int] = Field(
+        None, ge=-20, le=20, description="Kademe pozisyonu (TTR için bağlam)")
+
+    ttr_a: Optional[float] = Field(None, gt=0, description="A fazı sarım oranı")
+    ttr_b: Optional[float] = Field(None, gt=0, description="B fazı sarım oranı")
+    ttr_c: Optional[float] = Field(None, gt=0, description="C fazı sarım oranı")
+
+    rw_a_ohm: Optional[float] = Field(None, gt=0, description="A fazı sargı direnci (Ω)")
+    rw_b_ohm: Optional[float] = Field(None, gt=0, description="B fazı sargı direnci (Ω)")
+    rw_c_ohm: Optional[float] = Field(None, gt=0, description="C fazı sargı direnci (Ω)")
+    winding_temp_c: Optional[float] = Field(
+        None, ge=-40, le=150, description="Sargı sıcaklığı (°C) — düzeltme için")
+
+    ir_1min_mohm: Optional[float] = Field(
+        None, gt=0, description="Yalıtım direnci, 1 dakika (MΩ)")
+    ir_10min_mohm: Optional[float] = Field(
+        None, gt=0, description="Yalıtım direnci, 10 dakika (MΩ) — PI için")
+    insulation_temp_c: Optional[float] = Field(None, ge=-40, le=150)
+
+    tan_delta_pct: Optional[float] = Field(
+        None, ge=0, le=100, description="Kayıp faktörü tan δ (%)")
+    tan_delta_temp_c: Optional[float] = Field(None, ge=-40, le=150)
+
+    tested_at: Optional[str] = Field(None, description="ISO tarih")
+    tested_by: Optional[str] = Field(None, max_length=100)
+    notes: Optional[str] = Field(None, max_length=500)

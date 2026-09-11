@@ -48,6 +48,21 @@ export const api = {
   createOilTest: (id, payload) =>
     client.post(`/transformers/${id}/oil-tests`, payload).then((r) => r.data),
 
+  // --- Elektriksel testler (Faz 8.6) --------------------------------------
+  electricalSchema: () => client.get('/electrical/schema').then((r) => r.data),
+  electricalFleet: () => client.get('/electrical/fleet').then((r) => r.data),
+  electricalTests: (id) =>
+    client.get(`/transformers/${id}/electrical-tests`).then((r) => r.data),
+  createElectricalTest: (id, payload) =>
+    client.post(`/transformers/${id}/electrical-tests`, payload)
+      .then((r) => r.data),
+  // Ayrı uç nokta olmasının sebebi: teknisyen ölçtüğü sayıyı GİRERKEN
+  // beklenen değeri görmeli, kaydettikten sonra değil. Kademe seçilir
+  // seçilmez beklenti güncellenir.
+  expectedRatio: (id, tap) =>
+    client.get(`/transformers/${id}/expected-ratio`,
+      { params: tap == null ? {} : { tap } }).then((r) => r.data),
+
   // --- Sağlık endeksi (Faz 8.5) -------------------------------------------
   // Ağırlıklar ve bantlar backend'den gelir; arayüze sabit yazmak formül
   // değiştiğinde ekranın yalan söylemesine yol açardı.

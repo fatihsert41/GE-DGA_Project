@@ -6,7 +6,7 @@
 > sonucu **bakım iş emrine** dönüştüren polyglot bir sistem.
 
 **Üç servis:** Python (ML) · .NET (bakım planlama) · React (arayüz).
-**159 test** (109 Python + 50 .NET).
+**195 test** (145 Python + 50 .NET).
 
 ---
 
@@ -23,7 +23,8 @@
 | **D — Belirsizlik** | Model emin değilse **söyler** ve vaka uzmana gider | `review` alanı, her tanıda |
 | **E — Eyleme dönüşüm** | Risk → iş emri → teknisyen ataması | .NET servisi |
 | **F — Kalan ömür** | Furan → DP → kağıdın tüketilen ömrü (DGA'nın göremediği) | `GET /transformers/{id}/oil-tests` |
-| **G — Tek skor** | Üç boyut (DGA · kağıt · yağ) → 0-100 sağlık endeksi, formülü açık | `GET /transformers/{id}/health` |
+| **G — Tek skor** | Dört boyut (DGA · kağıt · elektriksel · yağ) → 0-100 sağlık endeksi, formülü açık | `GET /transformers/{id}/health` |
+| **H — Bağımsız duyu** | TTR, sargı direnci, PI, tan δ — yağın göremediği arızalar | `GET /transformers/{id}/electrical-tests` |
 
 ---
 
@@ -148,7 +149,7 @@ Vite iki servise birden yönlendirir: `/api` → :8000, `/maint` → :5080.
 ## Testler
 
 ```powershell
-cd backend      ; pytest -q            # 109 test
+cd backend      ; pytest -q            # 145 test
 cd maintenance  ; dotnet test          # 50 test
 ```
 
@@ -165,9 +166,10 @@ sınıflarda tutulduğu için doğrudan test edilebiliyor.
 | **Numune Analizi** | Elle gaz girişi → tanı, SHAP grafiği, Duval üçgeni, yöntem karşılaştırması, gerçeklik kontrolü paneli |
 | **Bakım Planlama** | İş emirleri, sistemin ürettiği öneriler, teknisyen yük tablosu, atama |
 
-Trafo detayı dört sekmeden oluşur: **Ölçümler ve Trend** (DGA) · **Yağ
+Trafo detayı beş sekmeden oluşur: **Ölçümler ve Trend** (DGA) · **Yağ
 Kalitesi** (nem, BDV, asitlik, arayüzey gerilimi + kağıt yaşlanması) ·
-**Sağlık Endeksi** (üç boyutun birleşimi, skorun aritmetiği satır satır) ·
+**Elektriksel** (TTR, sargı direnci, yalıtım direnci/PI, tan δ) ·
+**Sağlık Endeksi** (dört boyutun birleşimi, skorun aritmetiği satır satır) ·
 **Künye** (nameplate, türetilmiş değerlerle).
 
 ---
@@ -186,9 +188,30 @@ gaz analizi olasılığı verir, **sonucu varlık sınıfı verir**:
 Sonuç: yüksek riskli bir LPT (3.00), kritik riskli bir MPT'nin (2.80)
 önüne geçer.
 
-**Sağlık endeksi: tek skor, ama kara kutu değil.** DGA riski, kağıt DP'si
-ve yağ kalitesi ortak bir 0-100 ölçeğine çevrilip ağırlıklı ortalaması
-alınır (DGA ×4, kağıt ×3, yağ ×2):
+**Elektriksel testler: yağın göremediği arızalar.** DGA, nem, furan —
+hepsi aynı yağ numunesinden okunur. Ama bazı arızalar yağa iz bırakmaz:
+sargıda kısa devre olmuş bir spir, kademe değiştiricide aşınmış bir
+kontak. Bu testler trafo **enerjisizken** yapılır ve sisteme bağımsız
+bir duyu ekler.
+
+İki vaka bunu anlatıyor. **TR-05**: yağı temiz, DGA'sı "Normal" — ama
+TTR B fazında %1.4 düşük, yani spir kaybı. Yalnızca yağa bakan bir sistem
+bunu göremezdi. **TR-04**: DGA "T1 (düşük sıcaklıkta ısınma)" diyor,
+sargı direnci de kademe kontağında %4.5 dengesizlik gösteriyor — iki
+**bağımsız** kaynak aynı sonuca varıyor, ki bu tek kaynağın iki kez
+söylemesinden çok daha güçlü bir kanıttır.
+
+Üç yerde "kolay ama yanlış" olan reddedildi:
+
+| Karar | Neden |
+|---|---|
+| TTR'de sapmanın **deseni** tanı koyar | Tek faz ayrışmışsa spir kaybı; üçü birlikte kaymışsa kademe yanlış girilmiş. Aynı sapma, biri kağıt hatası diğeri devreden çıkarma sebebi |
+| IR > 5000 MΩ'da **PI'a bakılmaz** | Naif kod filonun en kuru trafosunu "ıslak" ilan ederdi (IEEE C57.152) |
+| tan δ'da sıcaklık düzeltmesi **yapılmaz** | Yalıtım tipine bağlı ampirik tablo gerekir; uydurmak yerine sınırı söylüyoruz |
+
+**Sağlık endeksi: tek skor, ama kara kutu değil.** DGA riski, kağıt DP'si,
+elektriksel testler ve yağ kalitesi ortak bir 0-100 ölçeğine çevrilip
+ağırlıklı ortalaması alınır (DGA ×4, kağıt ×3, elektriksel ×3, yağ ×2):
 
 ```
 Sağlık = Σ(ağırlık × puan) ÷ Σ(ağırlık)
@@ -199,7 +222,7 @@ Sağlık = Σ(ağırlık × puan) ÷ Σ(ağırlık)
 | Kural | Neden |
 |---|---|
 | Bilinmeyen boyut ortalamadan **çıkarılır** | Yağ testi olmayan trafo, yağı iyi olanla aynı skoru alamaz |
-| Bir boyut en kötü seviyedeyse skor **45'i aşamaz** | İki iyi boyut, ark yapan bir trafoyu gizleyemez |
+| Bir boyut en kötü seviyedeyse skor **45'i aşamaz** | Üç iyi boyut, ark yapan (ya da sargısı bozuk) bir trafoyu gizleyemez — TR-05'in ham ortalaması 77, tavanla 45 |
 | **Yaş ayrı boyut değil** | Etkisi zaten kağıt DP'sinin içinde; iki kez saymak olurdu |
 
 Skorun yanında onu **en çok aşağı çeken boyut** da bildirilir. Demo

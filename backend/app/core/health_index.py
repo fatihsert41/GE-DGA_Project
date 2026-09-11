@@ -1,13 +1,19 @@
-"""Sağlık Endeksi — üç boyutu tek 0-100 skora indirger. — Faz 8.5
+"""Sağlık Endeksi — dört boyutu tek 0-100 skora indirger. — Faz 8.5/8.6
 
 NEDEN?
 ------
-Elimizde artık trafonun durumunu anlatan ÜÇ ayrı ölçüt var ve üçü farklı
+Elimizde trafonun durumunu anlatan DÖRT ayrı ölçüt var ve dördü farklı
 birimlerde konuşuyor:
 
-* **DGA riski**      — IEEE C57.104 kondisyonu (1-4)
-* **Yağ kalitesi**   — iyi / kabul / kötü (IEC 60422 ailesi)
-* **Kağıt DP**       — tüketilen ömür yüzdesi (Chendong / IEC 61198)
+* **DGA riski**        — IEEE C57.104 kondisyonu (1-4)
+* **Kağıt DP**         — tüketilen ömür yüzdesi (Chendong / IEC 61198)
+* **Elektriksel test** — iyi / kabul / kötü (IEEE C57.152, Faz 8.6)
+* **Yağ kalitesi**     — iyi / kabul / kötü (IEC 60422 ailesi)
+
+İlk üçü aynı yağ numunesinden ya da işletme sırasında okunur; elektriksel
+testler ise trafo ENERJİSİZKEN yapılır. Bu, endekse **bağımsız bir duyu**
+ekler: iki ayrı kaynağın aynı şeyi söylemesi, tek kaynağın iki kez
+söylemesinden çok daha güçlü bir kanıttır.
 
 Bir bakım planlamacısı bunlara ayrı ayrı bakıp "hangisine önce gideyim?"
 sorusunu cevaplayamaz. Endüstrideki karşılığı **Health Index**'tir: her
@@ -46,8 +52,9 @@ from typing import Dict, List, Optional
 # weight : önem ağırlığı (ortalamada çarpan)
 #
 # DGA en ağır: aktif, gelişmekte olan bir arızayı gösteren tek boyut o.
-# Kağıt ikinci: bozunması GERİ DÖNÜŞSÜZ, trafonun ömrü kağıdın ömrüdür.
-# Yağ en hafif: kötü yağ ciddidir ama yağ filtrelenebilir/değiştirilebilir.
+# Kağıt ve elektriksel testler ikinci sırada: kağıdın bozunması GERİ
+# DÖNÜŞSÜZ, bozuk bir sargı ise sarılmak zorundadır.
+# Yağ en hafif: kötü yağ ciddidir ama yağ filtrelenebilir, değiştirilebilir.
 DIMENSIONS: Dict[str, Dict[str, object]] = {
     "dga": {
         "key": "dga",
@@ -63,6 +70,14 @@ DIMENSIONS: Dict[str, Dict[str, object]] = {
         "source": "Furan → DP (Chendong, IEC 61198)",
         "meaning": "Tüketilen mekanik ömür. Geri dönüşü yoktur.",
     },
+    "electrical": {
+        "key": "electrical",
+        "label": "Elektriksel testler",
+        "weight": 3.0,
+        "source": "IEEE C57.152 / C57.12.00 (TTR, direnç, PI, tan δ)",
+        "meaning": "Sargı ve yalıtımın mekanik/elektriksel bütünlüğü — "
+                   "yağın göremediği arızalar.",
+    },
     "oil": {
         "key": "oil",
         "label": "Yağ kalitesi",
@@ -72,7 +87,7 @@ DIMENSIONS: Dict[str, Dict[str, object]] = {
     },
 }
 
-DIMENSION_ORDER: List[str] = ["dga", "paper", "oil"]
+DIMENSION_ORDER: List[str] = ["dga", "paper", "electrical", "oil"]
 
 # IEEE kondisyonu -> 0-100 puan. Doğrusal DEĞİL: 1'den 2'ye geçmek rutin
 # bir uyarıdır, 3'ten 4'e geçmek acil müdahaledir. Puan da bunu yansıtmalı.
@@ -80,6 +95,12 @@ DGA_SCORES: Dict[int, float] = {1: 100.0, 2: 75.0, 3: 40.0, 4: 10.0}
 
 # Yağ genel durumu -> 0-100 puan.
 OIL_SCORES: Dict[str, float] = {"iyi": 100.0, "kabul": 65.0, "kötü": 25.0}
+
+# Elektriksel test genel durumu -> 0-100 puan. Yağla aynı ölçek ama
+# ağırlığı daha yüksek (3 vs 2): kötü yağ filtrelenebilir, bozuk bir
+# sargı sarılmak zorundadır.
+ELECTRICAL_SCORES: Dict[str, float] = {"iyi": 100.0, "kabul": 60.0,
+                                       "kötü": 20.0}
 
 # Skor bandı: (alt_sınır, kod, etiket, eylem)
 BANDS = [
@@ -99,10 +120,11 @@ CRITICAL_CAP = 45.0
 DGA_CRITICAL_CONDITION = 4        # IEEE kondisyon 4
 PAPER_CRITICAL_CONSUMED = 90.0    # tüketilen ömür %90 üstü
 OIL_CRITICAL = "kötü"
+ELECTRICAL_CRITICAL = "kötü"
 
 # Kapsama (coverage) yorumları: skor kaç boyutun verisine dayanıyor?
 COVERAGE_LABELS = {
-    "full": "Üç boyutun üçü de ölçülü.",
+    "full": "Dört boyutun dördü de ölçülü.",
     "partial": "Bazı boyutlarda ölçüm yok; skor eksik veriye dayanıyor.",
     "none": "Hiçbir boyutta ölçüm yok; sağlık endeksi hesaplanamaz.",
 }
@@ -180,9 +202,29 @@ def _oil_dimension(oil_overall: Optional[str]) -> Dict[str, object]:
     }
 
 
+def _electrical_dimension(overall: Optional[str]) -> Dict[str, object]:
+    """Elektriksel test genel hükmünü 0-100 puana çevirir.
+
+    Bu boyut diğerlerinden bir yönüyle ayrılır: ölçümü **seyrektir**,
+    çünkü trafo enerjisizken yapılır. "Ölçüm yok" burada istisna değil
+    sık görülen durumdur — ve tam da bu yüzden kapsama (coverage)
+    bildirimi önem kazanır.
+    """
+    if not overall or overall == "bilinmiyor":
+        return {"available": False, "reason": "elektriksel test yok"}
+    return {
+        "available": True,
+        "score": ELECTRICAL_SCORES.get(overall, 60.0),
+        "detail": f"Genel hüküm: {overall}",
+        "raw": overall,
+        "is_critical": overall == ELECTRICAL_CRITICAL,
+    }
+
+
 def compute(risk_condition: Optional[int] = None,
             oil_overall: Optional[str] = None,
             paper: Optional[Dict[str, object]] = None,
+            electrical_overall: Optional[str] = None,
             asset_class: Optional[str] = None,
             asset_weight: Optional[float] = None) -> Dict[str, object]:
     """Sağlık endeksini hesaplar.
@@ -197,6 +239,7 @@ def compute(risk_condition: Optional[int] = None,
     dims = {
         "dga": _dga_dimension(risk_condition),
         "paper": _paper_dimension(paper),
+        "electrical": _electrical_dimension(electrical_overall),
         "oil": _oil_dimension(oil_overall),
     }
 
@@ -242,8 +285,8 @@ def compute(risk_condition: Optional[int] = None,
         return {
             "available": False,
             "reason": "no_data",
-            "message": "Bu trafo için ne DGA ne yağ testi var; sağlık "
-                       "endeksi hesaplanamaz.",
+            "message": "Bu trafo için hiçbir ölçüm yok (DGA, yağ ya da "
+                       "elektriksel test); sağlık endeksi hesaplanamaz.",
             "dimensions": rows,
             "coverage": {"level": "none", "measured": 0,
                          "total": len(DIMENSION_ORDER),
