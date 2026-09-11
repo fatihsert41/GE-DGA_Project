@@ -100,6 +100,32 @@ def init_db() -> None:
             """
         )
 
+        # Yaşam döngüsü (Faz 9.35). Varsayılan "devrede", çünkü mevcut
+        # kayıtların tamamı işletmedeki varlıklar; yeni eklenenler
+        # açıkça durum belirtir.
+        _ensure_column(conn, "transformers", "lifecycle_status",
+                       "TEXT NOT NULL DEFAULT 'in_service'")
+        _ensure_column(conn, "transformers", "lifecycle_changed_at", "TEXT")
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS lifecycle_events (
+                id             INTEGER PRIMARY KEY AUTOINCREMENT,
+                transformer_id TEXT NOT NULL,
+                from_status    TEXT,
+                to_status      TEXT NOT NULL,
+                note           TEXT,
+                changed_at     TEXT NOT NULL,
+                changed_by_id   TEXT,
+                changed_by_name TEXT,
+                FOREIGN KEY (transformer_id) REFERENCES transformers(id)
+            )
+            """
+        )
+        conn.execute(
+            """CREATE INDEX IF NOT EXISTS idx_lifecycle_transformer
+               ON lifecycle_events(transformer_id, changed_at DESC)"""
+        )
+
         # Kimlik sütunları (Faz 9.0c). Her kayıt "kim girdi" bilgisini
         # TAŞIR ve bu bilgi ANLIK GÖRÜNTÜDÜR: sicil no yanında ad da
         # saklanır. Neden? Personel işten ayrılsa, soyadı değişse ya da
@@ -513,6 +539,8 @@ def latest_measurements() -> List[Dict]:
                    t.cooling AS cooling,
                    t.commissioned_at AS commissioned_at,
                    t.year_made AS year_made,
+                   t.lifecycle_status AS lifecycle_status,
+                   t.lifecycle_changed_at AS lifecycle_changed_at,
                    r.id       AS measurement_id,
                    r.sampled_at,
                    r.gases_json,
@@ -646,3 +674,55 @@ def void_test(table: str, transformer_id: str, test_id: int,
              int(test_id), transformer_id),
         )
         return cur.rowcount > 0
+
+
+# ---------------------------------------------------------------------------
+# Yaşam döngüsü (Faz 9.35)
+# ---------------------------------------------------------------------------
+
+def set_lifecycle(transformer_id: str, to_status: str,
+                  note: Optional[str] = None,
+                  changed_by: Optional[Dict[str, str]] = None) -> Optional[Dict]:
+    """Durumu değiştirir ve geçişi geçmişe yazar.
+
+    Geçerlilik kontrolü BURADA DEĞİL, çağıran katmanda yapılır
+    (``core/lifecycle.validate_transition``): kural saf modülde durur,
+    veritabanı yalnızca yazar. Aynı ayrım künye doğrulamasında da var.
+    """
+    rec = changed_by or {}
+    with _connect() as conn:
+        row = conn.execute(
+            "SELECT lifecycle_status FROM transformers WHERE id = ?",
+            (transformer_id,)).fetchone()
+        if row is None:
+            return None
+
+        now = _now()
+        conn.execute(
+            """UPDATE transformers
+               SET lifecycle_status = ?, lifecycle_changed_at = ?
+               WHERE id = ?""",
+            (to_status, now, transformer_id))
+        conn.execute(
+            """INSERT INTO lifecycle_events
+               (transformer_id, from_status, to_status, note, changed_at,
+                changed_by_id, changed_by_name)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (transformer_id, row["lifecycle_status"], to_status, note, now,
+             rec.get("employee_no"), rec.get("name")))
+
+    return get_transformer(transformer_id)
+
+
+def get_lifecycle_events(transformer_id: str) -> List[Dict]:
+    """Durum geçişi geçmişi, eskiden yeniye.
+
+    Geçmiş SİLİNMEZ: "bu ünite ne zaman devreye alındı, ne zaman hizmet
+    dışı kaldı" sorusu varlık yönetiminin temel sorularından biridir.
+    """
+    with _connect() as conn:
+        rows = conn.execute(
+            """SELECT * FROM lifecycle_events WHERE transformer_id = ?
+               ORDER BY changed_at ASC, id ASC""",
+            (transformer_id,)).fetchall()
+    return [dict(r) for r in rows]

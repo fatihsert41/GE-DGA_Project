@@ -149,4 +149,57 @@ public class ConditionRuleTests
                                    electricalOverall: "kötü"));
         Assert.Contains(s, x => x.Rule == "electrical-fault");
     }
+
+    // --- Faz 9.35: sahada olmayan varlığa saha işi planlanmaz ------------
+
+    [Fact]
+    public void Fabrikadaki_uniteye_saha_isi_planlanmaz()
+    {
+        // YAŞANAN HATA SINIFI: fabrikada sevkiyat bekleyen bir üniteye
+        // "temel çizgi elektriksel testi" iş emri açmak, henüz teslim
+        // alınmamış bir varlığa saha ekibi göndermek demektir.
+        var s = Plan(TestData.Risk("TR-10",
+            hasData: false, riskLevel: null, riskCondition: null,
+            hasElectricalTest: false, electricalOverall: null,
+            healthScore: null, lifeConsumedPct: null,
+            lifecyclePhase: "factory", lifecycleStatus: "ready_to_ship",
+            lifecycleMonitored: false));
+
+        Assert.DoesNotContain(s, x => x.Rule == "no-electrical-baseline");
+    }
+
+    [Fact]
+    public void Nakliye_bekleyen_uniteye_de_planlanmaz()
+    {
+        var s = Plan(TestData.Risk("TR-10", hasElectricalTest: false,
+            electricalOverall: "kötü",
+            lifecyclePhase: "transit",
+            lifecycleStatus: "awaiting_transport",
+            lifecycleMonitored: false));
+
+        Assert.DoesNotContain(s, x => x.Rule.StartsWith("electrical"));
+    }
+
+    [Fact]
+    public void Sahadaki_uniteye_normal_calisir()
+    {
+        // Kural evreye bakıyor; "field" evresindeki her durumda çalışmalı.
+        var s = Plan(TestData.Risk("TR-05", electricalOverall: "kötü",
+            lifecyclePhase: "field", lifecycleStatus: "commissioning"));
+
+        Assert.Contains(s, x => x.Rule == "electrical-fault");
+    }
+
+    [Fact]
+    public void Hurdaya_ayrilmis_uniteye_is_planlanmaz()
+    {
+        var s = Plan(TestData.Risk("TR-ESKI", electricalOverall: "kötü",
+            lifeConsumedPct: 95.0, healthScore: 12.0,
+            lifecyclePhase: "retired", lifecycleStatus: "scrapped",
+            lifecycleMonitored: false));
+
+        Assert.DoesNotContain(s, x => x.Rule.StartsWith("electrical")
+                                   || x.Rule.StartsWith("paper")
+                                   || x.Rule.StartsWith("health"));
+    }
 }

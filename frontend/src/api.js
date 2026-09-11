@@ -132,6 +132,14 @@ export const api = {
     client.delete(`/transformers/${id}/electrical-tests/${testId}/void`)
       .then((r) => r.data),
 
+  // --- Varlık yaşam döngüsü (Faz 9.35) ------------------------------------
+  lifecycleSchema: () => client.get('/lifecycle/schema').then((r) => r.data),
+  lifecycle: (id) =>
+    client.get(`/transformers/${id}/lifecycle`).then((r) => r.data),
+  changeLifecycle: (id, status, note) =>
+    client.put(`/transformers/${id}/lifecycle`, { status, note })
+      .then((r) => r.data),
+
   // --- Sağlık endeksi (Faz 8.5) -------------------------------------------
   // Ağırlıklar ve bantlar backend'den gelir; arayüze sabit yazmak formül
   // değiştiğinde ekranın yalan söylemesine yol açardı.

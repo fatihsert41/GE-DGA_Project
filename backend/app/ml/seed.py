@@ -162,6 +162,33 @@ FLEET = [
             "notes": "SPT hattı üretimden kalktı; yedek parça temini zor.",
         },
     },
+    {
+        # Faz 9.35 — HENÜZ SAHAYA GİTMEMİŞ ÜNİTE.
+        #
+        # Bu kayıt bir hatayı kanıtlamak için var: yaşam döngüsü
+        # modellenmeden önce, fabrikada bekleyen böyle bir ünite
+        # "hiç numune alınmamış" sayılıp numune alma iş emri
+        # üretiyordu. Henüz enerjilenmemiş, yağında gaz üretmesi
+        # fiziksel olarak mümkün olmayan bir trafo için.
+        #
+        # Ölçümü YOK ve olmamalı (months: 0).
+        "id": "TR-10", "name": "Yeni Ünite — Sipariş 4471",
+        "location": "Fabrika / Gebze", "asset_class": "LPT", "mva": 200.0,
+        "scenario": "Normal", "months": 0,
+        "lifecycle": "awaiting_transport",
+        "lifecycle_note": "Fabrika testleri tamam; ağır nakliye ve vinç "
+                          "planlaması bekleniyor.",
+        "nameplate": {
+            "manufacturer": "GE Vernova", "serial_no": "GV-200-1188",
+            "year_made": 2026,
+            "hv_kv": 154.0, "lv_kv": 34.5, "vector_group": "YNd11",
+            "cooling": "OFAF", "oil_volume_l": 52000.0,
+            "winding_material": "Cu", "insulation_type": "tuk",
+            "tap_changer_type": "OLTC", "tap_min": -9, "tap_max": 9,
+            "tap_step_percent": 1.25,
+            "notes": "Müşteri teslimi bekleniyor; sahaya henüz sevk edilmedi.",
+        },
+    },
 ]
 
 
@@ -195,6 +222,7 @@ def _reset() -> None:
     """Tabloları oluştur ve eski demo kayıtları temizle (temiz başlangıç)."""
     database.init_db()
     with sqlite3.connect(database.DB_PATH) as conn:
+        conn.execute("DELETE FROM lifecycle_events")
         conn.execute("DELETE FROM electrical_tests")
         conn.execute("DELETE FROM oil_tests")
         conn.execute("DELETE FROM measurements")
@@ -213,8 +241,22 @@ def seed() -> None:
             **np_fields,
         )
 
+        # Yaşam döngüsü durumu (Faz 9.35). Varsayılan "devrede".
+        life = unit.get("lifecycle")
+        if life and life != "in_service":
+            database.set_lifecycle(
+                unit["id"], life, unit.get("lifecycle_note"),
+                changed_by={"employee_no": "10502", "name": "Demo Kurulum"})
+
         scenario = unit["scenario"]
         months = unit["months"]
+
+        # Ölçümü olmayan varlık: fabrikada bekleyen ünite gibi.
+        if months == 0:
+            print(f"  {unit['id']} {unit['name']:<22} {unit['asset_class']} "
+                  f"{unit['mva']:>6.0f}MVA  "
+                  f"durum={life}  (olcum yok — henuz isletmede degil)")
+            continue
         keep = unit.get("keep")
         lag = unit.get("lag", 0)
 

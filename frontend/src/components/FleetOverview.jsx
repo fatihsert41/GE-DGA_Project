@@ -83,14 +83,36 @@ function RiskComposition({ distribution, total }) {
 
 function TransformerCard({ t, onSelect }) {
   if (!t.has_data) {
+    // Ölçümü olmayan varlık iki farklı sebeple olabilir ve ikisi ÇOK
+    // farklı: ya sahada olup ihmal edilmiş, ya da henüz işletmede değil
+    // (fabrikada, yolda). İkisini aynı göstermek, fabrika ünitesini
+    // ihmal edilmiş gibi raporlamak demektir.
+    const pending = t.lifecycle && !t.lifecycle.monitored
     return (
-      <div className="tcard">
+      <button type="button" className="tcard clickable"
+        onClick={() => onSelect(t)}
+        aria-label={`${t.id} ${t.name} detayını aç`}>
         <div className="tcard-head">
           <div><div className="tid">{t.id}</div>
             <div className="tname">{t.name}</div></div>
+          {t.lifecycle && (
+            <span className={`badge sm ${pending ? 'medium' : ''}`}>
+              {t.lifecycle.label_tr}
+            </span>
+          )}
         </div>
-        <p className="empty" style={{ padding: '18px 0' }}>Henüz ölçüm yok</p>
-      </div>
+        <p className="empty" style={{ padding: '14px 0 6px' }}>
+          {pending
+            ? 'Henüz işletmede değil — ölçüm beklenmez'
+            : 'Henüz ölçüm yok'}
+        </p>
+        {pending && (
+          <div className="muted" style={{ fontSize: '0.76rem' }}>
+            {t.lifecycle.phase_note}
+          </div>
+        )}
+        <span className="tcard-go">Detay →</span>
+      </button>
     )
   }
 
@@ -113,6 +135,10 @@ function TransformerCard({ t, onSelect }) {
         </div>
         <span className={`badge sm ${t.risk_level}`}>{t.risk_level_tr}</span>
       </div>
+
+      {t.lifecycle && !t.lifecycle.monitored && (
+        <span className="overdue-chip">{t.lifecycle.label_tr}</span>
+      )}
 
       {t.needs_review && (
         <span className="review-chip" title="Model bu tanıdan emin değil">

@@ -50,7 +50,10 @@ public static class TestData
         string? paperBand = "saglikli",
         double? healthScore = 90.0,
         string? healthBand = "excellent",
-        double assetWeight = 0.7)
+        double assetWeight = 0.7,
+        string? lifecyclePhase = "field",
+        string? lifecycleStatus = "in_service",
+        bool lifecycleMonitored = true)
         => new(
             Id: id,
             Name: $"Trafo {id}",
@@ -83,7 +86,10 @@ public static class TestData
             PaperBand: paperBand,
             HealthScore: healthScore,
             HealthBand: healthBand,
-            AssetWeight: assetWeight);
+            AssetWeight: assetWeight,
+            LifecycleStatus: lifecycleStatus,
+            LifecyclePhase: lifecyclePhase,
+            LifecycleMonitored: lifecycleMonitored);
 
     public static FleetOverview Fleet(params TransformerRisk[] transformers)
         => new(
