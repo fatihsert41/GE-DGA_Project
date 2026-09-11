@@ -298,6 +298,28 @@ public class WorkOrderPlanner
                 today.AddDays(DueDaysSevere), "electrical-fault"));
         }
 
+        // KURAL 7b — Fiziksel saha bulgusu.
+        //
+        // Yalnızca KRİTİK maddeler iş emri açar (yağ kaçağı, soğutma,
+        // koruma, buşing, topraklama). Boyanın dökülmesi ya da hafif
+        // gürültü iş emri değil, kayıt konusudur — her kozmetik bulguya
+        // iş emri açmak, gerçek bulguları gürültüde boğar.
+        //
+        // Bu bulgular hiçbir ölçüme yansımaz: tıkalı bir radyatörü DGA
+        // ancak termal arıza gazı çıkınca görür, o zaman hasar zaten
+        // oluşmuştur.
+        if (t.PhysicalFindings is { Count: > 0 })
+        {
+            Add(output, openPairs, new Suggestion(
+                t.Id, WorkOrderKind.Repair,
+                "Saha bulgusu — müdahale gerekli",
+                string.Join(" · ", t.PhysicalFindings)
+                    + ". Fiziksel gözlemden geldi; bu bulgular kimyasal "
+                    + "ya da elektriksel ölçümlere yansımaz.",
+                ElectricalFaultCondition * t.AssetWeight,
+                today.AddDays(DueDaysHigh), "physical-critical"));
+        }
+
         // KURAL 8 — Kağıdın ömrü tükeniyor.
         //
         // Aciliyeti DÜŞÜK ama önemi yüksek: kağıt bozunması geri

@@ -1102,3 +1102,46 @@ td.num, span.num, b.num {
 .lc-step.todo { color: var(--muted); }
 .lc-step.now .lc-label { font-weight: 700; }
 .lc-label { display: block; padding: 0 4px; }
+
+/* ---------------------------------------------------------------------
+   Faz 9.5 — Fiziksel saha gözlemi
+   ------------------------------------------------------------------- */
+
+.insp-group { margin-top: 20px; }
+.insp-group h3 { margin-bottom: 6px; }
+
+.insp-row {
+  display: flex; align-items: flex-start; gap: 16px; flex-wrap: wrap;
+  padding: 10px 0; border-bottom: 1px solid var(--rule);
+}
+.insp-item { flex: 1 1 260px; min-width: 0; }
+.insp-hint { font-size: 0.72rem; margin-top: 2px; }
+
+.insp-choices { display: flex; gap: 5px; flex-wrap: wrap; }
+.insp-choice {
+  padding: 5px 11px; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--rule); background: var(--surface);
+  color: var(--ink-soft); font: inherit; font-size: 0.76rem;
+  white-space: nowrap;
+}
+.insp-choice:hover { border-color: var(--ink); }
+.insp-choice.on { border-color: var(--ink); font-weight: 600; }
+.insp-choice.on.low {
+  background: var(--low); color: #241a08; border-color: var(--low);
+}
+.insp-choice.on.medium {
+  background: var(--medium); color: #1c1205; border-color: var(--medium);
+}
+.insp-choice.on.critical {
+  background: var(--critical); color: #fffdf8; border-color: var(--critical);
+}
+
+/* Kritik madde işareti. Boyanın dökülmesi ile koruma arızasını ayırt
+   etmek, bu ekranın en önemli tasarım kararı. */
+.crit-chip {
+  margin-left: 7px; font-size: 0.62rem; padding: 1px 7px;
+  border-radius: 999px; background: var(--high); color: #fffdf8;
+  vertical-align: middle;
+}
+
+.insp-why { font-size: 0.74rem; max-width: 46ch; }

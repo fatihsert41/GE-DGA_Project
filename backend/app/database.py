@@ -100,6 +100,31 @@ def init_db() -> None:
             """
         )
 
+        # Fiziksel gözlem turları (Faz 9.5). Maddeler JSON olarak
+        # saklanıyor: liste zamanla değişebilir ve her madde için ayrı
+        # sütun açmak şemayı kırılgan yapardı. Yağ/elektriksel testlerde
+        # sütun tercih edildi çünkü orada alanlar SAYISAL ve sorgulanıyor;
+        # burada değerler kategorik ve bütün olarak okunuyor.
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS physical_inspections (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                transformer_id  TEXT NOT NULL,
+                inspected_at    TEXT NOT NULL,
+                observations_json TEXT NOT NULL,
+                notes           TEXT,
+                created_at      TEXT NOT NULL,
+                recorded_by_id   TEXT,
+                recorded_by_name TEXT,
+                FOREIGN KEY (transformer_id) REFERENCES transformers(id)
+            )
+            """
+        )
+        conn.execute(
+            """CREATE INDEX IF NOT EXISTS idx_physical_transformer
+               ON physical_inspections(transformer_id, inspected_at DESC)"""
+        )
+
         # Yaşam döngüsü (Faz 9.35). Varsayılan "devrede", çünkü mevcut
         # kayıtların tamamı işletmedeki varlıklar; yeni eklenenler
         # açıkça durum belirtir.
@@ -726,3 +751,67 @@ def get_lifecycle_events(transformer_id: str) -> List[Dict]:
                ORDER BY changed_at ASC, id ASC""",
             (transformer_id,)).fetchall()
     return [dict(r) for r in rows]
+
+
+# ---------------------------------------------------------------------------
+# Fiziksel gözlem (Faz 9.5)
+# ---------------------------------------------------------------------------
+
+def save_physical_inspection(transformer_id: str,
+                             observations: Dict[str, object],
+                             inspected_at: Optional[str] = None,
+                             notes: Optional[str] = None,
+                             recorded_by: Optional[Dict[str, str]] = None
+                             ) -> int:
+    """Bir gözlem turunu kaydeder."""
+    rec = recorded_by or {}
+    with _connect() as conn:
+        cur = conn.execute(
+            """INSERT INTO physical_inspections
+               (transformer_id, inspected_at, observations_json, notes,
+                created_at, recorded_by_id, recorded_by_name)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (transformer_id, _normalize_ts(inspected_at) or _now(),
+             json.dumps(observations, ensure_ascii=False), notes, _now(),
+             rec.get("employee_no"), rec.get("name")),
+        )
+        return int(cur.lastrowid)
+
+
+def get_physical_inspections(transformer_id: str) -> List[Dict]:
+    """Bir trafonun gözlem turları, eskiden yeniye."""
+    with _connect() as conn:
+        rows = conn.execute(
+            """SELECT * FROM physical_inspections WHERE transformer_id = ?
+               ORDER BY inspected_at ASC, id ASC""",
+            (transformer_id,)).fetchall()
+    out = []
+    for r in rows:
+        d = dict(r)
+        d["observations"] = json.loads(d.pop("observations_json"))
+        out.append(d)
+    return out
+
+
+def latest_physical_inspections() -> Dict[str, Dict]:
+    """Her trafonun EN SON gözlem turu — filo görünümü için."""
+    with _connect() as conn:
+        rows = conn.execute(
+            """
+            WITH ranked AS (
+                SELECT p.*,
+                       ROW_NUMBER() OVER (
+                           PARTITION BY p.transformer_id
+                           ORDER BY p.inspected_at DESC, p.id DESC
+                       ) AS rn
+                FROM physical_inspections p
+            )
+            SELECT * FROM ranked WHERE rn = 1
+            """
+        ).fetchall()
+    out = {}
+    for r in rows:
+        d = dict(r)
+        d["observations"] = json.loads(d.pop("observations_json"))
+        out[d["transformer_id"]] = d
+    return out

@@ -202,4 +202,48 @@ public class ConditionRuleTests
                                    || x.Rule.StartsWith("paper")
                                    || x.Rule.StartsWith("health"));
     }
+
+    // --- Faz 9.5: fiziksel saha bulgusu ---------------------------------
+
+    [Fact]
+    public void Kritik_saha_bulgusu_is_emri_uretir()
+    {
+        // TR-06 senaryosu: DGA sakin ama radyatör tıkalı. Tıkalı bir
+        // radyatörü DGA ancak termal arıza gazı çıkınca görür — o zaman
+        // hasar zaten oluşmuştur.
+        var s = Plan(TestData.Risk("TR-06",
+            physicalOverall: "kötü",
+            physicalFindings: new List<string> { "Radyatör ve fanlar" }));
+
+        var found = Assert.Single(s, x => x.Rule == "physical-critical");
+        Assert.Equal(WorkOrderKind.Repair, found.Kind);
+        Assert.Contains("Radyatör", found.Reason);
+    }
+
+    [Fact]
+    public void Kozmetik_bulgu_is_emri_uretmez()
+    {
+        // Hüküm "kabul" ama kritik bulgu YOK: boyanın dökülmesi kayıt
+        // konusudur, iş emri konusu değil. Her kozmetik bulguya iş emri
+        // açmak, gerçek bulguları gürültüde boğar.
+        var s = Plan(TestData.Risk("TR-03", physicalOverall: "kabul",
+                                   physicalFindings: new List<string>()));
+
+        Assert.DoesNotContain(s, x => x.Rule == "physical-critical");
+    }
+
+    [Fact]
+    public void Saha_bulgusu_elektriksel_bulgudan_bagimsiz_acilir()
+    {
+        // İkisi de Repair türü kullanıyor; idempotens anahtarı
+        // (trafo, tür) olduğu için biri diğerini bastırır. Bu bilinçli:
+        // aynı saha ziyaretinde ikisi de ele alınır.
+        var s = Plan(TestData.Risk("TR-06",
+            electricalOverall: "kötü",
+            physicalOverall: "kötü",
+            physicalFindings: new List<string> { "Yağ kaçağı" }));
+
+        var repairs = s.Where(x => x.Kind == WorkOrderKind.Repair).ToList();
+        Assert.Single(repairs);
+    }
 }

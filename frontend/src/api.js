@@ -132,6 +132,14 @@ export const api = {
     client.delete(`/transformers/${id}/electrical-tests/${testId}/void`)
       .then((r) => r.data),
 
+  // --- Fiziksel saha gözlemi (Faz 9.5) ------------------------------------
+  physicalSchema: () => client.get('/physical/schema').then((r) => r.data),
+  physicalFleet: () => client.get('/physical/fleet').then((r) => r.data),
+  inspections: (id) =>
+    client.get(`/transformers/${id}/inspections`).then((r) => r.data),
+  createInspection: (id, payload) =>
+    client.post(`/transformers/${id}/inspections`, payload).then((r) => r.data),
+
   // --- Varlık yaşam döngüsü (Faz 9.35) ------------------------------------
   lifecycleSchema: () => client.get('/lifecycle/schema').then((r) => r.data),
   lifecycle: (id) =>

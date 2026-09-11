@@ -448,8 +448,8 @@ dil gerektirecek.
 9.2  Bildirim / ticket         (.NET)     ✅ TAMAM
 9.3  Yönetici ekranı           (React)    ✅ TAMAM
 9.35 Varlık yaşam döngüsü      (Py+React) ✅ TAMAM
-9.5  Fiziksel gözlem           (Python)   ⭐ ŞİMDİ
-9.4  Buşing + OLTC             (Python)
+9.5  Fiziksel gözlem           (Python)   ✅ TAMAM
+9.4  Buşing + OLTC             (Python)   ⭐ ŞİMDİ
 9.6  Trafo şeması              (React)
 9.7  Kurumsal görünüm cilası   (React)
 ```
