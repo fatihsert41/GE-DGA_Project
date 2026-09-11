@@ -6,7 +6,9 @@ malzemesi) doğrudan bağımlıdır.
 """
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
+
+from ..auth import Identity, require_identity
 
 from .. import database
 from ..core import electrical as core_electrical
@@ -127,9 +129,15 @@ def list_electrical_tests(transformer_id: str) -> dict:
 
 
 @router.post("/transformers/{transformer_id}/electrical-tests")
-def create_electrical_test(transformer_id: str,
-                           test: ElectricalTestIn) -> dict:
-    """Yeni bir elektriksel test kaydeder ve hemen değerlendirir."""
+def create_electrical_test(
+        transformer_id: str,
+        test: ElectricalTestIn,
+        identity: Identity = Depends(require_identity)) -> dict:
+    """Yeni bir elektriksel test kaydeder ve hemen değerlendirir.
+
+    Kimlik ZORUNLU: sorumlusu bilinmeyen bir ölçüm kaydı, denetim izi
+    tutmanın amacını boşa çıkarır.
+    """
     if database.get_transformer(transformer_id) is None:
         raise HTTPException(status_code=404,
                             detail=f"Trafo bulunamadı: {transformer_id}")
@@ -162,7 +170,9 @@ def create_electrical_test(transformer_id: str,
 
     test_id = database.save_electrical_test(
         transformer_id, values, tested_at=test.tested_at,
-        tested_by=test.tested_by, notes=test.notes)
+        tested_by=test.tested_by, notes=test.notes,
+        recorded_by={"employee_no": identity.employee_no,
+                     "name": identity.name})
 
     saved = next(t for t in database.get_electrical_tests(transformer_id)
                  if t["id"] == test_id)
@@ -194,8 +204,9 @@ def get_electrical_test(transformer_id: str, test_id: int) -> dict:
 
 
 @router.post("/transformers/{transformer_id}/electrical-tests/{test_id}/void")
-def void_electrical_test(transformer_id: str, test_id: int,
-                         body: VoidTestIn) -> dict:
+def void_electrical_test(
+        transformer_id: str, test_id: int, body: VoidTestIn,
+        identity: Identity = Depends(require_identity)) -> dict:
     """Hatalı bir test kaydını GEÇERSİZ işaretler — silmez.
 
     Silme uç noktası bilinçli olarak YOKTUR. Ölçüm kayıtları bir varlığın
@@ -207,7 +218,9 @@ def void_electrical_test(transformer_id: str, test_id: int,
     atlanır ve hüküm/sağlık endeksi hesabına girmez.
     """
     ok = database.void_test("electrical_tests", transformer_id, test_id,
-                            body.reason)
+                            body.reason,
+                            voided_by={"employee_no": identity.employee_no,
+                                       "name": identity.name})
     if not ok:
         raise HTTPException(status_code=404,
                             detail=f"Test bulunamadı: {test_id}")
@@ -216,7 +229,9 @@ def void_electrical_test(transformer_id: str, test_id: int,
 
 
 @router.delete("/transformers/{transformer_id}/electrical-tests/{test_id}/void")
-def unvoid_electrical_test(transformer_id: str, test_id: int) -> dict:
+def unvoid_electrical_test(
+        transformer_id: str, test_id: int,
+        identity: Identity = Depends(require_identity)) -> dict:
     """Geçersiz işaretini kaldırır (yanlışlıkla işaretlenmişse)."""
     ok = database.void_test("electrical_tests", transformer_id, test_id, "")
     if not ok:

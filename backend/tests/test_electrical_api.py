@@ -12,6 +12,33 @@ from app import database
 from app.services import electrical as el_service
 
 
+# --- Test kimliği ---------------------------------------------------------
+# Yazma uç noktaları artık kimlik istiyor (Faz 9.0c). Test, .NET'in
+# ürettiğine denk bir belirteci AYNI paylaşılan anahtarla kendisi imzalar.
+# Gerçek sistemde imzayı yalnızca .NET atar; burada amaç .NET'i ayağa
+# kaldırmadan uç nokta davranışını sınamak.
+
+def _token(employee_no="10502", name="Test Kullanıcı", role="Supervisor",
+           valid_seconds=3600):
+    import base64, hashlib, hmac, json, time
+    from app import auth as auth_module
+
+    payload = {
+        "employee_no": employee_no, "name": name, "role": role,
+        "expires_at_unix": int(time.time()) + valid_seconds,
+        "nonce": "test",
+    }
+    body = base64.urlsafe_b64encode(
+        json.dumps(payload).encode("utf-8")).decode().rstrip("=")
+    sig = hmac.new(auth_module._secret().encode("utf-8"),
+                   body.encode("utf-8"), hashlib.sha256).digest()
+    return f"{body}.{base64.urlsafe_b64encode(sig).decode().rstrip('=')}"
+
+
+def _auth(**kwargs):
+    return {"Authorization": f"Bearer {_token(**kwargs)}"}
+
+
 @pytest.fixture()
 def db(tmp_path, monkeypatch):
     """Her test kendi geçici veritabanını alır."""
@@ -125,7 +152,8 @@ def test_kademeli_trafoda_ttr_icin_kademe_zorunlu(db, monkeypatch):
 
     client = TestClient(app)
     r = client.post("/transformers/TR-TEST/electrical-tests",
-                    json={"ttr_a": 7.73, "ttr_b": 7.73, "ttr_c": 7.73})
+                    json={"ttr_a": 7.73, "ttr_b": 7.73, "ttr_c": 7.73},
+                    headers=_auth())
     assert r.status_code == 400
     assert "kademe" in r.json()["detail"].lower()
 
@@ -136,7 +164,7 @@ def test_sadece_kademe_girmek_kayit_olusturmaz(db):
 
     client = TestClient(app)
     r = client.post("/transformers/TR-TEST/electrical-tests",
-                    json={"tap_position": 3})
+                    json={"tap_position": 3}, headers=_auth())
     assert r.status_code == 400
     assert el_service.history("TR-TEST")["available"] is False
 
@@ -227,7 +255,7 @@ def test_gecersiz_isaretlemede_gerekce_zorunlu(db):
 
     client = TestClient(app)
     r = client.post(f"/transformers/TR-TEST/electrical-tests/{test_id}/void",
-                    json={"reason": "kısa"})
+                    json={"reason": "kısa"}, headers=_auth())
     assert r.status_code == 422                # min_length=5
 
 
@@ -251,3 +279,76 @@ def test_gecersiz_kayit_son_test_olarak_gosterilmez(db):
     assert h["latest_valid_id"] == tests[0]["id"]
     assert h["latest_assessment"]["overall"] == "iyi"
     assert h["n_tests"] == 2 and h["n_valid"] == 1
+
+
+# --- Kimlik zorunluluğu (Faz 9.0c) ---------------------------------------
+
+def test_kimliksiz_yazma_reddedilir(db):
+    """Sorumlusu bilinmeyen bir ölçüm kaydı oluşturulmamalı."""
+    from fastapi.testclient import TestClient
+    from app.main import app
+
+    client = TestClient(app)
+    r = client.post("/transformers/TR-TEST/electrical-tests",
+                    json={"tan_delta_pct": 0.3})
+    assert r.status_code == 401
+    assert el_service.history("TR-TEST")["available"] is False
+
+
+def test_kimlik_kayda_islenir(db):
+    from fastapi.testclient import TestClient
+    from app.main import app
+
+    client = TestClient(app)
+    r = client.post("/transformers/TR-TEST/electrical-tests",
+                    json={"tan_delta_pct": 0.3},
+                    headers=_auth(employee_no="10247", name="Ahmet Yılmaz"))
+    assert r.status_code == 200
+
+    saved = database.get_electrical_tests("TR-TEST")[0]
+    assert saved["recorded_by_id"] == "10247"
+    assert saved["recorded_by_name"] == "Ahmet Yılmaz"
+
+
+def test_kurcalanmis_belirtec_reddedilir(db):
+    """İmzası bozulmuş belirteçle rol yükseltilememeli."""
+    from fastapi.testclient import TestClient
+    from app.main import app
+
+    token = _token()
+    body, sig = token.split(".")
+    client = TestClient(app)
+    r = client.post("/transformers/TR-TEST/electrical-tests",
+                    json={"tan_delta_pct": 0.3},
+                    headers={"Authorization": f"Bearer {body}.{'A' * len(sig)}"})
+    assert r.status_code == 401
+
+
+def test_suresi_dolmus_belirtec_reddedilir(db):
+    from fastapi.testclient import TestClient
+    from app.main import app
+
+    client = TestClient(app)
+    r = client.post("/transformers/TR-TEST/electrical-tests",
+                    json={"tan_delta_pct": 0.3},
+                    headers=_auth(valid_seconds=-10))
+    assert r.status_code == 401
+
+
+def test_gecersiz_isaretleyen_kisi_kaydedilir(db):
+    """Kimin geçersiz saydığı da denetim izinin parçası."""
+    from fastapi.testclient import TestClient
+    from app.main import app
+
+    database.save_electrical_test("TR-TEST", {"tan_delta_pct": 0.3})
+    test_id = database.get_electrical_tests("TR-TEST")[0]["id"]
+
+    client = TestClient(app)
+    r = client.post(f"/transformers/TR-TEST/electrical-tests/{test_id}/void",
+                    json={"reason": "cihaz kalibrasyonu şüpheli"},
+                    headers=_auth(employee_no="10318", name="Elif Demir"))
+    assert r.status_code == 200
+
+    saved = database.get_electrical_tests("TR-TEST")[0]
+    assert saved["voided_by_id"] == "10318"
+    assert saved["voided_by_name"] == "Elif Demir"
