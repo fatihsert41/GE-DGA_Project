@@ -68,6 +68,12 @@ export const api = {
   me: () => maint.get('/auth/me').then((r) => r.data),
   personnel: () => maint.get('/technicians').then((r) => r.data),
 
+  // --- Bildirimler (Faz 9.2) ----------------------------------------------
+  notifications: (unreadOnly = false) =>
+    maint.get('/notifications', { params: { unreadOnly } }).then((r) => r.data),
+  markNotificationRead: (id) =>
+    maint.post(`/notifications/${id}/read`).then((r) => r.data),
+
   health: () => client.get('/health').then((r) => r.data),
   predict: (payload) => client.post('/predict', payload).then((r) => r.data),
   explain: (gases) => client.post('/explain', gases).then((r) => r.data),

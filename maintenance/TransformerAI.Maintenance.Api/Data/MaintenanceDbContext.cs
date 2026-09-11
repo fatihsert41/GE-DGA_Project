@@ -48,6 +48,8 @@ public class MaintenanceDbContext : DbContext
 
     public DbSet<Session> Sessions => Set<Session>();
 
+    public DbSet<Notification> Notifications => Set<Notification>();
+
     /// <summary>Tablo/sütun ayrıntılarını burada tanımlıyoruz.</summary>
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -132,6 +134,46 @@ public class MaintenanceDbContext : DbContext
             .OnDelete(DeleteBehavior.SetNull);
 
         wo.HasIndex(o => o.TechnicianId);
+
+        // --- Bildirimler (Faz 9.2) ---------------------------------------
+        var note = modelBuilder.Entity<Notification>();
+        note.ToTable("notifications");
+        note.HasKey(n => n.Id);
+        note.Property(n => n.Id).HasMaxLength(40);
+        note.Property(n => n.WorkOrderId).HasMaxLength(40).IsRequired();
+        note.Property(n => n.RecipientId).HasMaxLength(20).IsRequired();
+        note.Property(n => n.RecipientName).HasMaxLength(100);
+        note.Property(n => n.RecipientEmployeeNo).HasMaxLength(20);
+        note.Property(n => n.Subject).HasMaxLength(200);
+        note.Property(n => n.Trigger).HasMaxLength(40);
+        note.Property(n => n.Channel).HasConversion<string>().HasMaxLength(20);
+        note.Property(n => n.Status).HasConversion<string>().HasMaxLength(20);
+
+        // Gelen kutusu sorgusu: "bana ait, okunmamış, önceliğe göre".
+        note.HasIndex(n => new { n.RecipientId, n.Status });
+        // Gönderim kuyruğu: bekleyenleri bulmak için.
+        note.HasIndex(n => n.Status);
+
+        // Aynı iş emri + alıcı + tetikleyici için TEK bildirim.
+        // Planlayıcı her çalıştığında aynı bildirimi yeniden üretirse
+        // gelen kutusu çöpe döner ve kimse okumaz — iş emri
+        // önerilerindeki idempotens ile aynı gerekçe.
+        note.HasIndex(n => new { n.WorkOrderId, n.RecipientId, n.Trigger })
+            .IsUnique();
+
+        // İş emri silinirse bildirimleri de gitsin: bildirim bağımsız
+        // bir geçmiş değil, iş emrinin eki.
+        note.HasOne(n => n.WorkOrder)
+            .WithMany()
+            .HasForeignKey(n => n.WorkOrderId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        // Personel silinirse bildirim KALIR (alıcı adı kayıtta duruyor):
+        // "kime haber verildi" sorusu sonradan da cevaplanabilmeli.
+        note.HasOne(n => n.Recipient)
+            .WithMany()
+            .HasForeignKey(n => n.RecipientId)
+            .OnDelete(DeleteBehavior.Restrict);
 
         // --- Demo teknisyenleri ------------------------------------------
         // HasData: başlangıç verisi migration'ın İÇİNE yazılır. Ayrı bir

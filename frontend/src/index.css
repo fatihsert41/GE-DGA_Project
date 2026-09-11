@@ -981,3 +981,49 @@ td.num, span.num, b.num {
 .src-chip.elec { background: var(--high); color: #fffdf8; }
 .src-chip.paper { background: var(--medium); color: #1c1205; }
 .src-chip.health { background: var(--accent); color: #fffdf8; }
+
+/* ---------------------------------------------------------------------
+   Faz 9.2 — Bildirimler
+   ------------------------------------------------------------------- */
+
+.bell {
+  position: relative; padding: 7px 14px; border-radius: 999px;
+  cursor: pointer; border: 1px solid var(--rule); background: var(--surface);
+  color: var(--ink-soft); font: inherit; font-size: 0.84rem; font-weight: 500;
+}
+.bell:hover { border-color: var(--ink); color: var(--ink); }
+.bell.has-unread { border-color: var(--high); color: var(--ink); }
+.bell-count {
+  margin-left: 7px; font-family: var(--mono); font-size: 0.72rem;
+  font-weight: 600; padding: 1px 7px; border-radius: 999px;
+  background: var(--high); color: #fffdf8;
+  font-variant-numeric: tabular-nums;
+}
+
+.note-list { list-style: none; padding: 0; margin: 16px 0 0; }
+.note-item {
+  padding: 14px 16px; border: 1px solid var(--rule); border-radius: 9px;
+  margin-bottom: 10px; background: var(--surface);
+}
+/* Okunmamış: sol kenarda kalın bir şerit. Renk tek başına anlam
+   taşımasın diye durum metni de her satırda yazılı. */
+.note-item.unread { border-left: 4px solid var(--high); background: var(--surface-2); }
+
+.note-head {
+  display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+}
+.note-subject { font-size: 0.92rem; }
+.note-when { margin-left: auto; font-size: 0.74rem; white-space: nowrap; }
+.note-meta { font-size: 0.74rem; margin-top: 4px; }
+
+.note-body {
+  margin: 10px 0 0; padding: 10px 12px; border-radius: 7px;
+  background: var(--paper); border: 1px solid var(--rule);
+  font-family: var(--sans); font-size: 0.82rem; line-height: 1.55;
+  white-space: pre-wrap; word-break: break-word;
+}
+
+.note-actions {
+  display: flex; align-items: center; gap: 14px; margin-top: 10px;
+  flex-wrap: wrap;
+}
