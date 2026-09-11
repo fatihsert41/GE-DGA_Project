@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import api, { session } from './api'
 import GasForm from './components/GasForm'
 import DiagnosisResult from './components/DiagnosisResult'
@@ -13,6 +13,7 @@ import NameplateForm from './components/NameplateForm'
 import TestsOverview from './components/TestsOverview'
 import LoginScreen from './components/LoginScreen'
 import PersonnelPanel from './components/PersonnelPanel'
+import NotificationsPanel from './components/NotificationsPanel'
 
 const TABS = [
   { id: 'diagnosis', label: 'Tanı' },
@@ -67,6 +68,24 @@ export default function App() {
       }))
       .catch(() => { session.clear(); setUser(null) })
   }, [])
+
+  // Okunmamış bildirim sayısı. Zil rozeti için; 60 saniyede bir
+  // tazelenir. Daha sık yoklamak sunucuyu boşuna meşgul ederdi,
+  // daha seyrek yapmak da bildirimi geç gösterirdi.
+  const [unread, setUnread] = useState(0)
+
+  const refreshUnread = useCallback(() => {
+    if (!session.token()) return
+    api.notifications(true)
+      .then((d) => setUnread(d.unread ?? 0))
+      .catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    refreshUnread()
+    const timer = setInterval(refreshUnread, 60000)
+    return () => clearInterval(timer)
+  }, [refreshUnread, view])
 
   const logout = () => {
     // Sunucuya haber ver (belirteç ANINDA iptal olsun), sonra yerelde
@@ -135,6 +154,13 @@ export default function App() {
               {' · '}{ROLE_TR[user.role] || user.role}
             </div>
           </div>
+          <button type="button"
+            className={`bell${unread ? ' has-unread' : ''}`}
+            onClick={() => { setView('notifications'); setSelected(null) }}
+            aria-label={`Bildirimler${unread ? `, ${unread} okunmamış` : ''}`}>
+            Bildirimler
+            {unread > 0 && <span className="bell-count">{unread}</span>}
+          </button>
           <button type="button" className="chip" onClick={logout}>Çıkış</button>
         </div>
       </header>
@@ -183,6 +209,14 @@ export default function App() {
       {view === 'maintenance' && <MaintenancePanel />}
 
       {view === 'personnel' && <PersonnelPanel currentUser={user} />}
+
+      {view === 'notifications' && (
+        selected
+          ? <TransformerDetail id={selected.id} meta={selected}
+              onBack={() => setSelected(null)} />
+          : <NotificationsPanel
+              onOpenTransformer={(id) => setSelected({ id })} />
+      )}
 
       {/* Analiz ekranı DOM'da kalır (sadece gizlenir) ki görünüm
           değiştirince girilen gaz değerleri ve sonuçlar kaybolmasın. */}

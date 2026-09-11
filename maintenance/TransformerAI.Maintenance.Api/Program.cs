@@ -62,6 +62,32 @@ builder.Services.AddScoped<TechnicianRepository>();
 builder.Services.AddSingleton<TokenIssuer>();
 builder.Services.AddScoped<AuthService>();
 
+// --- Bildirim altyapısı (Faz 9.2) ------------------------------------------
+// NotificationPlanner saf bir kural sınıfı -> Singleton yeterli.
+builder.Services.AddSingleton<NotificationPlanner>();
+builder.Services.AddScoped<NotificationService>();
+
+// ARAYÜZE kayıt: kodun geri kalanı INotificationSender bilir, hangi
+// uygulamanın kullanıldığını bilmez. E-postaya geçmek istendiğinde
+// DEĞİŞECEK TEK SATIR burasıdır — bağımlılık ters çevirmenin somut
+// karşılığı budur.
+builder.Services.AddScoped<INotificationSender, LoggingNotificationSender>();
+
+// Arka plan servisi: uygulama açık olduğu sürece kuyruğu boşaltır.
+//
+// ⚠ ÖĞRENİLEN TUZAK: `AddHostedService<NotificationDispatcher>()` sınıfı
+// yalnızca IHostedService olarak kaydeder, NotificationDispatcher olarak
+// DEĞİL. Uç noktada `NotificationDispatcher dispatcher` parametresi
+// yazınca ASP.NET onu bir servis değil, istek GÖVDESİ sandı ve
+// "Implicit body inferred for parameter" hatası verdi.
+//
+// Doğrusu: önce Singleton olarak kaydet, sonra aynı örneği hosted
+// service olarak göster. Tek örnek hem arka planda çalışır hem de
+// enjekte edilebilir.
+builder.Services.AddSingleton<NotificationDispatcher>();
+builder.Services.AddHostedService(sp =>
+    sp.GetRequiredService<NotificationDispatcher>());
+
 builder.Services.AddHttpClient<MlServiceClient>(client =>
 {
     client.BaseAddress = new Uri(mlBaseUrl);
@@ -399,7 +425,7 @@ app.MapPost("/workorders/{id}/assign",
 
 app.MapGet("/workorders/suggestions",
     async (MlServiceClient ml, WorkOrderRepository repo, WorkOrderPlanner planner,
-           CancellationToken ct) =>
+           NotificationService notifications, CancellationToken ct) =>
 {
     var fleet = await ml.GetFleetAsync(ct);
     if (fleet is null)
@@ -430,7 +456,7 @@ app.MapGet("/workorders/suggestions",
 // POST çünkü sistemi DEĞİŞTİRİYOR; GET yan etkisiz olmalıdır.
 app.MapPost("/workorders/suggestions/apply",
     async (MlServiceClient ml, WorkOrderRepository repo, WorkOrderPlanner planner,
-           CancellationToken ct) =>
+           NotificationService notifications, CancellationToken ct) =>
 {
     var fleet = await ml.GetFleetAsync(ct);
     if (fleet is null)
@@ -444,10 +470,19 @@ app.MapPost("/workorders/suggestions/apply",
     var today = DateOnly.FromDateTime(DateTime.UtcNow);
     var plan = planner.Plan(fleet, existing, today);
 
+    var now = DateTime.UtcNow;
+    var notified = 0;
+
     var created = new List<WorkOrder>();
     foreach (var suggestion in plan.Suggestions)
     {
-        created.Add(await repo.AddAsync(WorkOrderPlanner.ToRequest(suggestion)));
+        var order = await repo.AddAsync(WorkOrderPlanner.ToRequest(suggestion));
+        created.Add(order);
+        // Bildirim burada yalnızca KUYRUĞA ALINIR (outbox deseni).
+        // Gönderimi arka plandaki NotificationDispatcher üstlenir; bu
+        // sayede e-posta sunucusu kapalı olsa bile iş emri açılır.
+        notified += await notifications.QueueForOrderAsync(
+            order, "work-order-created", now, ct);
     }
 
     // Kötüleşen durumlar için YENİ emir açmıyoruz; mevcut emri güncelliyoruz.
@@ -459,6 +494,11 @@ app.MapPost("/workorders/suggestions/apply",
         if (updated is not null)
         {
             escalated.Add(updated);
+            // Aciliyet yükselmesi AYRI bir tetikleyici: "bu iş artık
+            // daha acil" bilgisi, ilk açılış bildirimi okunmuş olsa bile
+            // yeniden haber vermeyi hak eder.
+            notified += await notifications.QueueForOrderAsync(
+                updated, "work-order-escalated", now, ct);
         }
     }
 
@@ -470,6 +510,7 @@ app.MapPost("/workorders/suggestions/apply",
         items = created,
         escalated = escalated.Count,
         escalatedItems = escalated,
+        notificationsQueued = notified,
     });
 })
 .WithName("ApplySuggestions");
@@ -596,6 +637,65 @@ app.MapGet("/auth/me", async (AuthService auth, HttpRequest http,
     });
 })
 .WithSummary("Belirtecin sahibini döndürür (oturum kontrolü).");
+
+
+
+// ---------------------------------------------------------------------------
+// Bildirimler (Faz 9.2)
+// ---------------------------------------------------------------------------
+//
+// Bildirim, iş emrinin EKİDİR: bağımsız bir mesajlaşma sistemi değil.
+// Her bildirim bir iş emrine bağlıdır ve "şunu yapman gerekiyor" der.
+// Bağlantısı olmayan bir uyarı kutusu, bir süre sonra kapatılan bir
+// uyarı kutusudur.
+
+app.MapGet("/notifications", async (AuthService auth, NotificationService svc,
+                                    HttpRequest http, bool? unreadOnly,
+                                    CancellationToken ct) =>
+{
+    var me = await auth.ResolveAsync(ReadToken(http), DateTime.UtcNow, ct);
+    if (me is null) return Results.Json(
+        new { message = "Oturum gerekli." }, statusCode: 401);
+
+    var items = await svc.InboxAsync(me.Id, unreadOnly ?? false, ct: ct);
+    return Results.Ok(new
+    {
+        count = items.Count,
+        unread = await svc.UnreadCountAsync(me.Id, ct),
+        items,
+    });
+})
+.WithSummary("Oturum sahibinin gelen kutusu.");
+
+app.MapPost("/notifications/{id}/read",
+    async (AuthService auth, NotificationService svc, HttpRequest http,
+           string id, CancellationToken ct) =>
+{
+    var me = await auth.ResolveAsync(ReadToken(http), DateTime.UtcNow, ct);
+    if (me is null) return Results.Json(
+        new { message = "Oturum gerekli." }, statusCode: 401);
+
+    // Alıcı kimliği servise geçiliyor: kimse BAŞKASININ bildirimini
+    // okundu işaretleyememeli. Kontrol hem burada hem sorguda var.
+    var result = await svc.MarkReadAsync(id, me.Id, DateTime.UtcNow, ct);
+    if (!result.Found)
+        return Results.NotFound(new { message = "Bildirim bulunamadı." });
+
+    return Results.Ok(new { ok = true, alreadyRead = result.AlreadyRead });
+})
+.WithSummary("Bildirimi okundu işaretler.");
+
+app.MapPost("/notifications/dispatch",
+    async (NotificationDispatcher dispatcher, CancellationToken ct) =>
+{
+    // Arka plan servisi 30 saniyede bir çalışıyor; bu uç nokta demo ve
+    // test için "hemen çalıştır" düğmesi. Üretimde gerekmez ama
+    // kuyruğun çalıştığını göstermenin en hızlı yolu.
+    var sent = await dispatcher.DispatchOnceAsync(ct);
+    return Results.Ok(new { sent });
+})
+.WithSummary("Bekleyen bildirimleri hemen gönderir (demo).");
+
 
 app.Run();
 

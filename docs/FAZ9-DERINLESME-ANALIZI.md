@@ -445,8 +445,8 @@ dil gerektirecek.
 9.0c Kimlik kayıtlara işlensin (Python)   ✅ TAMAM
 9.0d Giriş + personel ekranı   (React)    ✅ TAMAM
 9.1  Bulgular → iş emri        (.NET)     ✅ TAMAM
-9.2  Bildirim / ticket         (.NET)     ⭐ ŞİMDİ
-9.3  Yönetici ekranı           (React)
+9.2  Bildirim / ticket         (.NET)     ✅ TAMAM
+9.3  Yönetici ekranı           (React)    ⭐ ŞİMDİ
 9.35 Varlık yaşam döngüsü      (Python+React)
 9.5  Fiziksel gözlem           (Python)   💡 ucuz kazanç
 9.4  Buşing + OLTC             (Python)
