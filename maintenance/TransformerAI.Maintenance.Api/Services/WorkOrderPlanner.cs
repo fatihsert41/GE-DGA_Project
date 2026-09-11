@@ -65,6 +65,22 @@ public class WorkOrderPlanner
     // veriyoruz ki görünür kalsın. Gerçek öncelik ilk ölçümde belirlenir.
     private const double AssumedPriorityUnknown = 1.5;
 
+    // --- Faz 9.1 eşikleri ---------------------------------------------
+    private const int DueDaysRenewal = 180;      // yenileme: bütçe/tedarik işi
+    private const int DueDaysBaseline = 120;     // temel çizgi testi
+    private const double PaperEndOfLifePct = 80.0;
+    private const double HealthCriticalScore = 30.0;
+
+    // Elektriksel arıza, IEEE kondisyon 4 (kritik) muamelesi görür.
+    //
+    // Gerekçe: kısa devre olmuş bir spir ya da aşınmış bir kademe
+    // kontağı, en ciddi DGA bulgusu kadar acildir — üstelik DGA'nın
+    // hiç göremeyeceği bir şeydir. Trafonun gazı sakin diye önceliği
+    // düşük hesaplamak, bulguyu listenin dibine gömerdi.
+    private const double ElectricalFaultCondition = 4.0;
+    private const double PaperEndOfLifeCondition = 3.0;
+    private const double HealthCriticalCondition = 3.5;
+
     /// <summary>
     /// Filo durumundan öneri listesi üretir.
     /// </summary>
@@ -118,6 +134,11 @@ public class WorkOrderPlanner
             }
 
             AddSamplingRule(t, today, claimed, desired);
+
+            // Faz 9.1 — DGA DIŞINDAKİ bulgular. Ölçüm olmasa da
+            // çalışırlar: elektriksel test ve yağ analizi DGA'dan
+            // bağımsız kaynaklardır.
+            AddConditionRules(t, today, claimed, desired);
         }
 
         var suggestions = new List<Suggestion>();
@@ -205,6 +226,116 @@ public class WorkOrderPlanner
                 $"Model güveni %{(t.Confidence ?? 0) * 100:0}, eşiğin altında. "
                     + $"Tanı: {t.PredictionLabel}.",
                 t.Priority, today.AddDays(DueDaysRoutine), "low-confidence"));
+        }
+    }
+
+    /// <summary>DGA dışındaki bulgular: elektriksel, kağıt, sağlık endeksi.</summary>
+    /// <remarks>
+    /// <b>Faz 9.1'in özü.</b> Faz 8 boyunca sisteme dört bağımsız duyu
+    /// eklendi ama iş emri üreten kurallar yalnızca gaz analizine
+    /// bakıyordu. Sonuç: sistem "B fazında kısa devre spir var" diyor,
+    /// kimse için bir iş çıkmıyordu.
+    ///
+    /// Bu kuralların hepsi <c>Inspection</c> DIŞINDA türler kullanır.
+    /// Sebep sadece anlam değil, idempotens: eşleşme anahtarı
+    /// (trafo, tür) olduğu için DGA kaynaklı bir inceleme açıkken
+    /// elektriksel arıza da ayrı bir emir açabiliyor. Aynı türü
+    /// kullansalardı biri diğerini sessizce bastırırdı.
+    /// </remarks>
+    private static void AddConditionRules(TransformerRisk t, DateOnly today,
+                                          HashSet<(string, WorkOrderKind)> openPairs,
+                                          List<Suggestion> output)
+    {
+        // KURAL 6 — Ölçüm şüpheli: önce testi tekrarla.
+        //
+        // SIRASI ÖNEMLİ: bulgu kuralından ÖNCE gelir. Ölçüm fiziksel
+        // olarak imkânsız bir değer taşıyorsa, o değerden çıkarılan
+        // "arıza" da geçersizdir. Geçersiz veriye dayanarak trafoyu
+        // devreden çıkarmak, boş yere kesinti demektir.
+        if (t.ElectricalDataSuspect)
+        {
+            Add(output, openPairs, new Suggestion(
+                t.Id, WorkOrderKind.Test,
+                "Elektriksel testi tekrarla — ölçüm şüpheli",
+                "Son elektriksel testte fiziksel olarak mümkün olmayan bir "
+                    + "sapma var. Değer, kademe pozisyonu ve cihaz bağlantıları "
+                    + "doğrulanarak test tekrarlanmalı. Arıza teşhisi bundan "
+                    + "sonra yapılabilir.",
+                ElectricalFaultCondition * t.AssetWeight,
+                today.AddDays(DueDaysCritical), "electrical-data-suspect"));
+            return;   // şüpheli veriden arıza kuralı türetme
+        }
+
+        // KURAL 7 — Elektriksel arıza (spir kaybı, kontak aşınması,
+        // ıslak yalıtım, yaşlanmış yalıtım). Hükmü "kötü" olan her şey.
+        if (t.ElectricalOverall == "kötü")
+        {
+            var findings = t.ElectricalProblems is { Count: > 0 }
+                ? string.Join(" · ", t.ElectricalProblems)
+                : "Elektriksel test hükmü: kötü.";
+
+            Add(output, openPairs, new Suggestion(
+                t.Id, WorkOrderKind.Repair,
+                "Elektriksel bulgu — saha incelemesi",
+                findings + " Bu bulgu yağ analiziyle görülemez; "
+                    + "elektriksel testten gelir.",
+                ElectricalFaultCondition * t.AssetWeight,
+                today.AddDays(DueDaysSevere), "electrical-fault"));
+        }
+
+        // KURAL 8 — Kağıdın ömrü tükeniyor.
+        //
+        // Aciliyeti DÜŞÜK ama önemi yüksek: kağıt bozunması geri
+        // dönüşsüzdür, yağ gibi değiştirilemez. Bu bir bakım değil
+        // YENİLEME kararıdır ve bütçe/tedarik süresi ister — bir LPT'nin
+        // teslim süresi aylarla ölçülür. Bu yüzden 180 gün.
+        if (t.LifeConsumedPct >= PaperEndOfLifePct)
+        {
+            Add(output, openPairs, new Suggestion(
+                t.Id, WorkOrderKind.Replacement,
+                "Yenileme planlaması — kağıt ömrü",
+                $"Kağıt yalıtımın %{t.LifeConsumedPct:0} ömrü tüketilmiş "
+                    + $"(durum: {t.PaperBand}). Kağıt bozunması geri "
+                    + "dönüşsüzdür; yenileme bütçesi ve tedarik süresi "
+                    + "şimdiden planlanmalı.",
+                PaperEndOfLifeCondition * t.AssetWeight,
+                today.AddDays(DueDaysRenewal), "paper-end-of-life"));
+        }
+
+        // KURAL 9 — Sağlık endeksi kritik.
+        //
+        // Tek bir boyut sınırı aşmasa bile BİRLEŞİK durum kötü olabilir:
+        // orta seviyede DGA + yaşlı kağıt + kabul sınırında yağ. Hiçbiri
+        // tek başına kural tetiklemez, toplamı tetikler.
+        if (t.HealthScore is { } score && score < HealthCriticalScore)
+        {
+            Add(output, openPairs, new Suggestion(
+                t.Id, WorkOrderKind.Inspection,
+                "Bütünsel değerlendirme — sağlık endeksi kritik",
+                $"Sağlık endeksi {score:0.0}/100. Tek bir bulgudan değil, "
+                    + "boyutların birleşiminden geliyor; varlık bütün "
+                    + "olarak değerlendirilmeli.",
+                HealthCriticalCondition * t.AssetWeight,
+                today.AddDays(DueDaysCritical), "health-critical"));
+        }
+
+        // KURAL 10 — Elektriksel temel çizgi yok.
+        //
+        // Aciliyet değil, BOŞLUK bildirir. Hiç elektriksel testi olmayan
+        // bir varlıkta ileride bulunan bir sapmayı neye göre
+        // değerlendireceğimiz belirsizdir: "hep böyleydi" ile "yeni
+        // gelişti" arasındaki farkı ancak geçmiş söyler. Önceliği
+        // yarıya indiriliyor ki gerçek bulgular önde kalsın.
+        if (!t.HasElectricalTest)
+        {
+            Add(output, openPairs, new Suggestion(
+                t.Id, WorkOrderKind.Test,
+                "Temel çizgi elektriksel testi",
+                "Bu varlığın hiç elektriksel test kaydı yok. Temel çizgi "
+                    + "olmadan ileride ölçülecek bir sapmanın yeni mi yoksa "
+                    + "baştan beri var mı olduğu anlaşılamaz.",
+                ElectricalFaultCondition * t.AssetWeight / 2.0,
+                today.AddDays(DueDaysBaseline), "no-electrical-baseline"));
         }
     }
 

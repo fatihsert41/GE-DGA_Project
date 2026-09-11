@@ -18,11 +18,31 @@ const STATUS_TR = {
   Cancelled: 'İptal',
 }
 
+// Kural -> hangi ölçüm kaynağından geldiği. Aynı ekranda "gaz analizi
+// böyle diyor" ile "sargı direnci böyle diyor" ayırt edilebilmeli:
+// ikisi bağımsız kaynaklardır ve aynı anda aynı şeyi söylemeleri,
+// tek kaynağın iki kez söylemesinden çok daha güçlü bir kanıttır.
+const SOURCE = {
+  'severe-fault': { label: 'DGA', cls: 'gas' },
+  'high-risk': { label: 'DGA', cls: 'gas' },
+  'low-confidence': { label: 'DGA', cls: 'gas' },
+  'sampling-overdue': { label: 'Numune', cls: '' },
+  'never-sampled': { label: 'Numune', cls: '' },
+  'electrical-fault': { label: 'Elektriksel', cls: 'elec' },
+  'electrical-data-suspect': { label: 'Elektriksel', cls: 'elec' },
+  'no-electrical-baseline': { label: 'Elektriksel', cls: 'elec' },
+  'paper-end-of-life': { label: 'Kağıt', cls: 'paper' },
+  'health-critical': { label: 'Sağlık endeksi', cls: 'health' },
+}
+
 const KIND_TR = {
   Inspection: 'İnceleme',
   Sampling: 'Numune alma',
   Repair: 'Onarım',
   Replacement: 'Değişim',
+  // Faz 9.1: elektriksel test yapılması/tekrarlanması. İncelemeden ayrı,
+  // çünkü ekipman ve planlı kesinti gerektirir.
+  Test: 'Elektriksel test',
 }
 
 // Durum -> rozet sınıfı. Risk rampasının renkleri KULLANILMIYOR: iş emri
@@ -91,7 +111,15 @@ function SuggestionPanel({ suggestions, onApply, applying }) {
           {suggestions.suggestions.map((s) => (
             <tr key={`${s.transformerId}-${s.kind}`}>
               <td><b>{s.transformerId}</b></td>
-              <td>{KIND_TR[s.kind] || s.kind}</td>
+              <td>
+                {KIND_TR[s.kind] || s.kind}
+                {/* Önerinin hangi DUYUDAN geldiği. Faz 9.1'e kadar
+                    hepsi gaz analizindendi; artık dört kaynak var ve
+                    planlamacının hangisine baktığını bilmesi gerekir. */}
+                <span className={`src-chip ${SOURCE[s.rule]?.cls || ''}`}>
+                  {SOURCE[s.rule]?.label || 'DGA'}
+                </span>
+              </td>
               <td>{s.priority.toFixed(2)}</td>
               <td>{fmtDate(s.dueDate)}</td>
               <td className="muted" style={{ fontFamily: 'inherit' }}>

@@ -30,6 +30,10 @@ public enum WorkOrderKind
     Sampling = 1,     // yağ numunesi alma (numunesi gecikmiş trafolar)
     Repair = 2,       // onarım
     Replacement = 3,  // ünite değişimi
+    // Faz 9.1: elektriksel test yapılması/tekrarlanması. Inspection'dan
+    // ayrı, çünkü farklı bir iş: ekipman ve planlı kesinti gerektirir,
+    // ayrıca sonucu "bir şey bul" değil "ölçümü doğrula".
+    Test = 4,
 }
 
 /// <summary>
