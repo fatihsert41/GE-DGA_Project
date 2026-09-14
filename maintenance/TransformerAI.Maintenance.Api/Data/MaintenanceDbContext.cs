@@ -233,6 +233,19 @@ public class MaintenanceDbContext : DbContext
                 Specialty = Specialty.Sampling,
                 Role = PersonnelRole.Engineer,
                 Department = Department.OilLaboratory,
-                MaxOpenOrders = 4, IsActive = true });
+                MaxOpenOrders = 4, IsActive = true },
+            // Faz 12 — Mühendislik. Mevcut departmanlardan kimse TAŞINMADI
+            // (kullanıcı kararı): her birimde en az bir kişi kalsın.
+            // Uzmanlıkları, onaylayacakları test türüyle eşleşiyor.
+            new Technician { Id = "TK-07", EmployeeNo = "10833", Name = "Deniz Koç",
+                Specialty = Specialty.Electrical,
+                Role = PersonnelRole.Engineer,
+                Department = Department.Engineering,
+                MaxOpenOrders = 2, IsActive = true },
+            new Technician { Id = "TK-08", EmployeeNo = "10921", Name = "Can Yıldız",
+                Specialty = Specialty.Thermal,
+                Role = PersonnelRole.Engineer,
+                Department = Department.Engineering,
+                MaxOpenOrders = 2, IsActive = true });
     }
 }

@@ -26,6 +26,9 @@ ALL_PERMISSIONS = [
     "tests.dga", "tests.oil", "tests.electrical", "tests.components",
     "tests.inspection", "assets.edit", "workorders.plan",
     "workorders.execute", "notifications.send",
+    # Faz 12 — Mühendislik
+    "engineering.approve", "engineering.review_model",
+    "engineering.limits", "engineering.rca",
 ]
 
 

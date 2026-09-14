@@ -12,8 +12,10 @@ from . import database
 from .ml import predictor
 from .routers import (compare, components, electrical, explain, fleet,
                       health_index,
-                      lifecycle, oil, physical, predict, schematic,
+                      lifecycle, model_reviews, oil, physical, predict,
+                      reviews, schematic,
                       transformers, trend)
+from .services import review as review_service
 
 app = FastAPI(
     title="TransformerAI - DGA Fault Prediction API",
@@ -45,11 +47,17 @@ app.include_router(lifecycle.router)
 app.include_router(physical.router)
 app.include_router(components.router)
 app.include_router(schematic.router)
+app.include_router(reviews.router)
+app.include_router(model_reviews.router)
 
 
 @app.on_event("startup")
 def _startup() -> None:
     database.init_db()
+    # Faz 12.2: onay sütunundan ÖNCE kaydedilmiş testleri bir kez
+    # sınıflandır (sınır dışı olanlar mühendis kuyruğuna düşer).
+    # Yinelenebilir: yalnızca durumu boş satırlara dokunur.
+    review_service.backfill()
 
 
 @app.get("/", tags=["meta"])

@@ -9,6 +9,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException
 
 from ..auth import Identity, require_permission
+from ..services import review as review_service
 
 from .. import database
 from ..core import electrical as core_electrical
@@ -174,9 +175,13 @@ def create_electrical_test(
         recorded_by={"employee_no": identity.employee_no,
                      "name": identity.name})
 
+    # Faz 12.2: sınır dışı sonuç mühendis onayına düşer.
+    review_status = review_service.classify("electrical", transformer_id,
+                                            test_id)
+
     saved = next(t for t in database.get_electrical_tests(transformer_id)
                  if t["id"] == test_id)
-    return {"ok": True, "id": test_id,
+    return {"ok": True, "id": test_id, "review_status": review_status,
             "assessment": electrical_service.assess_test(transformer_id,
                                                          saved)}
 

@@ -20,6 +20,7 @@ from typing import Dict, List, Optional
 
 from .. import database
 from ..core import electrical, nameplate
+from ..core import review as review_core
 
 
 def _context(transformer_id: str) -> Dict[str, object]:
@@ -93,6 +94,10 @@ def _summaries(transformer_id: str,
             "recorded_by_id": t.get("recorded_by_id"),
             "recorded_by_name": t.get("recorded_by_name"),
             "voided_by_name": t.get("voided_by_name"),
+            # Mühendis onayı (Faz 12.2).
+            "review_status": t.get("review_status"),
+            "reviewed_by_name": t.get("reviewed_by_name"),
+            "review_note": t.get("review_note"),
         })
     return rows
 
@@ -110,7 +115,9 @@ def history(transformer_id: str) -> Dict[str, object]:
                 "message": "Bu trafo için elektriksel test kaydı yok.",
                 "tests": []}
 
-    valid = [t for t in tests if not t.get("voided_at")]
+    # Geçersiz işaretlenen ya da mühendisin REDDETTİĞİ testler hüküm
+    # üretmez (Faz 8.6 / 12.2); ikisi de geçmişte görünür kalır.
+    valid = [t for t in tests if review_core.is_usable(t)]
     if not valid:
         return {"available": False, "reason": "all_voided",
                 "message": "Bu trafonun tüm test kayıtları geçersiz "
@@ -166,7 +173,8 @@ def electrical_card(transformer_id: str,
     if not test:
         return {"has_electrical_test": False, "electrical_overall": None,
                 "electrical_tested_at": None, "electrical_problems": [],
-                "electrical_data_suspect": False}
+                "electrical_data_suspect": False,
+                "electrical_review_status": None}
 
     assessment = assess_test(transformer_id, test)
     ttr = assessment["sections"]["turns_ratio"]
@@ -179,6 +187,7 @@ def electrical_card(transformer_id: str,
         # "testi tekrarla"dır. İki farklı iş emri türü; bakım servisinin
         # bunu ayırt edebilmesi için karta taşınıyor. (Faz 9.1)
         "electrical_data_suspect": bool(ttr.get("data_suspect")),
+        "electrical_review_status": test.get("review_status"),
     }
 
 

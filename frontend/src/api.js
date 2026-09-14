@@ -145,6 +145,21 @@ export const api = {
     maint.put(`/technicians/${id}/department`, { department })
       .then((r) => r.data),
 
+  // --- Mühendislik test onay kuyruğu (Faz 12.2) ---------------------------
+  // Önbelleğe ALINMIYOR: kuyruk başka mühendislerin kararıyla değişir.
+  reviewQueue: (folder = 'pending') =>
+    client.get('/reviews/queue', { params: { folder } }).then((r) => r.data),
+  reviewDecision: (kind, testId, body) =>
+    client.post(`/reviews/${kind}/${testId}/decision`, body).then((r) => r.data),
+
+  // --- Model inceleme / uzman etiketi (Faz 12.3) --------------------------
+  modelReviewQueue: (folder = 'pending') =>
+    client.get('/model-reviews/queue', { params: { folder } }).then((r) => r.data),
+  modelReviewDetail: (id) =>
+    client.get(`/model-reviews/${id}`).then((r) => r.data),
+  modelReviewLabel: (id, body) =>
+    client.post(`/model-reviews/${id}/label`, body).then((r) => r.data),
+
   health: () => client.get('/health').then((r) => r.data),
   predict: (payload) => client.post('/predict', payload).then((r) => r.data),
   explain: (gases) => client.post('/explain', gases).then((r) => r.data),

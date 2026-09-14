@@ -15,6 +15,8 @@ from typing import Dict, List, Optional
 
 from .. import database
 from ..core import assets, health_index, lifecycle, nameplate
+from ..core import review as review_core
+from ..core import expert_label
 from ..core.gases import (FAULT_FAMILY, FAULT_GROUP, FAULT_LABELS_TR,
                           SEVERE_FAULTS, total_combustible)
 from ..core.risk import RISK_LEVELS_TR, RISK_ORDER
@@ -157,7 +159,8 @@ def build_overview(rows: List[Dict],
                    oil_tests: Optional[Dict[str, Dict]] = None,
                    electrical_tests: Optional[Dict[str, Dict]] = None,
                    inspections: Optional[Dict[str, Dict]] = None,
-                   component_tests: Optional[Dict[str, Dict]] = None) -> Dict:
+                   component_tests: Optional[Dict[str, Dict]] = None,
+                   expert_labels: Optional[Dict[int, Dict]] = None) -> Dict:
     """Saf hesaplama: DB satırlarını özet + kart listesine çevirir.
 
     Veritabanına dokunmaz, bu yüzden sahte satırlarla test edilebilir.
@@ -166,9 +169,15 @@ def build_overview(rows: List[Dict],
     electrical_tests = electrical_tests or {}
     inspections = inspections or {}
     component_tests = component_tests or {}
+    expert_labels = expert_labels or {}
     cards: List[Dict] = []
     for r in rows:
         card = _to_card(r)
+        # Uzman kararı (Faz 12.3): son ölçüm etiketlendiyse tanı, ciddi
+        # arıza işareti ve inceleme bayrağı uzman kararından gelir. Modelin
+        # tahmini `model_prediction` alanında korunur.
+        card["measurement_id"] = r.get("measurement_id")
+        expert_label.apply_to_card(card, expert_labels.get(r.get("measurement_id")))
         # Yağ özeti karta eklenir; testi olmayan trafo için güvenli boş değer.
         card.update(oil_service.oil_card(card["id"],
                                          oil_tests.get(card["id"])))
@@ -193,6 +202,11 @@ def build_overview(rows: List[Dict],
             physical_overall=card.get("physical_overall"),
             component_overall=card.get("component_overall"),
             asset_weight=card.get("asset_weight"),
+            unverified=review_core.unverified_dimensions({
+                "oil": card.get("oil_review_status"),
+                "electrical": card.get("electrical_review_status"),
+                "components": card.get("component_review_status"),
+            }),
         )
         card["health_score"] = card["health"].get("score")
         card["health_band"] = card["health"].get("band")
@@ -264,4 +278,5 @@ def overview() -> Dict:
                           database.latest_oil_tests(),
                           database.latest_electrical_tests(),
                           database.latest_physical_inspections(),
-                          database.latest_component_tests())
+                          database.latest_component_tests(),
+                          database.expert_labels_by_measurement())

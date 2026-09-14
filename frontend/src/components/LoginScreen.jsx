@@ -26,6 +26,8 @@ const DEMO_ACCOUNTS = [
   { no: '10740', name: 'Selin Öztürk', dept: 'Yağ Laboratuvarı', hint: 'DGA, yağ testi' },
   { no: '10247', name: 'Ahmet Yılmaz', dept: 'Elektriksel Test', hint: 'TTR, buşing' },
   { no: '10611', name: 'Burak Aydın', dept: 'Saha Bakım', hint: 'iş yürütme, gözlem' },
+  { no: '10833', name: 'Deniz Koç', dept: 'Mühendislik', hint: 'test onayı, model incelemesi' },
+  { no: '10921', name: 'Can Yıldız', dept: 'Mühendislik', hint: 'test onayı, model incelemesi' },
 ]
 
 export default function LoginScreen({ onLogin }) {

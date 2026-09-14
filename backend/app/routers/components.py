@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from .. import database
 from ..auth import Identity, require_permission
+from ..services import review as review_service
 from ..core import components as core_components
 from ..schemas import ComponentTestIn
 from ..services import components as component_service
@@ -67,7 +68,11 @@ def create_component_test(transformer_id: str, test: ComponentTestIn,
         recorded_by={"employee_no": identity.employee_no,
                      "name": identity.name})
 
+    # Faz 12.2: sınır dışı sonuç mühendis onayına düşer.
+    review_status = review_service.classify("components", transformer_id,
+                                            test_id)
+
     saved = next(t for t in database.get_component_tests(transformer_id)
                  if t["id"] == test_id)
-    return {"ok": True, "id": test_id,
+    return {"ok": True, "id": test_id, "review_status": review_status,
             "assessment": component_service.assess_test(transformer_id, saved)}

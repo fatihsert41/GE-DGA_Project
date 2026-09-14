@@ -299,7 +299,8 @@ def compute(risk_condition: Optional[int] = None,
             physical_overall: Optional[str] = None,
             component_overall: Optional[str] = None,
             asset_class: Optional[str] = None,
-            asset_weight: Optional[float] = None) -> Dict[str, object]:
+            asset_weight: Optional[float] = None,
+            unverified: Optional[List[str]] = None) -> Dict[str, object]:
     """Sağlık endeksini hesaplar.
 
     Saf fonksiyon: veritabanına da HTTP'ye de dokunmaz, bu yüzden doğrudan
@@ -323,6 +324,12 @@ def compute(risk_condition: Optional[int] = None,
     weighted_sum = 0.0
     critical_dims: List[str] = []
     warnings: List[str] = []
+    # Mühendis onayı bekleyen boyutlar (Faz 12.2). Hesaba GİRERLER:
+    # onay beklerken kritik bir bulguyu yok saymak, onu hatalı kabul
+    # etmekten daha tehlikelidir. Ama skorun doğrulanmamış veriye
+    # dayandığı açıkça söylenir.
+    unverified_keys = set(unverified or [])
+    unverified_labels: List[str] = []
 
     for key in DIMENSION_ORDER:
         spec = DIMENSIONS[key]
@@ -346,6 +353,9 @@ def compute(risk_condition: Optional[int] = None,
                 "raw": d.get("raw"),
                 "contribution": round(weight * score, 1),
             })
+            if key in unverified_keys:
+                row["unverified"] = True
+                unverified_labels.append(str(spec["label"]))
             if d.get("is_critical"):
                 critical_dims.append(str(spec["label"]))
             warnings.extend(list(d.get("warnings") or []))
@@ -391,6 +401,12 @@ def compute(risk_condition: Optional[int] = None,
             " ölçülmemiş. Eksik boyut 'sağlıklı' sayılmadı, ortalamadan "
             "çıkarıldı.")
 
+    if unverified_labels:
+        warnings.append(
+            "Doğrulanmamış veri: " + ", ".join(unverified_labels) +
+            " — mühendis onayı bekliyor. Sonuç hesaba katıldı, çünkü onay "
+            "beklerken kritik bir bulguyu yok saymak tehlikeli olurdu.")
+
     result: Dict[str, object] = {
         "available": True,
         "score": round(score, 1),
@@ -398,6 +414,7 @@ def compute(risk_condition: Optional[int] = None,
         "capped": capped,
         "cap": CRITICAL_CAP if capped else None,
         "critical_dimensions": critical_dims,
+        "unverified_dimensions": unverified_labels,
         "weakest": {"key": weakest["key"], "label": weakest["label"],
                     "score": weakest["score"], "detail": weakest.get("detail")},
         "dimensions": rows,
