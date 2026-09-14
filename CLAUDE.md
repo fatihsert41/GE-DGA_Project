@@ -99,6 +99,17 @@ otomatik okundu sayılır. **Bildirim göndermek kayıtlı herkese açık**
 duruyor ki ileride tek satırla kısıtlanabilsin.
 ⚠ "Görsel dil" bölümü (aşağıda) Faz 9.7 öncesini anlatıyor, geçersiz.
 
+**SIRADAKİ: Faz 12–15 — `docs/FAZ12-15-YOL-HARITASI.md`** (14 Eyl'de
+kullanıcının fikirlerinden hazırlandı, kullanıcı henüz sırayı onaylamadı).
+Önerilen sıra: **12 Mühendislik departmanı + onay akışı** (test onay
+kuyruğu, dört göz; model inceleme kuyruğu → uzman etiketi = gerçek veri) →
+**13 Doküman/design yönetimi** (yükleme, revizyon, tarayıcıda PDF/görsel,
+şema parçasına bağlama) → **14 Stok ve yedek parça** (parça kataloğu,
+künyeden uyumluluk, depo, rezervasyon, teslim süresi + emniyet stoğu,
+yeni Stok Kontrol departmanı) → **15 Akıllı cihaz (IED) filosu** (cihaz
+kaydı, kalp atışı, kalibrasyon, laboratuvar–sensör sapması ile veri
+kalitesi, model sürüm takibi). İLK İŞ: belgenin sonundaki 5 soruyu sor.
+
 **Yeni bilgisayara geçiş (14 Eyl):** git'e girmeyen dosyalar yeniden
 üretildi — `npm ci`, `python -m app.ml.train --field-like`,
 `python -m app.ml.seed`; `dotnet-ef` global araç olarak kuruldu.
