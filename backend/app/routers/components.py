@@ -4,7 +4,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException
 
 from .. import database
-from ..auth import Identity, require_identity
+from ..auth import Identity, require_permission
 from ..core import components as core_components
 from ..schemas import ComponentTestIn
 from ..services import components as component_service
@@ -34,7 +34,7 @@ def list_component_tests(transformer_id: str) -> dict:
 
 @router.post("/transformers/{transformer_id}/component-tests")
 def create_component_test(transformer_id: str, test: ComponentTestIn,
-                          identity: Identity = Depends(require_identity)
+                          identity: Identity = Depends(require_permission("tests.components"))
                           ) -> dict:
     """Yeni bir buşing/kademe testi kaydeder ve hemen değerlendirir."""
     if database.get_transformer(transformer_id) is None:

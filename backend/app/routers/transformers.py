@@ -1,9 +1,10 @@
 """Varlık kaydı (künye) ve ölçüm geçmişi uç noktaları."""
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
 from .. import database
+from ..auth import Identity, require_permission
 from ..core import assets, nameplate
 from ..schemas import NameplateIn, TransformerCreate
 
@@ -41,8 +42,14 @@ def nameplate_schema() -> dict:
 
 
 @router.post("")
-def create(t: TransformerCreate) -> dict:
-    """Trafo ekler veya günceller (künyesiyle birlikte)."""
+def create(t: TransformerCreate,
+           _identity: Identity = Depends(require_permission("assets.edit"))
+           ) -> dict:
+    """Trafo ekler veya günceller (künyesiyle birlikte).
+
+    Faz 10: yetki ister. Önceden bu uç nokta kimliksiz çağrılabiliyordu,
+    yani giriş yapmamış biri bile bir trafonun künyesini ezebiliyordu.
+    """
     np_fields = t.nameplate.model_dump(exclude_none=True) if t.nameplate else {}
 
     problems = nameplate.validate({**np_fields, "mva": t.mva})
@@ -68,7 +75,9 @@ def get_one(transformer_id: str) -> dict:
 
 
 @router.put("/{transformer_id}/nameplate")
-def update_nameplate(transformer_id: str, np_in: NameplateIn) -> dict:
+def update_nameplate(transformer_id: str, np_in: NameplateIn,
+                     _identity: Identity = Depends(
+                         require_permission("assets.edit"))) -> dict:
     """Künyeyi kısmen günceller — gönderilmeyen alanlar korunur."""
     fields = np_in.model_dump(exclude_none=True)
 

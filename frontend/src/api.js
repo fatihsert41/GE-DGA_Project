@@ -57,6 +57,62 @@ const attachToken = (config) => {
 client.interceptors.request.use(attachToken)
 maint.interceptors.request.use(attachToken)
 
+// --- Kısa süreli önbellek (optimizasyon) -----------------------------------
+//
+// Filo, Testler ve Yönetim ekranları aynı filo listelerini kullanıyor ve
+// her ekran geçişinde hepsini baştan çekiyordu. Artık bir GET cevabı
+// 30 saniye saklanıyor; o sürede aynı istek sunucuya gitmeden dönüyor.
+//
+// İki kural bunu güvenli tutuyor:
+// 1. Veri DEĞİŞTİREN her istek (POST/PUT/PATCH/DELETE) önbelleği tamamen
+//    siler. Yağ testi kaydeden kullanıcı eski listeyi görmez.
+// 2. Cevabın kendisi değil SÖZ (Promise) saklanır. Aynı anda iki ekran
+//    aynı veriyi isterse sunucuya tek istek gider. Hata olursa kayıt
+//    silinir ki bir sonraki deneme gerçekten yeniden denesin.
+//
+// Yalnızca yavaş değişen listeler önbelleğe alınıyor (filo özetleri,
+// şemalar). Bildirimler ve iş emirleri başka kullanıcılar tarafından da
+// değiştirilebildiği için her seferinde tazeleniyor.
+const CACHE_MS = 30000
+const cache = new Map()
+
+const cachedGet = (http, url) => {
+  const key = `${http.defaults.baseURL}${url}`
+  const hit = cache.get(key)
+  if (hit && Date.now() - hit.at < CACHE_MS) return hit.promise
+  const promise = http.get(url).then((r) => r.data)
+  cache.set(key, { at: Date.now(), promise })
+  promise.catch(() => cache.delete(key))
+  return promise
+}
+
+const clearCacheOnWrite = (response) => {
+  if ((response.config.method || 'get').toLowerCase() !== 'get') cache.clear()
+  return response
+}
+// Faz 10: Python yetki reddini {detail: {message, required_permission}}
+// biçiminde döndürüyor. Bileşenlerin çoğu hata metnini `detail`ten okuyup
+// doğrudan ekrana yazıyor; nesneyi ekrana basmaya çalışmak React'i
+// çökertirdi. Burada mesaj metne indiriliyor, ayrıntı `permission`da
+// saklanıyor. (Künye doğrulamasının {message, problems} biçimine
+// DOKUNULMUYOR — onu NameplateForm ayrıca okuyor.)
+const normalizePermissionError = (error) => {
+  const data = error?.response?.data
+  const detail = data?.detail
+  if (detail && typeof detail === 'object' && detail.required_permission) {
+    data.permission = detail
+    data.detail = detail.message
+  }
+  return Promise.reject(error)
+}
+
+client.interceptors.response.use(clearCacheOnWrite, normalizePermissionError)
+maint.interceptors.response.use(clearCacheOnWrite)
+
+// Araç çubuğundaki "Yenile": kullanıcı sunucudaki son hâli istiyor,
+// 30 saniyelik önbelleği beklememeli.
+export const clearApiCache = () => cache.clear()
+
 export const api = {
   // --- Kimlik (Faz 9.0) ---------------------------------------------------
   // Giriş .NET'te: personel kaydı orada duruyor. Python belirteci
@@ -64,7 +120,10 @@ export const api = {
   // kapalıyken de ölçüm girilebilir.
   login: (employeeNo, pin) =>
     maint.post('/auth/login', { employeeNo, pin }).then((r) => r.data),
-  logout: () => maint.post('/auth/logout').then((r) => r.data),
+  logout: () => maint.post('/auth/logout')
+    .then((r) => r.data)
+    // Oturum kapanınca başka kullanıcının verisi önbellekte kalmasın.
+    .finally(() => cache.clear()),
   me: () => maint.get('/auth/me').then((r) => r.data),
   personnel: () => maint.get('/technicians').then((r) => r.data),
 
@@ -73,19 +132,31 @@ export const api = {
     maint.get('/notifications', { params: { unreadOnly } }).then((r) => r.data),
   markNotificationRead: (id) =>
     maint.post(`/notifications/${id}/read`).then((r) => r.data),
+  // Faz 10: personele elle bildirim gönderme ve gönderilenler kutusu.
+  sendMessage: (payload) =>
+    maint.post('/notifications/messages', payload).then((r) => r.data),
+  sentMessages: () => maint.get('/notifications/sent').then((r) => r.data),
+
+  // --- Departmanlar ve yetkiler (Faz 10) ----------------------------------
+  // Katalog nadiren değişir, önbelleğe alınıyor. Departman değiştirmek bir
+  // yazma isteği olduğu için önbelleği zaten kendisi temizler.
+  departments: () => cachedGet(maint, '/departments'),
+  changeDepartment: (id, department) =>
+    maint.put(`/technicians/${id}/department`, { department })
+      .then((r) => r.data),
 
   health: () => client.get('/health').then((r) => r.data),
   predict: (payload) => client.post('/predict', payload).then((r) => r.data),
   explain: (gases) => client.post('/explain', gases).then((r) => r.data),
   compare: (gases) => client.post('/compare', gases).then((r) => r.data),
-  leaderboard: () => client.get('/compare/leaderboard').then((r) => r.data),
+  leaderboard: () => cachedGet(client, '/compare/leaderboard'),
   realityCheck: () => client.get('/compare/reality-check').then((r) => r.data),
   trendDemo: (cls, months = 24, horizon = 6) =>
     client.get(`/trend/demo/${cls}`, { params: { months, horizon } })
       .then((r) => r.data),
   trendFromSamples: (payload) =>
     client.post('/trend', payload).then((r) => r.data),
-  fleetOverview: () => client.get('/fleet/overview').then((r) => r.data),
+  fleetOverview: () => cachedGet(client, '/fleet/overview'),
   transformerTrend: (id, horizon = 6) =>
     client.get(`/trend/${id}`, { params: { horizon } }).then((r) => r.data),
   measurements: (id) =>
@@ -95,23 +166,23 @@ export const api = {
   transformer: (id) => client.get(`/transformers/${id}`).then((r) => r.data),
   // Form açılır listeleri backend'den gelir; seçenekleri burada tekrar
   // yazmak iki yerde iki farklı gerçek yaratırdı.
-  nameplateSchema: () => client.get('/transformers/schema').then((r) => r.data),
+  nameplateSchema: () => cachedGet(client, '/transformers/schema'),
   createTransformer: (payload) =>
     client.post('/transformers', payload).then((r) => r.data),
   updateNameplate: (id, fields) =>
     client.put(`/transformers/${id}/nameplate`, fields).then((r) => r.data),
 
   // --- Yağ kalitesi ve kağıt yaşlanması (Faz 8.3-8.4) ---------------------
-  oilSchema: () => client.get('/oil/schema').then((r) => r.data),
-  oilFleet: () => client.get('/oil/fleet').then((r) => r.data),
+  oilSchema: () => cachedGet(client, '/oil/schema'),
+  oilFleet: () => cachedGet(client, '/oil/fleet'),
   oilTests: (id) =>
     client.get(`/transformers/${id}/oil-tests`).then((r) => r.data),
   createOilTest: (id, payload) =>
     client.post(`/transformers/${id}/oil-tests`, payload).then((r) => r.data),
 
   // --- Elektriksel testler (Faz 8.6) --------------------------------------
-  electricalSchema: () => client.get('/electrical/schema').then((r) => r.data),
-  electricalFleet: () => client.get('/electrical/fleet').then((r) => r.data),
+  electricalSchema: () => cachedGet(client, '/electrical/schema'),
+  electricalFleet: () => cachedGet(client, '/electrical/fleet'),
   electricalTests: (id) =>
     client.get(`/transformers/${id}/electrical-tests`).then((r) => r.data),
   createElectricalTest: (id, payload) =>
@@ -139,8 +210,8 @@ export const api = {
     client.get(`/transformers/${id}/schematic`).then((r) => r.data),
 
   // --- Buşing ve kademe değiştirici (Faz 9.4) -----------------------------
-  componentsSchema: () => client.get('/components/schema').then((r) => r.data),
-  componentsFleet: () => client.get('/components/fleet').then((r) => r.data),
+  componentsSchema: () => cachedGet(client, '/components/schema'),
+  componentsFleet: () => cachedGet(client, '/components/fleet'),
   componentTests: (id) =>
     client.get(`/transformers/${id}/component-tests`).then((r) => r.data),
   createComponentTest: (id, payload) =>
@@ -148,15 +219,15 @@ export const api = {
       .then((r) => r.data),
 
   // --- Fiziksel saha gözlemi (Faz 9.5) ------------------------------------
-  physicalSchema: () => client.get('/physical/schema').then((r) => r.data),
-  physicalFleet: () => client.get('/physical/fleet').then((r) => r.data),
+  physicalSchema: () => cachedGet(client, '/physical/schema'),
+  physicalFleet: () => cachedGet(client, '/physical/fleet'),
   inspections: (id) =>
     client.get(`/transformers/${id}/inspections`).then((r) => r.data),
   createInspection: (id, payload) =>
     client.post(`/transformers/${id}/inspections`, payload).then((r) => r.data),
 
   // --- Varlık yaşam döngüsü (Faz 9.35) ------------------------------------
-  lifecycleSchema: () => client.get('/lifecycle/schema').then((r) => r.data),
+  lifecycleSchema: () => cachedGet(client, '/lifecycle/schema'),
   lifecycle: (id) =>
     client.get(`/transformers/${id}/lifecycle`).then((r) => r.data),
   changeLifecycle: (id, status, note) =>
@@ -166,8 +237,8 @@ export const api = {
   // --- Sağlık endeksi (Faz 8.5) -------------------------------------------
   // Ağırlıklar ve bantlar backend'den gelir; arayüze sabit yazmak formül
   // değiştiğinde ekranın yalan söylemesine yol açardı.
-  healthSchema: () => client.get('/health-index/schema').then((r) => r.data),
-  healthFleet: () => client.get('/health-index/fleet').then((r) => r.data),
+  healthSchema: () => cachedGet(client, '/health-index/schema'),
+  healthFleet: () => cachedGet(client, '/health-index/fleet'),
   transformerHealth: (id) =>
     client.get(`/transformers/${id}/health`).then((r) => r.data),
 

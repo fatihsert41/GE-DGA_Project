@@ -1,11 +1,15 @@
 import { useState } from 'react'
 import { GASES, GAS_LABELS, PRESETS } from '../constants'
+import { can } from '../permissions'
 
 const empty = () => GASES.reduce((o, g) => ({ ...o, [g]: '' }), {})
 
 export default function GasForm({ onSubmit, loading }) {
   const [values, setValues] = useState(PRESETS['Ark (D2)'])
   const [tid, setTid] = useState('TR-01')
+  // Faz 10: TANI herkese açık, ölçümü trafonun geçmişine KAYDETMEK DGA
+  // yetkisi ister. Yetki yoksa analiz yine yapılır, kayıt yapılmaz.
+  const canSave = can('tests.dga')
 
   const setGas = (g, v) => setValues((s) => ({ ...s, [g]: v }))
   const applyPreset = (p) => setValues(PRESETS[p])
@@ -15,7 +19,7 @@ export default function GasForm({ onSubmit, loading }) {
     const gases = GASES.reduce(
       (o, g) => ({ ...o, [g]: parseFloat(values[g]) || 0 }), {})
     onSubmit({ gases, transformer_id: tid || null,
-      transformer_name: tid || null, persist: !!tid })
+      transformer_name: tid || null, persist: !!tid && canSave })
   }
 
   return (
@@ -45,6 +49,12 @@ export default function GasForm({ onSubmit, loading }) {
         <input value={tid} onChange={(e) => setTid(e.target.value)}
           placeholder="Örn: TR-01" />
       </div>
+      {!canSave && (
+        <p className="note">
+          Departmanınızın DGA ölçümü kaydetme yetkisi yok: analiz yapılır ama
+          ölçüm trafonun geçmişine <b>kaydedilmez</b>.
+        </p>
+      )}
 
       <button className="primary" type="submit" disabled={loading}>
         {loading ? 'Analiz ediliyor…' : 'Analiz Et'}

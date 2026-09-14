@@ -260,7 +260,6 @@ function Workload({ orders, personnel, today }) {
 
 export default function ManagerDashboard({ onSelect }) {
   const [fleet, setFleet] = useState(null)
-  const [health, setHealth] = useState(null)
   const [electrical, setElectrical] = useState(null)
   const [orders, setOrders] = useState(null)
   const [personnel, setPersonnel] = useState(null)
@@ -268,8 +267,11 @@ export default function ManagerDashboard({ onSelect }) {
   const [error, setError] = useState(null)
 
   useEffect(() => {
-    Promise.all([api.fleetOverview(), api.healthFleet(), api.electricalFleet()])
-      .then(([f, h, e]) => { setFleet(f); setHealth(h); setElectrical(e) })
+    // Sağlık özeti ve yenileme listesi filo cevabının İÇİNDE geliyor.
+    // Önceden ayrıca /health-index/fleet isteniyordu ve sunucu aynı filoyu
+    // iki kez hesaplıyordu.
+    Promise.all([api.fleetOverview(), api.electricalFleet()])
+      .then(([f, e]) => { setFleet(f); setElectrical(e) })
       .catch((err) => setError(err?.response?.data?.detail || err.message))
 
     // .NET ayrı ele alınıyor: kapalıysa yalnızca iş yükü bölümü
@@ -282,11 +284,11 @@ export default function ManagerDashboard({ onSelect }) {
   if (error) {
     return <div className="panel"><b>Filo verisi alınamadı:</b> {error}</div>
   }
-  if (!fleet || !health) {
+  if (!fleet) {
     return <div className="panel"><p className="empty">Yükleniyor…</p></div>
   }
 
-  const stats = health.stats || {}
+  const stats = fleet.summary.health || {}
   const dist = stats.band_distribution || {}
   const critical = (dist.critical || 0) + (dist.poor || 0)
   const today = new Date().toISOString().slice(0, 10)
@@ -347,7 +349,8 @@ export default function ManagerDashboard({ onSelect }) {
 
       <HealthMatrix transformers={fleet.transformers} onSelect={onSelect} />
 
-      <RenewalList items={health.items || []} onSelect={onSelect} />
+      <RenewalList items={fleet.summary.renewal?.items || []}
+        onSelect={onSelect} />
 
       {maintError ? (
         <div className="panel">

@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
-import api from '../api'
+import api, { session } from '../api'
+import { can } from '../permissions'
+import NoPermission from './NoPermission'
 
 /* Faz 7.7 — Bakım planlama ekranı.
  *
@@ -130,10 +132,15 @@ function SuggestionPanel({ suggestions, onApply, applying }) {
         </tbody>
       </table>
 
-      <button type="button" className="primary" onClick={onApply}
-        disabled={applying}>
-        {applying ? 'Uygulanıyor…' : `${suggestions.count} iş emrini oluştur`}
-      </button>
+      {/* Önerileri GÖRMEK serbest, UYGULAMAK planlama yetkisi ister. */}
+      {can('workorders.plan') ? (
+        <button type="button" className="primary" onClick={onApply}
+          disabled={applying}>
+          {applying ? 'Uygulanıyor…' : `${suggestions.count} iş emrini oluştur`}
+        </button>
+      ) : (
+        <p className="note"><NoPermission compact permission="workorders.plan" /></p>
+      )}
     </div>
   )
 }
@@ -146,13 +153,14 @@ function TechnicianTable({ technicians }) {
       <h2>Teknisyenler</h2>
       <table className="compare">
         <thead>
-          <tr><th>Sicil</th><th>Ad</th><th>Uzmanlık</th><th>Yük</th></tr>
+          <tr><th>Sicil</th><th>Ad</th><th>Departman</th><th>Uzmanlık</th><th>Yük</th></tr>
         </thead>
         <tbody>
           {technicians.items.map((t) => (
             <tr key={t.id}>
               <td className="num">{t.employeeNo}</td>
               <td><b>{t.name}</b></td>
+              <td className="muted">{t.departmentName || '—'}</td>
               <td className="muted">{t.specialty}</td>
               <td>
                 <span className={t.hasCapacity ? '' : 'over-limit'}>
@@ -171,6 +179,14 @@ function TechnicianTable({ technicians }) {
 }
 
 function WorkOrderTable({ orders, onAssign, onStatus, busyId }) {
+  const me = session.user()
+  const canPlan = can('workorders.plan')
+  // Saha personeli yalnızca KENDİSİNE atanan işi yürütür. Sunucu aynı
+  // kuralı ayrıca uygular; burada düğmeyi hiç göstermiyoruz ki kullanıcı
+  // başkasının işine "Başlat" deyip ret mesajıyla karşılaşmasın.
+  const canRun = (o) => canPlan
+    || (can('workorders.execute') && o.technician?.employeeNo === me?.employeeNo)
+
   if (!orders?.items?.length) {
     return (
       <div className="panel">
@@ -218,17 +234,17 @@ function WorkOrderTable({ orders, onAssign, onStatus, busyId }) {
                   </span>
                 </td>
                 <td className="wo-actions">
-                  {!o.technician && (
+                  {!o.technician && canPlan && (
                     <button type="button" className="chip"
                       disabled={busyId === o.id}
                       onClick={() => onAssign(o.id)}>Ata</button>
                   )}
-                  {o.status === 'Planned' && (
+                  {o.status === 'Planned' && canRun(o) && (
                     <button type="button" className="chip"
                       disabled={busyId === o.id}
                       onClick={() => onStatus(o.id, 'InProgress')}>Başlat</button>
                   )}
-                  {o.status === 'InProgress' && (
+                  {o.status === 'InProgress' && canRun(o) && (
                     <button type="button" className="chip"
                       disabled={busyId === o.id}
                       onClick={() => onStatus(o.id, 'Done')}>Bitir</button>

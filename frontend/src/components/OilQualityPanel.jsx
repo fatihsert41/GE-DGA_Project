@@ -4,6 +4,8 @@ import {
   Tooltip, XAxis, YAxis,
 } from 'recharts'
 import api from '../api'
+import { can } from '../permissions'
+import NoPermission from './NoPermission'
 import { axis, grid, tooltip, muted, SERIES } from '../theme'
 
 /* Faz 8.4 — Yağ kalitesi ve kağıt yaşlanması ekranı.
@@ -329,7 +331,17 @@ export default function OilQualityPanel({ id }) {
     return <div className="panel"><p className="empty">Yükleniyor…</p></div>
   }
 
-  if (adding) {
+  // Faz 10: yağ testini yalnızca yağ laboratuvarı (ve yönetim) girer.
+  // Yetki yoksa düğmenin YERİNE neden olmadığını söyleyen satır çıkar.
+  const canWrite = can('tests.oil')
+  const addButton = canWrite
+    ? (
+      <button type="button" className="btn-add"
+        onClick={() => setAdding(true)}>+ Yeni yağ testi</button>
+    )
+    : <NoPermission compact permission="tests.oil" />
+
+  if (adding && canWrite) {
     return (
       <OilTestForm transformerId={id} schema={schema}
         onCancel={() => setAdding(false)}
@@ -342,8 +354,7 @@ export default function OilQualityPanel({ id }) {
       <div className="panel">
         <div className="np-head">
           <h2>Yağ Kalitesi</h2>
-          <button type="button" className="btn-add"
-            onClick={() => setAdding(true)}>+ Yeni yağ testi</button>
+          {addButton}
         </div>
         <p className="empty">{data.message}</p>
       </div>
@@ -366,8 +377,7 @@ export default function OilQualityPanel({ id }) {
             son test {fmtDate(test.sampled_at)}
             {test.lab ? ` · ${test.lab}` : ''} · toplam {data.n_tests} test
           </span>
-          <button type="button" className="btn-add"
-            onClick={() => setAdding(true)}>+ Yeni yağ testi</button>
+          {addButton}
         </div>
 
         <OilParameters assessment={a} />

@@ -1,20 +1,31 @@
-import { useCallback, useEffect, useState } from 'react'
-import api, { session } from './api'
-import GasForm from './components/GasForm'
-import DiagnosisResult from './components/DiagnosisResult'
-import ShapChart from './components/ShapChart'
-import DuvalTriangle from './components/DuvalTriangle'
-import ComparePanel from './components/ComparePanel'
-import TrendPanel from './components/TrendPanel'
-import FleetOverview from './components/FleetOverview'
-import TransformerDetail from './components/TransformerDetail'
-import MaintenancePanel from './components/MaintenancePanel'
-import NameplateForm from './components/NameplateForm'
-import TestsOverview from './components/TestsOverview'
+import { lazy, Suspense, useCallback, useEffect, useState } from 'react'
+import api, { clearApiCache, session } from './api'
+import { can, canAny } from './permissions'
+// Giriş ekranı HEMEN yüklenir: kullanıcının ilk gördüğü şey o.
 import LoginScreen from './components/LoginScreen'
-import PersonnelPanel from './components/PersonnelPanel'
-import NotificationsPanel from './components/NotificationsPanel'
-import ManagerDashboard from './components/ManagerDashboard'
+import NoPermission from './components/NoPermission'
+
+// Kod bölme: her ekran İLK AÇILDIĞINDA ayrı dosya olarak indirilir.
+// `lazy` bileşeni ilk çizileceği ana kadar indirmez; `Suspense` indirme
+// sürerken yerine ne gösterileceğini belirler.
+const GasForm = lazy(() => import('./components/GasForm'))
+const DiagnosisResult = lazy(() => import('./components/DiagnosisResult'))
+const ShapChart = lazy(() => import('./components/ShapChart'))
+const DuvalTriangle = lazy(() => import('./components/DuvalTriangle'))
+const ComparePanel = lazy(() => import('./components/ComparePanel'))
+const TrendPanel = lazy(() => import('./components/TrendPanel'))
+const FleetOverview = lazy(() => import('./components/FleetOverview'))
+const TransformerDetail = lazy(() => import('./components/TransformerDetail'))
+const MaintenancePanel = lazy(() => import('./components/MaintenancePanel'))
+const NameplateForm = lazy(() => import('./components/NameplateForm'))
+const TestsOverview = lazy(() => import('./components/TestsOverview'))
+const PersonnelPanel = lazy(() => import('./components/PersonnelPanel'))
+const NotificationsPanel = lazy(() => import('./components/NotificationsPanel'))
+const ManagerDashboard = lazy(() => import('./components/ManagerDashboard'))
+
+const Loading = () => (
+  <div className="panel"><p className="empty">Yükleniyor…</p></div>
+)
 
 const TABS = [
   { id: 'diagnosis', label: 'Tanı' },
@@ -23,29 +34,46 @@ const TABS = [
   { id: 'trend', label: 'Trend Tahmini' },
 ]
 
-// `roles` alanı olan görünümler YALNIZCA o rollere gösterilir.
-//
-// Faz 9.0'da eklenen Role alanı burada ilk kez gerçek bir iş yapıyor:
-// yönetim ekranı süpervizör ve mühendise açık, teknisyene kapalı.
-// Sebep yetki kısıtlamak değil — teknisyenin işine yaramayan bir ekran
-// onun için gürültüdür. GE Vernova'nın APM ürünü de ekranlarını bu
-// üç rol üzerinden ayırıyor.
-//
-// ⚠ Bu bir GÜVENLİK sınırı DEĞİLDİR: uç noktalar hâlâ herkese açık.
-// Gerçek yetkilendirme sunucu tarafında yapılmalı; arayüzde gizlemek
-// yalnızca ekranı sadeleştirir.
+/* Faz 11 — ERP kabuğu.
+ *
+ * Kullanıcı isteği: "Canias ERP gibi bir ekran, AI frontendinden
+ * uzaklaşalım." Kurumsal ERP'lerin (Canias, SAP, Logo) ortak yapısı
+ * burada birebir kuruldu:
+ *
+ *   * MODÜL AĞACI — ekranlar işlevsel modüllere (Varlık, Analiz, Bakım,
+ *     Yönetim, İletişim) klasör klasör ayrılır.
+ *   * İŞLEM KODU — her ekranın kısa bir kodu var (FL01, BK01…). Sık
+ *     kullanan personel menüde gezinmez, kodu yazıp Enter'a basar.
+ *   * ÇOKLU PENCERE — açılan ekranlar sekme olur; kullanıcı işini
+ *     kaybetmeden ekranlar arasında geçer.
+ *   * ARAÇ ÇUBUĞU ve DURUM ÇUBUĞU — her ekranda aynı yerde aynı
+ *     komutlar; altta bağlantı ve oturum bilgisi.
+ *
+ * Yetki mantığı Faz 10'daki gibi: ekranın `permission` alanı listeyse
+ * listedekilerden BİRİ yeterli. Yetkisiz ekran menüde kilitli görünür.
+ * ⚠ Bu bir GÜVENLİK sınırı DEĞİLDİR; asıl kontrol sunucuda (403).
+ */
+const MODULES = [
+  { id: 'assets', label: 'Varlık Yönetimi' },
+  { id: 'analysis', label: 'Analiz' },
+  { id: 'maintenance', label: 'Bakım Yönetimi' },
+  { id: 'admin', label: 'Yönetim' },
+  { id: 'comm', label: 'İletişim' },
+]
+
 const VIEWS = [
-  { id: 'fleet', label: 'Filo' },
-  { id: 'manager', label: 'Yönetim',
-    roles: ['Supervisor', 'Engineer'] },
-  { id: 'analysis', label: 'Numune Analizi' },
-  // Filo geneli test durumu: "hangi trafo bozuk" değil, "nerede eksiğim".
-  { id: 'tests', label: 'Testler' },
-  // Bakım ekranı .NET servisinden beslenir (diğerleri Python'dan).
-  { id: 'maintenance', label: 'Bakım Planlama' },
-  // Personel kayıtları da .NET'te: kullanıcı ".NET kayıtlarını nerede
-  // görüyorum?" diye sordu, cevabı buraya kadar yoktu.
-  { id: 'personnel', label: 'Personel' },
+  { id: 'fleet', code: 'FL01', label: 'Filo Durumu', module: 'assets' },
+  { id: 'tests', code: 'TS01', label: 'Test Durumu', module: 'assets' },
+  { id: 'analysis', code: 'NA01', label: 'Numune Analizi', module: 'analysis',
+    permission: 'analysis.run' },
+  { id: 'maintenance', code: 'BK01', label: 'Bakım Planlama', module: 'maintenance',
+    permission: ['workorders.plan', 'workorders.execute'] },
+  { id: 'manager', code: 'YN01', label: 'Yönetim Özeti', module: 'admin',
+    permission: 'manager.view' },
+  { id: 'personnel', code: 'PR01', label: 'Personel', module: 'admin',
+    permission: 'personnel.view' },
+  // Gelen kutusu, yeni bildirim ve gönderilenler TEK ekranda (Faz 11).
+  { id: 'notifications', code: 'BL01', label: 'Bildirimler', module: 'comm' },
 ]
 
 const ROLE_TR = {
@@ -54,38 +82,64 @@ const ROLE_TR = {
   Supervisor: 'Süpervizör',
 }
 
+const viewById = (id) => VIEWS.find((v) => v.id === id)
+const allowedFor = (viewDef, user) =>
+  !viewDef?.permission || canAny(viewDef.permission, user)
+const upperTr = (s) => s.toLocaleUpperCase('tr-TR')
+
 export default function App() {
   // Oturum. Sayfa yenilendiğinde localStorage'tan geri okunur; belirtecin
   // hâlâ geçerli olup olmadığını /auth/me söyler.
-  const [user, setUser] = useState(() => session.user())
+  const [user, setUser] = useState(() => {
+    const saved = session.user()
+    // Faz 10 öncesi açılmış oturumda yetki listesi yok → yeniden giriş.
+    if (saved && !Array.isArray(saved.permissions)) {
+      session.clear()
+      return null
+    }
+    return saved
+  })
+
+  // Açık pencereler (sekmeler) ve etkin olan.
+  const [openTabs, setOpenTabs] = useState(['fleet'])
   const [view, setView] = useState('fleet')
-  // Seçili trafo kartı (null ise filo listesi görünür).
+  // Menüde kapatılmış modül klasörleri.
+  const [collapsed, setCollapsed] = useState(() => new Set())
+  const [tcode, setTcode] = useState('')
+  const [statusMsg, setStatusMsg] = useState('Hazır')
+  // "Yenile" düğmesi: değeri değişince etkin ekran baştan kurulur.
+  const [refreshKey, setRefreshKey] = useState(0)
+
+  // Seçili trafo kartı (null ise liste görünür).
   const [selected, setSelected] = useState(null)
   // Yeni trafo kaydı formu açık mı? Filo listesinin yerine geçer.
   const [creating, setCreating] = useState(false)
-  // Kayıt sonrası filo listesini tazelemek için sayaç: değeri değişince
-  // FleetOverview yeniden monte olur ve veriyi baştan çeker.
   const [fleetVersion, setFleetVersion] = useState(0)
   const [tab, setTab] = useState('diagnosis')
   const [loading, setLoading] = useState(false)
   const [health, setHealth] = useState(null)
+  const [maintUp, setMaintUp] = useState(null)
   const [error, setError] = useState(null)
 
-  // Sayfa açılışında saklanan belirteç hâlâ geçerli mi? Süresi dolmuş
-  // ya da iptal edilmiş olabilir; o zaman kullanıcı yeniden giriş yapar.
+  // Departman ve yetkiler buradan TAZELENİR: yönetim birinin departmanını
+  // değiştirdiyse menü sayfa yenilenince güncellenir.
   useEffect(() => {
     if (!session.token()) return
     api.me()
-      .then((me) => setUser({
-        employeeNo: me.employeeNo, name: me.name, role: me.role,
-        specialty: me.specialty,
-      }))
+      .then((me) => {
+        const next = {
+          ...session.user(),
+          employeeNo: me.employeeNo, name: me.name, role: me.role,
+          specialty: me.specialty, department: me.department,
+          departmentName: me.departmentName, permissions: me.permissions,
+        }
+        session.save(session.token(), next)
+        setUser(next)
+      })
       .catch(() => { session.clear(); setUser(null) })
   }, [])
 
-  // Okunmamış bildirim sayısı. Zil rozeti için; 60 saniyede bir
-  // tazelenir. Daha sık yoklamak sunucuyu boşuna meşgul ederdi,
-  // daha seyrek yapmak da bildirimi geç gösterirdi.
+  // Okunmamış bildirim sayısı ve bakım servisi bağlantısı: 60 sn'de bir.
   const [unread, setUnread] = useState(0)
 
   const refreshUnread = useCallback(() => {
@@ -93,6 +147,9 @@ export default function App() {
     api.notifications(true)
       .then((d) => setUnread(d.unread ?? 0))
       .catch(() => {})
+    api.maintenance.health()
+      .then(() => setMaintUp(true))
+      .catch(() => setMaintUp(false))
   }, [])
 
   useEffect(() => {
@@ -101,27 +158,93 @@ export default function App() {
     return () => clearInterval(timer)
   }, [refreshUnread, view])
 
-  const logout = () => {
-    // Sunucuya haber ver (belirteç ANINDA iptal olsun), sonra yerelde
-    // temizle. Sunucu ulaşılamazsa da yerel temizlik yapılır — yoksa
-    // kullanıcı .NET kapalıyken çıkış yapamaz hâle gelirdi.
-    api.logout().catch(() => {}).finally(() => {
-      session.clear()
-      setUser(null)
-      setSelected(null)
-      setView('fleet')
-    })
-  }
-
   const [result, setResult] = useState(null)
   const [explanation, setExplanation] = useState(null)
   const [compare, setCompare] = useState(null)
   const [leaderboard, setLeaderboard] = useState(null)
 
+  // Numune Analizi ilk kez açıldı mı? Açılmadıysa hiç çizilmez (kodu da
+  // inmez). Açıldıktan sonra DOM'da kalır ki girilen değerler kaybolmasın.
+  const [analysisOpened, setAnalysisOpened] = useState(false)
+
+  const viewDef = viewById(view)
+  const allowed = allowedFor(viewDef, user)
+  const analysisAllowed = allowedFor(viewById('analysis'), user)
+
   useEffect(() => {
     api.health().then(setHealth).catch(() => setHealth(null))
-    api.leaderboard().then(setLeaderboard).catch(() => {})
   }, [])
+
+  useEffect(() => {
+    if (view !== 'analysis' || analysisOpened || !analysisAllowed) return
+    setAnalysisOpened(true)
+    api.leaderboard().then(setLeaderboard).catch(() => {})
+  }, [view, analysisOpened, analysisAllowed])
+
+  // --- Pencere yönetimi -----------------------------------------------------
+
+  const openView = (id) => {
+    setOpenTabs((prev) => (prev.includes(id) ? prev : [...prev, id]))
+    setView(id)
+    setSelected(null)
+    setCreating(false)
+  }
+
+  const closeTab = (id) => {
+    if (openTabs.length <= 1) return            // en az bir pencere açık kalır
+    const idx = openTabs.indexOf(id)
+    const next = openTabs.filter((t) => t !== id)
+    setOpenTabs(next)
+    if (id === view) {
+      setView(next[Math.max(0, idx - 1)])
+      setSelected(null)
+      setCreating(false)
+    }
+  }
+
+  const toggleModule = (id) => setCollapsed((prev) => {
+    const next = new Set(prev)
+    if (next.has(id)) next.delete(id); else next.add(id)
+    return next
+  })
+
+  // İşlem kodu: tam kod (FL01) ya da ekran adının başı ("bak", "per").
+  const runCode = (e) => {
+    e.preventDefault()
+    const q = upperTr(tcode.trim())
+    if (!q) return
+    const target = VIEWS.find((v) => v.code === q)
+      || VIEWS.find((v) => upperTr(v.label).startsWith(q))
+    if (!target) {
+      setStatusMsg(`İşlem kodu bulunamadı: ${q}`)
+      return
+    }
+    openView(target.id)
+    setTcode('')
+    setStatusMsg(`${target.code} · ${target.label} açıldı`)
+  }
+
+  const refresh = () => {
+    // Önbellekteki liste 30 sn saklanıyor; "Yenile" diyen kullanıcı
+    // gerçekten sunucudaki son hâli görmeli.
+    clearApiCache()
+    setRefreshKey((k) => k + 1)
+    refreshUnread()
+    setStatusMsg(`${viewDef?.code} yenilendi · ${new Date().toLocaleTimeString('tr-TR')}`)
+  }
+
+  const logout = () => {
+    // Sunucuya haber ver (belirteç ANINDA iptal olsun), sonra yerelde
+    // temizle. Sunucu ulaşılamazsa da yerel temizlik yapılır.
+    api.logout().catch(() => {}).finally(() => {
+      session.clear()
+      setUser(null)
+      setSelected(null)
+      setOpenTabs(['fleet'])
+      setView('fleet')
+      setAnalysisOpened(false)
+    })
+  }
 
   const runAnalysis = async (payload) => {
     setLoading(true); setError(null)
@@ -130,7 +253,6 @@ export default function App() {
       setResult(res)
       const cmp = await api.compare(payload.gases)
       setCompare(cmp)
-      // SHAP only when a model is trained.
       if (health?.model_trained) {
         try { setExplanation(await api.explain(payload.gases)) }
         catch { setExplanation(null) }
@@ -146,162 +268,238 @@ export default function App() {
 
   if (!user) return <LoginScreen onLogin={setUser} />
 
+  const today = new Date().toLocaleDateString('tr-TR',
+    { day: '2-digit', month: '2-digit', year: 'numeric' })
+
   return (
-    <div className="app">
-      {/* Faz 9.7 — Kurumsal kabuk: gezinme SOLDA kalıcı, içerik sağda
-          değişir. Kurumsal yazılımın en belirgin yapısal işareti bu;
-          üst sekme şeridi tüketici uygulamalarının dili. */}
-      <nav className="sidebar" aria-label="Ana gezinme">
-        <div className="sidebar-brand">
-          <span className="sidebar-mark" aria-hidden="true" />
+    <div className="erp">
+      {/* --- Başlık çubuğu ------------------------------------------------ */}
+      <header className="erp-titlebar">
+        <div className="erp-brand">
+          <span className="erp-logo" aria-hidden="true" />
           <div>
-            <div className="sidebar-name">TransformerAI</div>
-            <div className="sidebar-sub">Varlık İzleme</div>
+            <b>TransformerAI</b>
+            <span>Varlık İzleme ve Bakım Yönetim Sistemi</span>
           </div>
         </div>
 
-        <div className="sidebar-nav">
-          <div className="sidebar-section">İzleme</div>
-          {VIEWS.filter((v) => !v.roles || v.roles.includes(user.role))
-            .map((v) => (
-              <button key={v.id} type="button"
-                className={view === v.id ? 'active' : ''}
-                aria-current={view === v.id ? 'page' : undefined}
-                onClick={() => {
-                  setView(v.id); setSelected(null); setCreating(false)
-                }}>
-                {v.label}
-              </button>
-            ))}
+        <form className="erp-tcode" onSubmit={runCode} role="search">
+          <label htmlFor="tcode">İşlem kodu</label>
+          <input id="tcode" value={tcode} list="tcodes" autoComplete="off"
+            onChange={(e) => setTcode(e.target.value)} placeholder="ör. BK01" />
+          <datalist id="tcodes">
+            {VIEWS.map((v) => <option key={v.id} value={v.code}>{v.label}</option>)}
+          </datalist>
+          <button type="submit">Git</button>
+        </form>
 
-          <div className="sidebar-section">Bana gelen</div>
-          <button type="button"
-            className={view === 'notifications' ? 'active' : ''}
-            aria-current={view === 'notifications' ? 'page' : undefined}
-            onClick={() => { setView('notifications'); setSelected(null) }}>
-            Bildirimler
-            {unread > 0 && <span className="sidebar-count">{unread}</span>}
-          </button>
-        </div>
-
-        <div className="sidebar-foot">
-          <div className="sidebar-user">{user.name}</div>
-          <div className="sidebar-role">
-            {user.employeeNo} · {ROLE_TR[user.role] || user.role}
-          </div>
-          <button type="button" className="sidebar-logout" onClick={logout}>
-            Çıkış
-          </button>
-        </div>
-      </nav>
-
-      <div className="app-main">
-        <header className="appbar">
-          <div>
-            <h1 className="appbar-title">
-              {VIEWS.find((v) => v.id === view)?.label
-                || (view === 'notifications' ? 'Bildirimler' : 'TransformerAI')}
-            </h1>
-            <div className="appbar-sub">
-              DGA arıza izleme · açıklanabilir ML · bakım planlama
-            </div>
-          </div>
-          <div className="appbar-right">
-            <span className={`status-pill ${trained ? 'ok' : 'warn'}`}>
-              {health == null ? 'API bağlantısı yok'
-                : trained ? `Model hazır: ${health.model_name || 'ML'}`
-                  : 'Model eğitilmemiş (klasik mod)'}
+        <div className="erp-user">
+          <div className="erp-user-text">
+            <span className="erp-user-name">{user.name}</span>
+            <span className="erp-user-meta">
+              {user.employeeNo} · {user.departmentName}
             </span>
           </div>
-        </header>
-
-      {error && (
-        <div className="panel"
-          style={{ borderLeft: '3px solid var(--critical)', marginBottom: 16 }}>
-          <b>Hata:</b> {String(error)}
+          <button type="button" className="erp-logout" onClick={logout}>Çıkış</button>
         </div>
-      )}
+      </header>
 
-      {view === 'fleet' && (
-        creating
-          ? <NameplateForm mode="create"
-              onCancel={() => setCreating(false)}
-              onSaved={() => {
-                setCreating(false)
-                setFleetVersion((v) => v + 1)
-              }} />
-          : selected
-            ? <TransformerDetail id={selected.id} meta={selected}
-                onBack={() => setSelected(null)} />
-            : <FleetOverview key={fleetVersion} onSelect={setSelected}
-                onCreate={() => setCreating(true)} />
-      )}
+      <div className="erp-body">
+        {/* --- Modül ağacı ------------------------------------------------ */}
+        <nav className="erp-menu" aria-label="Ana menü">
+          <div className="erp-menu-head">Ana Menü</div>
+          {MODULES.map((m) => {
+            const isOpen = !collapsed.has(m.id)
+            return (
+              <div key={m.id} className="erp-module">
+                <button type="button" className="erp-module-head"
+                  aria-expanded={isOpen} onClick={() => toggleModule(m.id)}>
+                  <span className={`erp-folder${isOpen ? ' open' : ''}`} aria-hidden="true" />
+                  {m.label}
+                </button>
+                {isOpen && (
+                  <ul>
+                    {VIEWS.filter((v) => v.module === m.id).map((v) => {
+                      const locked = !allowedFor(v, user)
+                      return (
+                        <li key={v.id}>
+                          <button type="button"
+                            className={[view === v.id ? 'active' : '', locked ? 'locked' : '']
+                              .filter(Boolean).join(' ')}
+                            aria-current={view === v.id ? 'page' : undefined}
+                            title={locked ? 'Departmanınızın bu ekrana yetkisi yok' : undefined}
+                            onClick={() => openView(v.id)}>
+                            <span className="erp-code">{v.code}</span>
+                            <span className="erp-item-label">{v.label}</span>
+                            {v.id === 'notifications' && unread > 0 && (
+                              <span className="sidebar-count">{unread}</span>
+                            )}
+                            {locked && <span className="sidebar-lock" aria-label="yetki yok" />}
+                          </button>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                )}
+              </div>
+            )
+          })}
+        </nav>
 
-      {view === 'tests' && (
-        selected
-          ? <TransformerDetail id={selected.id} meta={selected}
-              onBack={() => setSelected(null)} />
-          // Test ekranından bir trafoya tıklayınca detayına gidilir;
-          // ID'den kart verisi yok, en azından kimliği taşıyoruz.
-          : <TestsOverview onSelect={(id) => setSelected({ id })} />
-      )}
-
-      {view === 'maintenance' && <MaintenancePanel />}
-
-      {view === 'manager' && (
-        selected
-          ? <TransformerDetail id={selected.id} meta={selected}
-              onBack={() => setSelected(null)} />
-          : <ManagerDashboard onSelect={setSelected} />
-      )}
-
-      {view === 'personnel' && <PersonnelPanel currentUser={user} />}
-
-      {view === 'notifications' && (
-        selected
-          ? <TransformerDetail id={selected.id} meta={selected}
-              onBack={() => setSelected(null)} />
-          : <NotificationsPanel
-              onOpenTransformer={(id) => setSelected({ id })} />
-      )}
-
-      {/* Analiz ekranı DOM'da kalır (sadece gizlenir) ki görünüm
-          değiştirince girilen gaz değerleri ve sonuçlar kaybolmasın. */}
-      <div className="grid" hidden={view !== 'analysis'}>
-        <GasForm onSubmit={runAnalysis} loading={loading} />
-
-        <div className="panel">
-          <div className="tabs">
-            {TABS.map((t) => (
-              <button key={t.id}
-                className={tab === t.id ? 'active' : ''}
-                onClick={() => setTab(t.id)}>{t.label}</button>
-            ))}
+        <main className="erp-workspace">
+          {/* --- Açık pencereler ------------------------------------------ */}
+          <div className="erp-tabs" role="tablist" aria-label="Açık ekranlar">
+            {openTabs.map((id) => {
+              const v = viewById(id)
+              const active = id === view
+              return (
+                <div key={id} className={`erp-tab${active ? ' active' : ''}`}>
+                  <button type="button" role="tab" aria-selected={active}
+                    className="erp-tab-label"
+                    onClick={() => { setView(id); setSelected(null); setCreating(false) }}>
+                    <span className="erp-code">{v.code}</span> {v.label}
+                  </button>
+                  {openTabs.length > 1 && (
+                    <button type="button" className="erp-tab-close"
+                      aria-label={`${v.label} penceresini kapat`}
+                      onClick={() => closeTab(id)}>×</button>
+                  )}
+                </div>
+              )
+            })}
           </div>
 
-          {tab === 'diagnosis' && (
-            result ? <DiagnosisResult result={result} />
-              : <p className="empty">Soldan değerleri girip "Analiz Et"e basın.</p>
-          )}
-          {tab === 'explain' && <ShapChart explanation={explanation} />}
-          {tab === 'compare' && (
-            <div>
-              <DuvalTriangle duval={compare?.classical?.duval} />
-              <ComparePanel compare={compare} leaderboard={leaderboard} />
+          {/* --- Araç çubuğu ---------------------------------------------- */}
+          <div className="erp-toolbar">
+            <div className="erp-toolbar-title">
+              <span className="erp-code">{viewDef.code}</span> {viewDef.label}
+              {selected && (
+                <><span className="erp-crumb">›</span>{selected.id}</>
+              )}
+              {creating && (
+                <><span className="erp-crumb">›</span>Yeni trafo kaydı</>
+              )}
             </div>
-          )}
-          {tab === 'trend' && <TrendPanel />}
-        </div>
+            <div className="erp-toolbar-actions">
+              {(selected || creating) && (
+                <button type="button" className="erp-tb"
+                  onClick={() => { setSelected(null); setCreating(false) }}>Geri</button>
+              )}
+              <button type="button" className="erp-tb" onClick={refresh}>Yenile</button>
+              <button type="button" className="erp-tb" onClick={() => window.print()}>Yazdır</button>
+              {openTabs.length > 1 && (
+                <button type="button" className="erp-tb" onClick={() => closeTab(view)}>Kapat</button>
+              )}
+            </div>
+          </div>
+
+          <div className="erp-content">
+            {error && (
+              <div className="np-problems" style={{ marginBottom: 10 }}>
+                <b>Hata:</b> {String(error)}
+              </div>
+            )}
+
+            {!allowed && (
+              <NoPermission permission={viewDef.permission} screen={viewDef.label} />
+            )}
+
+            {allowed && (
+              <Suspense fallback={<Loading />}>
+                <div key={`${view}-${refreshKey}`}>
+                  {view === 'fleet' && (
+                    creating && can('assets.edit')
+                      ? <NameplateForm mode="create"
+                          onCancel={() => setCreating(false)}
+                          onSaved={() => {
+                            setCreating(false)
+                            setFleetVersion((v) => v + 1)
+                          }} />
+                      : selected
+                        ? <TransformerDetail id={selected.id} meta={selected}
+                            onBack={() => setSelected(null)} />
+                        : <FleetOverview key={fleetVersion} onSelect={setSelected}
+                            onCreate={can('assets.edit') ? () => setCreating(true) : undefined} />
+                  )}
+
+                  {view === 'tests' && (
+                    selected
+                      ? <TransformerDetail id={selected.id} meta={selected}
+                          onBack={() => setSelected(null)} />
+                      : <TestsOverview onSelect={(id) => setSelected({ id })} />
+                  )}
+
+                  {view === 'maintenance' && <MaintenancePanel />}
+
+                  {view === 'manager' && (
+                    selected
+                      ? <TransformerDetail id={selected.id} meta={selected}
+                          onBack={() => setSelected(null)} />
+                      : <ManagerDashboard onSelect={setSelected} />
+                  )}
+
+                  {view === 'personnel' && <PersonnelPanel currentUser={user} />}
+
+                  {view === 'notifications' && (
+                    selected
+                      ? <TransformerDetail id={selected.id} meta={selected}
+                          onBack={() => setSelected(null)} />
+                      : <NotificationsPanel
+                          onOpenTransformer={(id) => setSelected({ id })}
+                          onChange={refreshUnread} />
+                  )}
+                </div>
+              </Suspense>
+            )}
+
+            {analysisOpened && analysisAllowed && (
+              <Suspense fallback={view === 'analysis' ? <Loading /> : null}>
+                <div className="grid" hidden={view !== 'analysis'}>
+                  <GasForm onSubmit={runAnalysis} loading={loading} />
+
+                  <div className="panel">
+                    <div className="tabs">
+                      {TABS.map((t) => (
+                        <button key={t.id} type="button"
+                          className={tab === t.id ? 'active' : ''}
+                          onClick={() => setTab(t.id)}>{t.label}</button>
+                      ))}
+                    </div>
+
+                    {tab === 'diagnosis' && (
+                      result ? <DiagnosisResult result={result} />
+                        : <p className="empty">Soldan değerleri girip "Analiz Et"e basın.</p>
+                    )}
+                    {tab === 'explain' && <ShapChart explanation={explanation} />}
+                    {tab === 'compare' && (
+                      <div>
+                        <DuvalTriangle duval={compare?.classical?.duval} />
+                        <ComparePanel compare={compare} leaderboard={leaderboard} />
+                      </div>
+                    )}
+                    {tab === 'trend' && <TrendPanel />}
+                  </div>
+                </div>
+              </Suspense>
+            )}
+          </div>
+        </main>
       </div>
 
-      <p className="note" style={{
-        textAlign: 'center', marginTop: 36, paddingTop: 16,
-        borderTop: '1px solid var(--rule)',
-      }}>
-        Veriler tamamen sentetiktir (IEC 60599 / Duval / IEEE C57.104 temelli).
-        Gerçek saha verisi kullanılmaz. — GE Vernova Staj Projesi
-      </p>
-      </div>
+      {/* --- Durum çubuğu ------------------------------------------------- */}
+      <footer className="erp-statusbar">
+        <span className="erp-status-msg" role="status">{statusMsg}</span>
+        <span className={`erp-svc ${health ? 'ok' : 'down'}`}>
+          Analiz servisi: {health
+            ? (trained ? `bağlı · ${health.model_name || 'model'} hazır` : 'bağlı · klasik mod')
+            : 'bağlantı yok'}
+        </span>
+        <span className={`erp-svc ${maintUp ? 'ok' : maintUp === null ? '' : 'down'}`}>
+          Bakım servisi: {maintUp ? 'bağlı' : maintUp === null ? 'kontrol ediliyor' : 'bağlantı yok'}
+        </span>
+        <span>{user.employeeNo} · {ROLE_TR[user.role] || user.role}</span>
+        <span className="num">{today}</span>
+      </footer>
     </div>
   )
 }

@@ -135,6 +135,87 @@ public class NotificationService
         return new NotificationReadResult(true, false);
     }
 
+    /// <summary>Elle yazılmış bir mesajı alıcılarının kuyruğuna koyar. (Faz 10)</summary>
+    /// <returns>Mesaj kimliği ve oluşturulan bildirim sayısı.</returns>
+    /// <remarks>
+    /// Alıcıları bu metot SEÇMEZ; seçim <c>MessageRules.Resolve</c>'da
+    /// yapılır ve burada yalnızca yazılır. İş emri bildirimleriyle aynı
+    /// outbox yolunu kullanır: önce veritabanı, gönderim arka planda.
+    /// Böylece "kime ne zaman haber verildi" sorusu mesajlar için de
+    /// cevaplanabilir kalır.
+    /// </remarks>
+    public async Task<(string MessageId, int Created)> SendMessageAsync(
+        Technician sender, SendMessageRequest request,
+        IReadOnlyList<Technician> recipients, DateTime now,
+        CancellationToken ct = default)
+    {
+        var messageId = Guid.NewGuid().ToString("N")[..24];
+        var subject = request.Subject.Trim();
+        var transformerId = string.IsNullOrWhiteSpace(request.TransformerId)
+            ? null
+            : request.TransformerId.Trim().ToUpperInvariant();
+
+        foreach (var person in recipients)
+        {
+            _db.Notifications.Add(new Notification
+            {
+                Id = Guid.NewGuid().ToString("N")[..24],
+                WorkOrderId = null,
+                MessageId = messageId,
+                SenderId = sender.Id,
+                SenderName = sender.Name,
+                SenderEmployeeNo = sender.EmployeeNo,
+                TransformerId = transformerId,
+                RecipientId = person.Id,
+                RecipientName = person.Name,
+                RecipientEmployeeNo = person.EmployeeNo,
+                Channel = NotificationChannel.InApp,
+                Status = NotificationStatus.Pending,
+                Subject = subject,
+                Body = request.Body.Trim(),
+                Trigger = "message",
+                Priority = MessageRules.PriorityValue(request.Priority),
+                CreatedAt = now,
+            });
+        }
+
+        await _db.SaveChangesAsync(ct);
+        return (messageId, recipients.Count);
+    }
+
+    /// <summary>Bir kişinin gönderdiği mesajlar, alıcı durumlarıyla.</summary>
+    public async Task<List<SentMessage>> SentAsync(string senderId, int limit = 30,
+                                                   CancellationToken ct = default)
+    {
+        // Önce satırlar çekilip bellekte gruplanıyor: SQLite sağlayıcısı
+        // GroupBy içindeki alt listeleri SQL'e çeviremiyor. Kişi başına
+        // gönderilen mesaj sayısı küçük olduğu için bu güvenli.
+        var rows = await _db.Notifications.AsNoTracking()
+            .Where(n => n.SenderId == senderId && n.MessageId != null)
+            .OrderByDescending(n => n.CreatedAt)
+            .Take(limit * MessageRules.MaxRecipients)
+            .ToListAsync(ct);
+
+        return rows
+            .GroupBy(n => n.MessageId!)
+            .Select(g =>
+            {
+                var first = g.First();
+                var recipients = g.OrderBy(n => n.RecipientEmployeeNo)
+                    .Select(n => new SentRecipient(n.RecipientEmployeeNo,
+                        n.RecipientName, n.Status.ToString(), n.ReadAt))
+                    .ToList();
+                return new SentMessage(g.Key, first.Subject, first.Body,
+                    first.Priority, first.TransformerId, first.CreatedAt,
+                    recipients.Count,
+                    recipients.Count(r => r.Status == nameof(NotificationStatus.Read)),
+                    recipients);
+            })
+            .OrderByDescending(m => m.CreatedAt)
+            .Take(limit)
+            .ToList();
+    }
+
     /// <summary>Gönderilmeyi bekleyen bildirimleri alır.</summary>
     public Task<List<Notification>> PendingAsync(int limit = 50,
                                                  CancellationToken ct = default)

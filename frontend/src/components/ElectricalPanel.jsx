@@ -4,6 +4,8 @@ import {
   Tooltip, XAxis, YAxis,
 } from 'recharts'
 import api from '../api'
+import { can } from '../permissions'
+import NoPermission from './NoPermission'
 import { axis, grid, tooltip, muted, SERIES } from '../theme'
 
 /* Faz 8.6 — Elektriksel testler ekranı.
@@ -383,7 +385,8 @@ function TestHistory({ summaries, selectedId, onSelect, onVoid, onUnvoid }) {
                   : r.problems.length ? r.problems[0] : 'bulgu yok'}
               </td>
               <td>
-                {r.voided
+                {/* Yetkisi olmayana (onVoid verilmemiş) düğme gösterilmez. */}
+                {!onVoid ? null : r.voided
                   ? <button type="button" className="link-like"
                       onClick={() => onUnvoid(r.id)}>geri al</button>
                   : <button type="button" className="link-like"
@@ -623,6 +626,10 @@ export default function ElectricalPanel({ id }) {
     api.electricalSchema().then(setSchema).catch(() => setSchema(null))
   }, [])
 
+  // Faz 10: elektriksel testi yalnızca elektriksel test ekibi (ve yönetim)
+  // girer ve geçersiz işaretler.
+  const canWrite = can('tests.electrical')
+
   // Gerekçe ZORUNLU: gerekçesiz bir "geçersiz" damgası silmekten pek
   // farklı olmaz — kayıt durur ama neden güvenilmediği bilinmez.
   const handleVoid = (testId) => {
@@ -643,7 +650,7 @@ export default function ElectricalPanel({ id }) {
 
   if (error) return <div className="panel"><p className="empty">Hata: {error}</p></div>
 
-  if (adding) {
+  if (adding && canWrite) {
     return (
       <ElectricalTestForm transformerId={id} schema={schema}
         onSaved={() => { setAdding(false); setSelectedId(null); load() }}
@@ -656,11 +663,13 @@ export default function ElectricalPanel({ id }) {
   // Eylem düğmesi çipten AYRILDI: çipler filtre/etiket için kullanılıyor,
   // bu ise bir eylem. İkisi aynı görünürse kullanıcı eylemi bulamıyor —
   // ilk denemede tam olarak bu oldu.
-  const addButton = (
-    <button type="button" className="btn-add" onClick={() => setAdding(true)}>
-      + Yeni elektriksel test
-    </button>
-  )
+  const addButton = canWrite
+    ? (
+      <button type="button" className="btn-add" onClick={() => setAdding(true)}>
+        + Yeni elektriksel test
+      </button>
+    )
+    : <NoPermission compact permission="tests.electrical" />
 
   if (!data.available) {
     return (
@@ -683,7 +692,8 @@ export default function ElectricalPanel({ id }) {
         {/* Tümü geçersizse bile geçmiş GÖRÜNÜR: neyin neden
             güvenilmez sayıldığı, kaydın kendisi kadar bilgidir. */}
         <TestHistory summaries={data.summaries} selectedId={null}
-          onSelect={() => {}} onVoid={handleVoid} onUnvoid={handleUnvoid} />
+          onSelect={() => {}} onVoid={canWrite ? handleVoid : null}
+          onUnvoid={canWrite ? handleUnvoid : null} />
       </div>
     )
   }
@@ -790,7 +800,8 @@ export default function ElectricalPanel({ id }) {
       </div>
 
       <TestHistory summaries={data.summaries} selectedId={shown.id}
-        onSelect={setSelectedId} onVoid={handleVoid} onUnvoid={handleUnvoid} />
+        onSelect={setSelectedId} onVoid={canWrite ? handleVoid : null}
+          onUnvoid={canWrite ? handleUnvoid : null} />
 
       {!isLatest && (
         <div className="panel el-note stop" style={{ marginBottom: 0 }}>

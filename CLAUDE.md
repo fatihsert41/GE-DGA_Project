@@ -67,10 +67,10 @@ Testler: `cd backend; pytest -q` (18 test).
 - `.venv`, `node_modules`, `*.db`, `model.joblib` git'e girmez (.gitignore).
 - ML katmanı Python'da kalır; CRUD/iş mantığı için .NET düşünülüyor (aşağıya bak).
 
-## YARIN BURADAN BAŞLA (10 Eylül 2026 sonu itibarıyla)
+## YARIN BURADAN BAŞLA (14 Eylül 2026 sonu itibarıyla)
 
 ```powershell
-cd C:\Users\Esma\Desktop\Python\GE-DGA_Project
+cd C:\Users\Lenovo\Desktop\Python\GE-DGA_Project   # 14 Eyl: yeni bilgisayar
 .\start.ps1                # üç servisi birden başlatır (~22 sn)
 .\start.ps1 -Check         # sadece durum kontrolü
 .\start.ps1 -Stop          # hepsini durdurur
@@ -78,13 +78,70 @@ cd C:\Users\Esma\Desktop\Python\GE-DGA_Project
 
 Arayüz: http://localhost:5173 · API: http://localhost:8000/docs
 
-**Durum:** Faz 0-9 BİTTİ. **291 test** (216 Python + 75 .NET).
+**Durum:** Faz 0-11 BİTTİ. **349 test** (232 Python + 117 .NET).
 Üç servis: Python :8000 · .NET :5080 · React :5173.
 
-**Giriş gerekli** (Faz 9.0): sicil + PIN. Demo hesapları —
-`10247`/`0247` Ahmet Yılmaz (Teknisyen) · `10318`/`0318` Elif Demir
-(Mühendis) · `10502`/`0502` Zeynep Şahin (**Süpervizör**, yönetim
-ekranını görür). PIN = sicilin son 4 hanesi.
+**Faz 11 — ERP arayüzü (Canias tarzı) TAMAM (14 Eyl).** Kullanıcı:
+"AI frontendinden uzaklaşalım." Kabuk `App.jsx`: lacivert başlık çubuğu +
+**işlem kodu** kutusu (FL01 Filo · TS01 Testler · NA01 Numune Analizi ·
+BK01 Bakım · YN01 Yönetim · PR01 Personel · BL01 Bildirimler; kod ya da
+ekran adının başı yazılıp Enter), sol **modül ağacı**, açık ekranlar
+**sekme** olur, araç çubuğu (Geri · Yenile [önbelleği temizler] ·
+Yazdır · Kapat), alt **durum çubuğu** (servis bağlantıları, kullanıcı).
+Stil `index.css` sonunda AYRI KATMAN ("Faz 11 — ERP arayüzü"): önceki
+kurallar silinmedi, eziliyor — geri almak o bloğu silmek kadar kolay.
+Sistem fontları (Segoe UI/Consolas), Google Fonts kaldırıldı. Risk
+rampası ve seri renkleri DEĞİŞMEDİ.
+**Bildirimler tek ekran (BL01):** klasörler (Gelen Kutusu · Okunmamış ·
+Gönderilenler) + "Yeni Bildirim" + liste + önizleme. Açılan bildirim
+otomatik okundu sayılır. **Bildirim göndermek kayıtlı herkese açık**
+(kullanıcı kararı): `notifications.send` her departmana verildi, anahtar
+duruyor ki ileride tek satırla kısıtlanabilsin.
+⚠ "Görsel dil" bölümü (aşağıda) Faz 9.7 öncesini anlatıyor, geçersiz.
+
+**Yeni bilgisayara geçiş (14 Eyl):** git'e girmeyen dosyalar yeniden
+üretildi — `npm ci`, `python -m app.ml.train --field-like`,
+`python -m app.ml.seed`; `dotnet-ef` global araç olarak kuruldu.
+⚠ `start.ps1` artık `npm.cmd` çağırıyor: yeni Windows'ta betik politikası
+Restricted olduğu için `npm` (npm.ps1) engelleniyor, arayüz penceresi
+sessizce açılmıyordu.
+
+**Giriş gerekli** (Faz 9.0): sicil + PIN. PIN = sicilin son 4 hanesi.
+
+**Faz 10 — Departmanlar, yetkiler, bildirim gönderme TAMAM.**
+Yetki ROLE değil DEPARTMANA bağlı ve işlem bazlı. Harita TEK YERDE:
+`maintenance/.../Models/Department.cs`. Belirtece yazılıyor; Python
+yetkiyi belirteçten okur (`auth.require_permission`), .NET'e sormaz.
+
+| Sicil | Kişi | Departman | Yapabildikleri |
+|---|---|---|---|
+| 10502 | Zeynep Şahin | **Yönetim** | tam yetki |
+| 10318 | Elif Demir | Bakım Planlama | iş emri planla/ata, bildirim gönder, personeli gör |
+| 10455, 10740 | Mehmet Kaya, Selin Öztürk | Yağ Laboratuvarı | DGA + yağ testi, numune analizi |
+| 10247 | Ahmet Yılmaz | Elektriksel Test | elektriksel + buşing/kademe testi |
+| 10611 | Burak Aydın | Saha Bakım | KENDİ işini başlat/bitir, saha gözlemi |
+
+Kararlar: her test türü tek departmana ait (testle korunuyor) · saha
+personeli yalnızca kendisine atanan işi yürütür · son Yönetim personelinin
+departmanı değiştirilemez (409) · yeni kayıt en dar yetkiyle başlar ·
+yetki listesi olmayan eski belirteç HİÇBİR ŞEY yazamaz · atanmamış iş
+emri bildirimi artık role değil planlama YETKİSİNE gidiyor · menüde
+yetkisiz ekran gizlenmez, kilitli görünür ve kime başvurulacağını söyler.
+Bildirim gönderme: `POST /notifications/messages` (kişi + departman +
+herkes birleşir, tekrar yok, gönderen ve pasif hariç), `GET
+/notifications/sent` (okundu durumu). `Notification.WorkOrderId` artık
+isteğe bağlı. Migration: `DepartmanVeMesajlar`.
+Bedel (bilinçli): departmanı değişen kişinin Python tarafındaki yetkisi
+yeniden girişe kadar eski kalır; .NET tarafında anında geçerli.
+⚠ Aynı fazda bulunan açık kapatıldı: `/workorders` cevabı atanan
+teknisyenin `PinHash`/`PinSalt` alanlarını da döndürüyordu → `[JsonIgnore]`.
+
+**Optimizasyon (14 Eyl):** ekranlar `React.lazy` ile bölündü (ana paket
+730 → 215 KB) · Yönetim ekranı filoyu iki kez hesaplatıyordu →
+`services/health.build_renewal_list(cards)` saf fonksiyonu,
+`/fleet/overview.summary.renewal` · `api.js`'de 30 sn önbellek (yazma
+isteği temizler) · `[hidden]{display:none!important}` — `.grid` kuralı
+gizli analiz ekranını her sayfanın altına çiziyordu.
 
 **Sağlık endeksi ALTI boyutlu:** DGA ×4 · kağıt ×3 · elektriksel ×3 ·
 buşing/kademe ×2 · yağ ×2 · fiziksel gözlem ×1 (payda 15).
@@ -180,6 +237,15 @@ Testler: `tests/test_electrical.py` (20) + `tests/test_electrical_api.py`
 * Faz 8.6-8.7: termal model (IEEE C57.91), bileşen izleme (buşing/OLTC).
 
 **Claude için teknik notlar:**
+* ⚠ PowerShell `[regex]::Replace(metin, desen, yerine, 1)` — 4. parametre
+  "kaç kez" DEĞİL, `RegexOptions` (1 = IgnoreCase). Bütün eşleşmeler
+  değişir. 14 Eyl'de migration'ın Down() bölümünü bu yüzden bozdu;
+  tek değişiklik için `[regex]::new(desen).Replace(metin, yerine, 1)`.
+* Enum sütununa `HasDefaultValue` KOYMA, eğer enum'un 0 değeri anlamlıysa
+  (ör. `Department.Management = 0`): EF 0'ı "atanmamış" sayıp veritabanı
+  varsayılanını yazar. Varsayılanı migration dosyasında ver.
+* bash heredoc Python kodundaki `'''` tırnaklarıyla da bozuluyor; uzun
+  yama betiklerini scratchpad'e Write ile yazıp oradan çalıştır.
 * Arayüz görsel olarak DOĞRULANMADI (tarayıcı otomasyonu kurulu değil).
   Ekran görünümüyle ilgili sorunları kullanıcı bildirir.
 * `bash` heredoc içinde ters bölü kaçışları bozuluyor; Python/C# dizelerine

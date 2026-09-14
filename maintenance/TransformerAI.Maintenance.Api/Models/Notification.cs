@@ -60,8 +60,36 @@ public class Notification
 {
     public string Id { get; set; } = string.Empty;
 
-    /// <summary>Hangi iş emri hakkında.</summary>
-    public string WorkOrderId { get; set; } = string.Empty;
+    /// <summary>Hangi iş emri hakkında — elle gönderilen mesajda BOŞ.</summary>
+    /// <remarks>
+    /// Faz 9.2'de her bildirim bir iş emrine bağlı olmak zorundaydı.
+    /// Faz 10'da personelin birbirine bildirim gönderebilmesi istendi
+    /// ("vardiya değişiyor", "TR-05'e yarın numune alınacak"); bu
+    /// mesajların bağlanacağı bir iş emri yok. Alan bu yüzden isteğe
+    /// bağlı oldu. İş emri bildirimleri eskisi gibi dolu gelir.
+    /// </remarks>
+    public string? WorkOrderId { get; set; }
+
+    // --- Elle gönderilen mesaj (Faz 10) ---------------------------------
+
+    /// <summary>Aynı mesajın bütün alıcı kopyalarını birbirine bağlar.</summary>
+    /// <remarks>
+    /// Outbox deseni gereği her alıcıya AYRI satır yazılır (her birinin
+    /// okundu durumu farklı). "Gönderilenler" ekranı bu kimlikle
+    /// gruplayıp "5 kişiye gitti, 3'ü okudu" diyebiliyor.
+    /// </remarks>
+    public string? MessageId { get; set; }
+
+    /// <summary>Gönderen — sistem bildirimlerinde boş.</summary>
+    public string? SenderId { get; set; }
+
+    /// <summary>Gönderenin o anki adı ve sicili — ANLIK GÖRÜNTÜ.</summary>
+    public string? SenderName { get; set; }
+    public string? SenderEmployeeNo { get; set; }
+
+    /// <summary>Mesajın ilgili olduğu trafo (isteğe bağlı).</summary>
+    /// <remarks>Doluysa gelen kutusunda "TR-05 detayı" bağlantısı çıkar.</remarks>
+    public string? TransformerId { get; set; }
 
     [JsonIgnore]
     public WorkOrder? WorkOrder { get; set; }
@@ -108,3 +136,37 @@ public class Notification
 
 /// <summary>Bildirimi okundu işaretleme sonucu.</summary>
 public record NotificationReadResult(bool Found, bool AlreadyRead);
+
+/// <summary>Elle bildirim gönderme isteği — "e-posta yaz" ekranı. (Faz 10)</summary>
+/// <remarks>
+/// Alıcılar üç yoldan seçilebilir ve BİRLEŞTİRİLİR: tek tek kişiler,
+/// bütün bir departman, ya da tüm personel. Aynı kişi iki yoldan
+/// seçilse de tek bildirim alır (bkz. <c>MessageRules.Resolve</c>).
+/// </remarks>
+public record SendMessageRequest(
+    string Subject,
+    string Body,
+    List<string>? RecipientIds = null,
+    List<string>? Departments = null,
+    bool AllPersonnel = false,
+    string? Priority = "normal",
+    string? TransformerId = null);
+
+/// <summary>Gönderilen bir mesajın alıcı bazında durumu.</summary>
+public record SentRecipient(
+    string EmployeeNo,
+    string Name,
+    string Status,
+    DateTime? ReadAt);
+
+/// <summary>"Gönderilenler" listesindeki bir mesaj.</summary>
+public record SentMessage(
+    string MessageId,
+    string Subject,
+    string Body,
+    double Priority,
+    string? TransformerId,
+    DateTime CreatedAt,
+    int RecipientCount,
+    int ReadCount,
+    IReadOnlyList<SentRecipient> Recipients);

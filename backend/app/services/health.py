@@ -86,16 +86,19 @@ def transformer_health(transformer_id: str) -> Dict[str, object]:
     }
 
 
-def fleet_health() -> Dict[str, object]:
-    """Filo geneli sağlık listesi — en kötüden iyiye sıralı.
+def build_renewal_list(cards: list[Dict]) -> Dict[str, object]:
+    """Saf hesap: HAZIR filo kartlarından yenileme listesini çıkarır.
 
-    Filo ekranı zaten her kartta skoru taşıyor; bu uç nokta "yenileme
-    bütçesi hangi ünitelere gitmeli?" sorusunu tek listede cevaplamak
-    için var ve ACİLİYETE göre değil DURUMA göre sıralar.
+    "Yenileme bütçesi hangi ünitelere gitmeli?" sorusunun cevabı —
+    ACİLİYETE göre değil DURUMA göre sıralı.
+
+    Neden ayrı ve saf? Önceden bu liste yalnızca ``fleet_health()`` içinde
+    üretiliyordu ve o fonksiyon filoyu BAŞTAN hesaplıyordu. Yönetim ekranı
+    hem ``/fleet/overview`` hem ``/health-index/fleet`` istediği için aynı
+    filo her açılışta iki kez hesaplanıyordu. Artık ``build_overview``
+    zaten elindeki kartlarla bu fonksiyonu çağırıyor; sıralama kuralı da
+    tek yerde kalıyor.
     """
-    from . import fleet as fleet_service
-
-    cards = fleet_service.overview()["transformers"]
     items = [
         {
             "transformer_id": c["id"],
@@ -126,10 +129,22 @@ def fleet_health() -> Dict[str, object]:
     unknown = sorted([i for i in items if i["score"] is None],
                      key=lambda i: str(i["transformer_id"]))
 
+    return {"items": scored, "unknown": unknown}
+
+
+def fleet_health() -> Dict[str, object]:
+    """``/health-index/fleet`` uç noktası: yenileme listesi + filo özeti.
+
+    Filo yalnızca BİR kez hesaplanır; istatistik ve liste aynı kartlardan
+    gelir. Uç nokta API tüketicileri için duruyor, arayüz artık bu veriyi
+    ``/fleet/overview`` içinden alıyor.
+    """
+    from . import fleet as fleet_service
+
+    summary = fleet_service.overview()["summary"]
     return {
-        "stats": health_index.fleet_stats([i["score"] for i in items]),
-        "items": scored,
-        "unknown": unknown,
+        "stats": summary["health"],
+        **summary["renewal"],
         "dimensions": [health_index.DIMENSIONS[k]
                        for k in health_index.DIMENSION_ORDER],
     }

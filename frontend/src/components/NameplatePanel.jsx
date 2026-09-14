@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import api from '../api'
+import { can } from '../permissions'
+import NoPermission from './NoPermission'
 import NameplateForm from './NameplateForm'
 
 /* Faz 8.2 — Künye görüntüleme paneli.
@@ -49,7 +51,7 @@ export default function NameplatePanel({ id }) {
     return <div className="panel"><p className="empty">Yükleniyor…</p></div>
   }
 
-  if (editing) {
+  if (editing && can('assets.edit')) {
     return (
       <NameplateForm mode="edit" transformer={record}
         onCancel={() => setEditing(false)}
@@ -74,9 +76,13 @@ export default function NameplatePanel({ id }) {
         <span className={`np-completeness${completeness < 60 ? ' low' : ''}`}>
           %{completeness} dolu ({filled}/{total})
         </span>
-        <button type="button" className="chip" onClick={() => setEditing(true)}>
-          Düzenle
-        </button>
+        {can('assets.edit') ? (
+          <button type="button" className="chip" onClick={() => setEditing(true)}>
+            Düzenle
+          </button>
+        ) : (
+          <NoPermission compact permission="assets.edit" />
+        )}
       </div>
 
       <div className="np-view">
