@@ -99,8 +99,75 @@ otomatik okundu sayılır. **Bildirim göndermek kayıtlı herkese açık**
 duruyor ki ileride tek satırla kısıtlanabilsin.
 ⚠ "Görsel dil" bölümü (aşağıda) Faz 9.7 öncesini anlatıyor, geçersiz.
 
-**SIRADAKİ: Faz 12–15 — `docs/FAZ12-15-YOL-HARITASI.md`** (14 Eyl'de
-kullanıcının fikirlerinden hazırlandı, kullanıcı henüz sırayı onaylamadı).
+**Faz 12–15 — kullanıcı kararları (15 Eyl):** sıra 12→13→14→15 ONAYLANDI ·
+Mühendislik YENİ demo personelle kuruldu (kimse taşınmadı) · akıllı cihaz
+bakımı Faz 15'te YENİ **Enstrümantasyon** departmanı olacak. Faz 13
+(DWG desteği) ve Faz 14 (depo sayısı) soruları o fazlara gelince sorulacak.
+
+**Faz 12 alt adımları:** 12.1 departman+yetki ✅ · 12.2 test onay kuyruğu ·
+12.3 model inceleme/uzman etiketi · 12.4 varlığa özel eşik · 12.5 kök neden
+analizi · 12.6 ERP ekranları MH01–04 + belgeler.
+
+**✅ 12.1 TAMAM (15 Eyl, commit edilmedi):** `Department.Engineering` +
+`engineering.approve / review_model / limits / rca` (+ analysis.run,
+manager.view, notifications.send). Mühendislik test GİRMEZ ve iş emri
+YÜRÜTMEZ (dört göz; testle korunuyor). Demo: **10833 Deniz Koç**,
+**10921 Can Yıldız** (Mühendislik). Migration `MuhendislikDepartmani`.
+⚠ Bulunan hata düzeltildi: `AssignmentService` otomatik atamada yetkiye
+bakmıyordu — iş, yürütme yetkisi olmayan birine (ör. laboratuvar) atanıp
+403 ile kilitlenebiliyordu. Artık yalnızca `workorders.execute` sahipleri
+aday. Testler: 232 Python + **123 .NET**.
+**✅ 12.2 TAMAM (15 Eyl, commit edilmedi) — Test onay kuyruğu (MH01).**
+Kurallar saf modülde: `backend/app/core/review.py`; DB/servis
+`services/review.py`; uç noktalar `routers/reviews.py`
+(`GET /reviews/queue?folder=pending|retest|approved|rejected|all`,
+`POST /reviews/{oil|electrical|components}/{id}/decision`, `GET /reviews/schema`).
+* Genel hükmü **"kötü"** olan yağ/elektriksel/buşing-kademe testi `pending`
+  olur (fiziksel gözlem dışarıda: ölçüm değil göz kontrolü).
+* Kararlar: onayla · **tekrar ölçülsün** (hesapta KALIR, doğrulanmamış) ·
+  **reddet** (hükme/endekse GİRMEZ, silinmez — `core_review.is_usable`).
+* **Dört göz kişiye bakar** (`recorded_by_id` = karar veren → 403), çünkü
+  Yönetim hem test girip hem onaylayabiliyor. Red/tekrar için gerekçe ≥10.
+* Karar bir kez: `UPDATE … WHERE review_status='pending'` (yarışta 409).
+* Sağlık endeksi `compute(unverified=[...])`: boyut `unverified: true`,
+  `unverified_dimensions`, uyarı metni. Yağ testi oil + paper'ı birlikte
+  işaretler.
+* `review_status` NULL başlar; açılışta `review_service.backfill()` eski
+  testleri bir kez sınıflandırır. Demo DB: 34 sınıflandı, **8 onay
+  bekliyor** (TR-05 spir kaybı, TR-08 buşing, TR-03 asitlik…).
+* Canlı doğrulandı: .NET'ten alınan mühendis belirteci Python'da karar
+  yetkisi olarak tanınıyor; laboratuvar 403.
+Testler: `tests/test_reviews.py` (16) → 248 Python + 123 .NET.
+
+**✅ 12.3 TAMAM (15 Eyl, commit edilmedi) — Model inceleme / uzman etiketi (MH02).**
+Kurallar `core/expert_label.py`; servis `services/model_review.py`; uç
+noktalar `routers/model_reviews.py` (`/model-reviews/queue|stats|dataset`
+[`?format=csv`], `GET /model-reviews/{mid}`, `POST …/{mid}/label`).
+Yeni tablo `expert_labels` (measurement_id UNIQUE; model tahmini ve güveni
+ANLIK GÖRÜNTÜ olarak kopyalanır). Kararlar:
+* **Uzman kararı modelin önüne geçer:** `expert_label.apply_to_card` filo
+  kartında `prediction/severe/prediction_family`'i uzmandan alır,
+  `needs_review=False`, `prediction_source="expert"`, modelinki
+  `model_prediction`'da kalır → .NET planlayıcısı doğru iş emrini üretir.
+* **"Belirlenemedi"** tanıyı değiştirmez, inceleme bayrağı KALIR, veri
+  setine GİRMEZ (uydurulmuş etiket modele yanlış öğretir).
+* Emin olunan tanı da etiketlenebilir (en tehlikeli hata: emin + yanlış).
+* Kuyruk: güven < 0.90 ve etiketsiz; önce trafonun SON ölçümü, sonra LPT.
+* Dört göz ölçümü KAYDEDENE bakar → `save_measurement(recorded_by=…)`
+  artık dolduruluyor (Faz 9.0c'den beri boş kalıyordu; `/predict` kimliği
+  yazıyor). Modelden farklı karar ve "belirlenemedi" gerekçe ≥10 ister.
+* Arayüzde modelin cevabı ÖNCEDEN SEÇİLİ DEĞİL (otomasyon yanlılığı).
+* İstatistik: alt tip uyumu, AİLE uyumu, modelin kaçırdığı ciddi arıza
+  (Faz 6.4 dersi: tek uyum oranı yetmez).
+* ⚠ Etiketler modeli OTOMATİK yeniden eğitmiyor (bilinçli): az sayıda
+  etiket + Faz 6.3'te "karma eğitim saf gerçeği geçmedi" bulgusu. Veri seti
+  CSV olarak dışa aktarılıyor; eğitime katmak ayrı, ÖLÇÜLEREK yapılacak iş.
+Demo DB: 26 düşük güvenli ölçüm kuyrukta (son ölçüm: TR-08, TR-09).
+Testler: `tests/test_model_reviews.py` (13) → **261 Python** + 123 .NET.
+**SIRADAKİ: 12.4 varlığa özel eşik** (gerekçe + süre + onaylayan zorunlu;
+sessiz eşik değişikliği yasak).
+
+**Yol haritası belgesi: `docs/FAZ12-15-YOL-HARITASI.md`**.
 Önerilen sıra: **12 Mühendislik departmanı + onay akışı** (test onay
 kuyruğu, dört göz; model inceleme kuyruğu → uzman etiketi = gerçek veri) →
 **13 Doküman/design yönetimi** (yükleme, revizyon, tarayıcıda PDF/görsel,

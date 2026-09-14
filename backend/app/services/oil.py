@@ -15,6 +15,7 @@ from typing import Dict, List, Optional
 
 from .. import database
 from ..core import oil_quality
+from ..core import review as review_core
 
 
 def _context(transformer_id: str) -> Dict[str, object]:
@@ -51,7 +52,9 @@ def history(transformer_id: str) -> Dict[str, object]:
                 "message": "Bu trafo için yağ kalitesi testi kaydı yok.",
                 "tests": []}
 
-    latest = assess_test(transformer_id, tests[-1])
+    # Geçersiz ya da mühendisin reddettiği test "son test" olamaz (Faz 12.2).
+    usable = [t for t in tests if review_core.is_usable(t)]
+    latest = assess_test(transformer_id, (usable or tests)[-1])
 
     # Kağıt bozunması geri DÖNÜŞSÜZDÜR: DP yalnızca düşer. İki ölçüm varsa
     # düşüş hızını göstermek, tek bir DP değerinden daha bilgilendiricidir.
@@ -112,7 +115,8 @@ def oil_card(transformer_id: str,
     if not test:
         return {"has_oil_test": False, "oil_overall": None,
                 "dp_estimate": None, "paper_band": None,
-                "life_consumed_pct": None, "paper": None}
+                "life_consumed_pct": None, "paper": None,
+                "oil_review_status": None}
 
     assessment = assess_test(transformer_id, test)
     paper = assessment["paper"]
@@ -128,4 +132,7 @@ def oil_card(transformer_id: str,
         # alanlardan yeniden türetmek yerine değerlendirmenin kendisini
         # taşıyoruz ki tek doğruluk kaynağı kalsın.
         "paper": paper,
+        # Onay durumu (Faz 12.2): sağlık endeksi "doğrulanmamış" işaretini
+        # buradan okur.
+        "oil_review_status": test.get("review_status"),
     }

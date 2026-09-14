@@ -22,6 +22,8 @@ const TestsOverview = lazy(() => import('./components/TestsOverview'))
 const PersonnelPanel = lazy(() => import('./components/PersonnelPanel'))
 const NotificationsPanel = lazy(() => import('./components/NotificationsPanel'))
 const ManagerDashboard = lazy(() => import('./components/ManagerDashboard'))
+const ReviewQueue = lazy(() => import('./components/ReviewQueue'))
+const ModelReviewQueue = lazy(() => import('./components/ModelReviewQueue'))
 
 const Loading = () => (
   <div className="panel"><p className="empty">Yükleniyor…</p></div>
@@ -57,6 +59,7 @@ const MODULES = [
   { id: 'assets', label: 'Varlık Yönetimi' },
   { id: 'analysis', label: 'Analiz' },
   { id: 'maintenance', label: 'Bakım Yönetimi' },
+  { id: 'engineering', label: 'Mühendislik' },
   { id: 'admin', label: 'Yönetim' },
   { id: 'comm', label: 'İletişim' },
 ]
@@ -68,6 +71,12 @@ const VIEWS = [
     permission: 'analysis.run' },
   { id: 'maintenance', code: 'BK01', label: 'Bakım Planlama', module: 'maintenance',
     permission: ['workorders.plan', 'workorders.execute'] },
+  // Faz 12.2 — sınır dışı test sonuçları mühendis kararını bekler.
+  { id: 'reviews', code: 'MH01', label: 'Test Onay Kuyruğu', module: 'engineering',
+    permission: 'engineering.approve' },
+  // Faz 12.3 — model kararsız kaldığında mühendis gerçek tanıyı seçer.
+  { id: 'model-reviews', code: 'MH02', label: 'Model İnceleme', module: 'engineering',
+    permission: 'engineering.review_model' },
   { id: 'manager', code: 'YN01', label: 'Yönetim Özeti', module: 'admin',
     permission: 'manager.view' },
   { id: 'personnel', code: 'PR01', label: 'Personel', module: 'admin',
@@ -430,6 +439,20 @@ export default function App() {
                   )}
 
                   {view === 'maintenance' && <MaintenancePanel />}
+
+                  {view === 'reviews' && (
+                    selected
+                      ? <TransformerDetail id={selected.id} meta={selected}
+                          onBack={() => setSelected(null)} />
+                      : <ReviewQueue onOpenTransformer={(id) => setSelected({ id })} />
+                  )}
+
+                  {view === 'model-reviews' && (
+                    selected
+                      ? <TransformerDetail id={selected.id} meta={selected}
+                          onBack={() => setSelected(null)} />
+                      : <ModelReviewQueue onOpenTransformer={(id) => setSelected({ id })} />
+                  )}
 
                   {view === 'manager' && (
                     selected

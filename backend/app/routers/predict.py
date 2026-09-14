@@ -23,8 +23,10 @@ def predict(req: PredictRequest,
     # yazmak bir test kaydıdır ve DGA yetkisi olan birinin sorumluluğundadır.
     # Yetki kontrolü tanıdan ÖNCE: reddedilecek bir isteğe model çalıştırmak
     # boşa iştir.
+    identity = None
     if req.persist and req.transformer_id:
-        check_permission(require_identity(authorization), "tests.dga")
+        identity = require_identity(authorization)
+        check_permission(identity, "tests.dga")
 
     gases = req.gases.as_dict()
     result = diagnose(gases)
@@ -36,7 +38,10 @@ def predict(req: PredictRequest,
         # varlık kaydını düzenlemek değildir.
         created = database.ensure_transformer(
             req.transformer_id, req.transformer_name)
-        mid = database.save_measurement(req.transformer_id, gases, result)
+        mid = database.save_measurement(
+            req.transformer_id, gases, result,
+            recorded_by={"employee_no": identity.employee_no,
+                         "name": identity.name} if identity else None)
         result["measurement_id"] = mid
         # Yeni bir varlık kaydı açıldıysa kullanıcı bunu bilsin: künyesi
         # boştur ve doldurulması gerekir.

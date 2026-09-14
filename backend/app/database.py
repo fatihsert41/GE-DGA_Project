@@ -202,7 +202,48 @@ def init_db() -> None:
             _ensure_column(conn, table, "voided_by_id", "TEXT")
             _ensure_column(conn, table, "voided_by_name", "TEXT")
 
+        # Mühendislik onay sütunları (Faz 12.2). ``review_status`` BOŞ
+        # (NULL) başlar, "onay gerekmiyor" değil: bu sütundan önce
+        # kaydedilmiş testlerin hükmü henüz değerlendirilmedi. Açılışta
+        # services/review.backfill() onları bir kez sınıflandırır.
+        for table in REVIEW_TABLES:
+            for col in ("review_status", "reviewed_at", "reviewed_by_id",
+                        "reviewed_by_name", "review_note"):
+                _ensure_column(conn, table, col, "TEXT")
 
+        # Uzman etiketleri (Faz 12.3). Ayrı tablo, ölçüme sütun DEĞİL:
+        # etiket ölçümün değil, ölçüm hakkındaki İNSAN KARARININ kaydıdır ve
+        # kendi sahibi, zamanı, gerekçesi vardır. measurement_id BENZERSİZ:
+        # bir ölçüme tek uzman kararı — iki mühendis aynı anda etiketlerse
+        # veritabanı ikincisini reddeder.
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS expert_labels (
+                id               INTEGER PRIMARY KEY AUTOINCREMENT,
+                measurement_id   INTEGER NOT NULL UNIQUE,
+                transformer_id   TEXT NOT NULL,
+                model_prediction TEXT,
+                model_confidence REAL,
+                expert_label     TEXT NOT NULL,
+                agrees           INTEGER NOT NULL,
+                note             TEXT,
+                labeled_at       TEXT NOT NULL,
+                labeled_by_id    TEXT,
+                labeled_by_name  TEXT,
+                FOREIGN KEY (measurement_id) REFERENCES measurements(id)
+            )
+            """
+        )
+        conn.execute(
+            """CREATE INDEX IF NOT EXISTS idx_expert_labels_transformer
+               ON expert_labels(transformer_id)"""
+        )
+
+
+
+# Mühendislik onay akışına giren tablolar (Faz 12.2). Tablo adı SQL'e
+# metin olarak girdiği için yalnızca bu listedekiler kabul edilir.
+REVIEW_TABLES = ("oil_tests", "electrical_tests", "component_tests")
 
 # Yağ kalitesi testi sütunları. DGA ölçümünden AYRI bir tablo:
 # farklı laboratuvar testleri, farklı sıklık, farklı birimler. Aynı tabloya
@@ -467,14 +508,23 @@ def list_transformers() -> List[Dict]:
 
 
 def save_measurement(transformer_id: str, gases: Dict[str, float],
-                     diagnosis: Dict, sampled_at: Optional[str] = None) -> int:
+                     diagnosis: Dict, sampled_at: Optional[str] = None,
+                     recorded_by: Optional[Dict[str, str]] = None) -> int:
+    """DGA ölçümünü tanısıyla kaydeder.
+
+    ``recorded_by`` (Faz 12.3): sütun Faz 9.0c'de eklenmişti ama DGA
+    ölçümlerinde hiç doldurulmuyordu. Uzman etiketindeki dört göz kuralı
+    "ölçümü kim girdi" bilgisine dayandığı için artık saklanıyor.
+    """
     risk = diagnosis.get("risk", {})
+    rec = recorded_by or {}
     with _connect() as conn:
         cur = conn.execute(
             """INSERT INTO measurements
                (transformer_id, sampled_at, gases_json, prediction,
-                confidence, risk_level, risk_condition)
-               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                confidence, risk_level, risk_condition,
+                recorded_by_id, recorded_by_name)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 transformer_id,
                 sampled_at or _now(),
@@ -483,6 +533,8 @@ def save_measurement(transformer_id: str, gases: Dict[str, float],
                 diagnosis.get("confidence"),
                 risk.get("level"),
                 risk.get("condition"),
+                rec.get("employee_no"),
+                rec.get("name"),
             ),
         )
         return int(cur.lastrowid)
@@ -559,6 +611,8 @@ def latest_oil_tests() -> Dict[str, Dict]:
                        ) AS rn
                 FROM oil_tests o
                 WHERE o.voided_at IS NULL
+                  -- Faz 12.2: mühendisin reddettiği ölçüm "son test" olamaz.
+                  AND COALESCE(o.review_status, '') <> 'rejected'
             )
             SELECT * FROM ranked WHERE rn = 1
             """
@@ -700,6 +754,7 @@ def latest_electrical_tests() -> Dict[str, Dict]:
                        ) AS rn
                 FROM electrical_tests e
                 WHERE e.voided_at IS NULL
+                  AND COALESCE(e.review_status, '') <> 'rejected'
             )
             SELECT * FROM ranked WHERE rn = 1
             """
@@ -908,8 +963,189 @@ def latest_component_tests() -> Dict[str, Dict]:
                            ORDER BY c.tested_at DESC, c.id DESC
                        ) AS rn
                 FROM component_tests c
+                WHERE COALESCE(c.review_status, '') <> 'rejected'
             )
             SELECT * FROM ranked WHERE rn = 1
             """
         ).fetchall()
     return {r["transformer_id"]: dict(r) for r in rows}
+
+
+# ---------------------------------------------------------------------------
+# Mühendislik onay akışı (Faz 12.2)
+# ---------------------------------------------------------------------------
+
+def _review_table(table: str) -> str:
+    """Tablo adını beyaz listeden geçirir.
+
+    Tablo adı SQL parametresi olarak verilemez (yalnızca değerler
+    verilebilir), metin olarak sorguya girer. Kullanıcıdan gelen bir
+    değerin buraya ulaşması SQL enjeksiyonu demektir; bu yüzden liste
+    dışındaki her ad reddedilir.
+    """
+    if table not in REVIEW_TABLES:
+        raise ValueError(f"Onay akışında olmayan tablo: {table}")
+    return table
+
+
+def get_test_row(table: str, test_id: int) -> Optional[Dict]:
+    """Tek bir test satırı (onay alanlarıyla)."""
+    with _connect() as conn:
+        row = conn.execute(
+            f"SELECT * FROM {_review_table(table)} WHERE id = ?",
+            (int(test_id),)).fetchone()
+    return dict(row) if row else None
+
+
+def set_review_status(table: str, test_id: int, status: str) -> None:
+    """İlk sınıflandırma: onay gerekiyor mu, gerekmiyor mu."""
+    with _connect() as conn:
+        conn.execute(
+            f"UPDATE {_review_table(table)} SET review_status = ? WHERE id = ?",
+            (status, int(test_id)))
+
+
+def tests_without_review_status(table: str) -> List[Dict]:
+    """Henüz sınıflandırılmamış (onay sütunundan önce girilmiş) testler."""
+    with _connect() as conn:
+        rows = conn.execute(
+            f"SELECT * FROM {_review_table(table)} WHERE review_status IS NULL"
+        ).fetchall()
+    return [dict(r) for r in rows]
+
+
+def tests_by_review_status(table: str, statuses: List[str]) -> List[Dict]:
+    """Verilen onay durumlarındaki testler."""
+    if not statuses:
+        return []
+    marks = ", ".join("?" for _ in statuses)
+    with _connect() as conn:
+        rows = conn.execute(
+            f"""SELECT * FROM {_review_table(table)}
+                WHERE review_status IN ({marks})
+                ORDER BY created_at ASC, id ASC""",
+            tuple(statuses)).fetchall()
+    return [dict(r) for r in rows]
+
+
+def record_review_decision(table: str, test_id: int, status: str,
+                           note: Optional[str],
+                           reviewer: Dict[str, str]) -> bool:
+    """Mühendis kararını yazar. Karar YALNIZCA bekleyen teste yazılır.
+
+    ``WHERE review_status = 'pending'`` koşulu bilinçli: iki mühendis aynı
+    anda karar verirse ikisi de kontrolü geçebilir, ama veritabanı yalnızca
+    birincisini yazar — ikincinin güncellemesi 0 satır etkiler ve
+    ``False`` döner. Kontrolü sadece uygulama katmanında yapmak bu
+    yarışı yakalayamazdı (iş emri sıra numarasındaki çakışmayla aynı ders).
+    """
+    with _connect() as conn:
+        cur = conn.execute(
+            f"""UPDATE {_review_table(table)}
+                SET review_status = ?, reviewed_at = ?, reviewed_by_id = ?,
+                    reviewed_by_name = ?, review_note = ?
+                WHERE id = ? AND review_status = 'pending'""",
+            (status, _now(), reviewer.get("employee_no"),
+             reviewer.get("name"), note, int(test_id)))
+        return cur.rowcount > 0
+
+
+def review_counts() -> Dict[str, int]:
+    """Onay durumlarına göre filo geneli sayım."""
+    counts: Dict[str, int] = {}
+    with _connect() as conn:
+        for table in REVIEW_TABLES:
+            for row in conn.execute(
+                    f"""SELECT review_status, COUNT(*) AS n FROM {table}
+                        WHERE review_status IS NOT NULL
+                        GROUP BY review_status""").fetchall():
+                key = row["review_status"]
+                counts[key] = counts.get(key, 0) + int(row["n"])
+    return counts
+
+
+# ---------------------------------------------------------------------------
+# Uzman etiketleri — model inceleme (Faz 12.3)
+# ---------------------------------------------------------------------------
+
+def _measurement_dict(row: sqlite3.Row) -> Dict:
+    d = dict(row)
+    d["gases"] = json.loads(d.pop("gases_json"))
+    return d
+
+
+def get_measurement(measurement_id: int) -> Optional[Dict]:
+    with _connect() as conn:
+        row = conn.execute("SELECT * FROM measurements WHERE id = ?",
+                           (int(measurement_id),)).fetchone()
+    return _measurement_dict(row) if row else None
+
+
+def measurements_by_ids(ids: List[int]) -> List[Dict]:
+    if not ids:
+        return []
+    marks = ", ".join("?" for _ in ids)
+    with _connect() as conn:
+        rows = conn.execute(
+            f"SELECT * FROM measurements WHERE id IN ({marks})",
+            tuple(int(i) for i in ids)).fetchall()
+    return [_measurement_dict(r) for r in rows]
+
+
+def low_confidence_measurements(threshold: float) -> List[Dict]:
+    """Model güveni eşiğin altında kalan ölçümler, yeniden eskiye."""
+    with _connect() as conn:
+        rows = conn.execute(
+            """SELECT * FROM measurements
+               WHERE confidence IS NOT NULL AND confidence < ?
+               ORDER BY sampled_at DESC, id DESC""",
+            (float(threshold),)).fetchall()
+    return [_measurement_dict(r) for r in rows]
+
+
+def save_expert_label(measurement: Dict, label: str, note: Optional[str],
+                      reviewer: Dict[str, str]) -> Optional[int]:
+    """Uzman kararını yazar; ölçüm zaten etiketliyse None.
+
+    Modelin tahmini ve güveni etikete KOPYALANIR (anlık görüntü): ölçüm
+    ileride yeni bir modelle yeniden tanılansa bile "uzman hangi tahmine
+    itiraz etti" sorusu cevaplanabilir kalmalı.
+    """
+    try:
+        with _connect() as conn:
+            cur = conn.execute(
+                """INSERT INTO expert_labels
+                   (measurement_id, transformer_id, model_prediction,
+                    model_confidence, expert_label, agrees, note,
+                    labeled_at, labeled_by_id, labeled_by_name)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (int(measurement["id"]), measurement["transformer_id"],
+                 measurement.get("prediction"), measurement.get("confidence"),
+                 label, int(label == measurement.get("prediction")), note,
+                 _now(), reviewer.get("employee_no"), reviewer.get("name")))
+            return int(cur.lastrowid)
+    except sqlite3.IntegrityError:
+        return None
+
+
+def expert_label_for(measurement_id: int) -> Optional[Dict]:
+    with _connect() as conn:
+        row = conn.execute("SELECT * FROM expert_labels WHERE measurement_id = ?",
+                           (int(measurement_id),)).fetchone()
+    return dict(row) if row else None
+
+
+def expert_labels_by_measurement() -> Dict[int, Dict]:
+    with _connect() as conn:
+        rows = conn.execute("SELECT * FROM expert_labels").fetchall()
+    return {int(r["measurement_id"]): dict(r) for r in rows}
+
+
+def labeled_measurements() -> List[Dict]:
+    """Etiketler + ölçüm gazları — veri seti dışa aktarımı için."""
+    with _connect() as conn:
+        rows = conn.execute(
+            """SELECT l.*, m.sampled_at, m.gases_json
+               FROM expert_labels l JOIN measurements m ON m.id = l.measurement_id
+               ORDER BY l.labeled_at ASC, l.id ASC""").fetchall()
+    return [_measurement_dict(r) for r in rows]

@@ -145,6 +145,14 @@ function TransformerCard({ t, onSelect }) {
           Uzman incelemesi
         </span>
       )}
+      {/* Faz 12.3: tanı mühendis kararından geliyorsa bunu açıkça söyle —
+          ve modelin ne dediğini sakla. */}
+      {t.prediction_source === 'expert' && (
+        <span className="review-chip expert"
+          title={`Tanı ${t.expert_labeled_by || 'mühendis'} tarafından belirlendi`}>
+          Uzman kararı · model: {t.model_prediction}
+        </span>
+      )}
 
       <div className="tverdict">{t.prediction}
         <span className="group-tag"> · {t.prediction_group}</span></div>

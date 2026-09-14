@@ -15,7 +15,9 @@ namespace TransformerAI.Maintenance.Api.Models;
 /// olurduk.
 ///
 /// Değerler veritabanına METİN olarak yazılır (bkz. DbContext): enum'a
-/// ortadan yeni birim eklenirse eski kayıtların anlamı kaymasın.
+/// ortadan yeni birim eklenirse eski kayıtların anlamı kaymasın. Yeni
+/// birimler yine de SONA eklenir; sayısal değer hiçbir yerde saklanmasa
+/// da okuyan kişi için sıra tarihçeyi anlatır.
 /// </remarks>
 public enum Department
 {
@@ -33,6 +35,9 @@ public enum Department
 
     /// <summary>Saha bakım — atanan işi yürütür, saha gözlemi yapar.</summary>
     FieldService = 4,
+
+    /// <summary>Mühendislik — test onayı, model incelemesi, eşik ve kök neden kararları. (Faz 12)</summary>
+    Engineering = 5,
 }
 
 /// <summary>Bir yetkinin tanımı — arayüzde gösterilecek adıyla.</summary>
@@ -96,6 +101,14 @@ public static class Permissions
     // --- Bildirim ---------------------------------------------------------
     public const string NotificationsSend = "notifications.send";
 
+    // --- Mühendislik (Faz 12) ---------------------------------------------
+    // Mühendislik test GİRMEZ, girilen testin sonucunu DEĞERLENDİRİR.
+    // "Ölçen" ile "onaylayan" ayrı kişiler olmalı (dört göz ilkesi).
+    public const string EngineeringApprove = "engineering.approve";
+    public const string EngineeringReviewModel = "engineering.review_model";
+    public const string EngineeringLimits = "engineering.limits";
+    public const string EngineeringRca = "engineering.rca";
+
     /// <summary>Tüm yetkiler, arayüzde gösterilecek adlarıyla.</summary>
     public static readonly IReadOnlyList<PermissionInfo> Catalog = new List<PermissionInfo>
     {
@@ -112,6 +125,10 @@ public static class Permissions
         new(WorkOrdersPlan, "İş emri açma, öneri uygulama, atama", "İş emirleri"),
         new(WorkOrdersExecute, "İş emrini başlatma / bitirme", "İş emirleri"),
         new(NotificationsSend, "Personele bildirim gönderme", "Bildirim"),
+        new(EngineeringApprove, "Sınır dışı test sonucunu onaylama", "Mühendislik"),
+        new(EngineeringReviewModel, "Model tanısını inceleme (uzman kararı)", "Mühendislik"),
+        new(EngineeringLimits, "Varlığa özel eşik tanımlama", "Mühendislik"),
+        new(EngineeringRca, "Kök neden analizi kaydı", "Mühendislik"),
     };
 
     private static readonly IReadOnlyList<string> All =
@@ -154,6 +171,15 @@ public static class Permissions
             {
                 WorkOrdersExecute, TestsInspection, NotificationsSend,
             },
+
+            // Mühendislik kararları verir ama test GİRMEZ ve iş emri
+            // YÜRÜTMEZ. Numune analizini (tanı denemesi) ve filo geneli
+            // yönetim özetini görür, çünkü onay kararı bağlam ister.
+            [Department.Engineering] = new[]
+            {
+                EngineeringApprove, EngineeringReviewModel, EngineeringLimits,
+                EngineeringRca, AnalysisRun, ManagerView, NotificationsSend,
+            },
         };
 
     /// <summary>Departmanın yetkileri.</summary>
@@ -187,6 +213,9 @@ public static class DepartmentCatalog
                 "İş emirlerini açar, atar, ekibi koordine eder ve bilgilendirir."),
             [Department.FieldService] = ("Saha Bakım",
                 "Atanan işleri sahada yürütür, fiziksel gözlem turu yapar."),
+            [Department.Engineering] = ("Mühendislik",
+                "Sınır dışı test sonuçlarını onaylar, model tanılarını inceler, "
+                + "varlığa özel eşik ve kök neden kararlarını verir."),
         };
 
     public static string Name(Department d) =>

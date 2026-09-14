@@ -14,6 +14,7 @@ from typing import Dict
 
 from .. import database
 from ..core import assets, health_index
+from ..core import review as review_core
 from . import electrical as electrical_service
 from . import oil as oil_service
 from . import components as component_service
@@ -33,11 +34,11 @@ def transformer_health(transformer_id: str) -> Dict[str, object]:
     # olduğunu bildiğimiz bir ölçümün skoru bozmasına izin vermek olurdu
     # — geçersiz işaretlemenin tüm amacı tam olarak bunu engellemek.
     tests = [t for t in database.get_oil_tests(transformer_id)
-             if not t.get("voided_at")]
+             if review_core.is_usable(t)]
     oil = oil_service.oil_card(transformer_id, tests[-1] if tests else None)
 
     el_tests = [t for t in database.get_electrical_tests(transformer_id)
-                if not t.get("voided_at")]
+                if review_core.is_usable(t)]
     el = electrical_service.electrical_card(
         transformer_id, el_tests[-1] if el_tests else None)
 
@@ -45,7 +46,8 @@ def transformer_health(transformer_id: str) -> Dict[str, object]:
     phys = physical_service.physical_card(
         inspections[-1] if inspections else None)
 
-    comp_tests = database.get_component_tests(transformer_id)
+    comp_tests = [t for t in database.get_component_tests(transformer_id)
+                  if review_core.is_usable(t)]
     comp = component_service.component_card(
         transformer_id, comp_tests[-1] if comp_tests else None)
 
@@ -58,6 +60,12 @@ def transformer_health(transformer_id: str) -> Dict[str, object]:
         physical_overall=phys.get("physical_overall"),
         component_overall=comp.get("component_overall"),
         asset_weight=float(cls["weight"]),   # type: ignore[arg-type]
+        # Onay bekleyen sonuç hesaba girer ama işaretlenir (Faz 12.2).
+        unverified=review_core.unverified_dimensions({
+            "oil": oil.get("oil_review_status"),
+            "electrical": el.get("electrical_review_status"),
+            "components": comp.get("component_review_status"),
+        }),
     )
 
     return {

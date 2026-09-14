@@ -48,9 +48,17 @@ public class AssignmentService
     {
         var needed = RequiredSpecialty(kind, family);
 
-        // Kapasitesi dolu ve pasif olanlar elenir.
+        // Kapasitesi dolu, pasif ve İŞ YÜRÜTME YETKİSİ OLMAYANLAR elenir.
+        //
+        // ⚠ Faz 12'de fark edilen hata: Faz 10'da departmanlar gelince bu
+        // filtre eklenmemişti. Sistem bir iş emrini yağ laboratuvarındaki
+        // bir mühendise atayabiliyordu; o kişi "Başlat" dediğinde sunucu
+        // 403 döndürüyordu — iş atanmış görünüp hiç yürütülemiyordu.
+        // Atama ile yetki aynı kurala bakmalı.
         var candidates = workloads
-            .Where(w => w.Technician.IsActive && w.HasCapacity)
+            .Where(w => w.Technician.IsActive && w.HasCapacity
+                        && Permissions.Has(w.Technician.Department,
+                                           Permissions.WorkOrdersExecute))
             .ToList();
 
         if (candidates.Count == 0)

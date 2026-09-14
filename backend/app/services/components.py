@@ -10,6 +10,7 @@ from typing import Dict, List, Optional
 
 from .. import database
 from ..core import components
+from ..core import review as review_core
 
 
 def _has_tap_changer(transformer_id: str) -> bool:
@@ -32,7 +33,8 @@ def history(transformer_id: str) -> Dict[str, object]:
                 "message": "Bu trafo için buşing/kademe testi kaydı yok.",
                 "tests": []}
 
-    latest = assess_test(transformer_id, tests[-1])
+    usable = [t for t in tests if review_core.is_usable(t)]
+    latest = assess_test(transformer_id, (usable or tests)[-1])
 
     # Kapasitans sapmasının SEYRİ, tek ölçümden çok daha bilgilendirici:
     # yüzde 3 sapma tek başına kabul edilebilir, ama iki yılda yüzde
@@ -61,7 +63,8 @@ def component_card(transformer_id: str,
     """Filo kartına eklenecek kısa özet (test yoksa da güvenli)."""
     if not test:
         return {"has_component_test": False, "component_overall": None,
-                "component_tested_at": None, "component_problems": []}
+                "component_tested_at": None, "component_problems": [],
+                "component_review_status": None}
 
     a = assess_test(transformer_id, test)
     return {
@@ -69,6 +72,7 @@ def component_card(transformer_id: str,
         "component_overall": a["overall"],
         "component_tested_at": test.get("tested_at"),
         "component_problems": a["problems"],
+        "component_review_status": test.get("review_status"),
     }
 
 
