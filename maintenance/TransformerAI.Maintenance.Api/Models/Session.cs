@@ -55,7 +55,16 @@ public record LoginResponse(
     string EmployeeNo,
     string Name,
     string Role,
-    string Specialty);
+    string Specialty,
+    // Faz 10: arayüz hangi ekranı/düğmeyi göstereceğini buradan bilir.
+    // Sunucu yine de her istekte ayrıca kontrol eder — arayüzde gizlemek
+    // tek başına yetki sayılmaz.
+    string Department,
+    string DepartmentName,
+    IReadOnlyList<string> Permissions);
+
+/// <summary>Personelin departmanını değiştirme isteği. (Faz 10)</summary>
+public record ChangeDepartmentRequest(Department Department);
 
 /// <summary>Giriş reddi — sebebiyle birlikte.</summary>
 /// <remarks>

@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from .. import database
-from ..auth import Identity, require_identity
+from ..auth import Identity, require_permission
 from ..core import lifecycle as core_lifecycle
 
 router = APIRouter(tags=["lifecycle"])
@@ -68,7 +68,7 @@ def get_lifecycle(transformer_id: str) -> dict:
 
 @router.put("/transformers/{transformer_id}/lifecycle")
 def change_lifecycle(transformer_id: str, body: LifecycleChangeIn,
-                     identity: Identity = Depends(require_identity)) -> dict:
+                     identity: Identity = Depends(require_permission("assets.edit"))) -> dict:
     """Durumu değiştirir — kurallı geçiş, kim yaptığı kaydedilir.
 
     Geçiş kuralı ``core/lifecycle`` içinde; bu uç nokta yalnızca onu

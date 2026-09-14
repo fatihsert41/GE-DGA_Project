@@ -61,6 +61,15 @@ public class Technician
 
     public Specialty Specialty { get; set; }
 
+    /// <summary>Çalıştığı birim — sistemde NE YAPABİLECEĞİNİ belirler. (Faz 10)</summary>
+    /// <remarks>
+    /// Yetki haritası <c>Models/Department.cs</c> içinde. Varsayılan
+    /// <c>FieldService</c>: yeni açılan bir kayıt en dar yetkiyle başlar,
+    /// genişletmek yönetimin kararıdır. Tersi (varsayılan tam yetki)
+    /// unutulan her kaydı açık bir kapıya çevirirdi.
+    /// </remarks>
+    public Department Department { get; set; } = Department.FieldService;
+
     /// <summary>Aynı anda üstlenebileceği açık iş sayısı.</summary>
     /// <remarks>
     /// Kapasite olmadan otomatik atama tek kişiyi ezer. Gerçek planlama
@@ -74,10 +83,20 @@ public class Technician
     // PIN'in KENDİSİ hiçbir zaman saklanmaz; yalnızca özeti ve tuzu.
     // Ayrıntılı gerekçe: Services/PinHasher.cs
 
+    // ⚠ [JsonIgnore] ŞART (Faz 10'da fark edilen açık): iş emri JSON'a
+    // çevrilirken içindeki Technician nesnesi BÜTÜN alanlarıyla
+    // yazılıyordu. Yani GET /workorders cevabında personelin PIN özeti
+    // ve tuzu açıkta duruyordu. Özet düz PIN değildir, ama 4 haneli bir
+    // PIN'in 10.000 olasılığını elindeki özet ve tuzla denemek saniyeler
+    // sürer — sunucudaki deneme sınırı bu durumda hiç devreye girmez.
+    // Kural: kimlik doğrulama alanları hiçbir cevap gövdesine girmez.
+
     /// <summary>PIN özeti (PBKDF2). Düz metin PIN asla saklanmaz.</summary>
+    [JsonIgnore]
     public string PinHash { get; set; } = string.Empty;
 
     /// <summary>Kişiye özel tuz — aynı PIN farklı özet üretsin diye.</summary>
+    [JsonIgnore]
     public string PinSalt { get; set; } = string.Empty;
 
     /// <summary>Arka arkaya yanlış PIN denemesi sayısı.</summary>

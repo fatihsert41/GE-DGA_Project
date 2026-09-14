@@ -93,6 +93,18 @@ public class MaintenanceDbContext : DbContext
         tech.Property(t => t.EmployeeNo).HasMaxLength(20).IsRequired();
         tech.Property(t => t.Role).HasConversion<string>().HasMaxLength(20);
 
+        // Departman (Faz 10) — metin olarak saklanır.
+        //
+        // ⚠ BİLİNÇLİ OLARAK HasDefaultValue KULLANILMADI. Enum'un ilk değeri
+        // Management = 0, yani C#'ın "boş" değeri. HasDefaultValue verilseydi
+        // EF Core, Department = Management atanmış bir kaydı "hiç
+        // atanmamış" sanıp veritabanı varsayılanını (FieldService) yazardı:
+        // yönetici eklemeye çalışan kişi sessizce en dar yetkili birime
+        // düşerdi. Mevcut satırların varsayılanı migration dosyasında
+        // ayarlandı.
+        tech.Property(t => t.Department).HasConversion<string>().HasMaxLength(30);
+        tech.HasIndex(t => t.Department);
+
         // BENZERSİZ indeks: aynı sicil iki kişide olamaz. Veritabanı
         // seviyesinde zorlamak şart — uygulama katmanındaki kontrol,
         // iki istek aynı anda gelirse yetersiz kalır. (İş emri sıra
@@ -139,7 +151,13 @@ public class MaintenanceDbContext : DbContext
         note.ToTable("notifications");
         note.HasKey(n => n.Id);
         note.Property(n => n.Id).HasMaxLength(40);
-        note.Property(n => n.WorkOrderId).HasMaxLength(40).IsRequired();
+        // Faz 10: elle gönderilen mesajın iş emri yok, alan isteğe bağlı.
+        note.Property(n => n.WorkOrderId).HasMaxLength(40);
+        note.Property(n => n.MessageId).HasMaxLength(40);
+        note.Property(n => n.SenderId).HasMaxLength(20);
+        note.Property(n => n.SenderName).HasMaxLength(100);
+        note.Property(n => n.SenderEmployeeNo).HasMaxLength(20);
+        note.Property(n => n.TransformerId).HasMaxLength(20);
         note.Property(n => n.RecipientId).HasMaxLength(20).IsRequired();
         note.Property(n => n.RecipientName).HasMaxLength(100);
         note.Property(n => n.RecipientEmployeeNo).HasMaxLength(20);
@@ -152,8 +170,14 @@ public class MaintenanceDbContext : DbContext
         note.HasIndex(n => new { n.RecipientId, n.Status });
         // Gönderim kuyruğu: bekleyenleri bulmak için.
         note.HasIndex(n => n.Status);
+        // "Gönderilenler" ekranı: bir kişinin mesajları ve alıcı kopyaları.
+        note.HasIndex(n => n.SenderId);
+        note.HasIndex(n => n.MessageId);
 
         // Aynı iş emri + alıcı + tetikleyici için TEK bildirim.
+        // (Elle gönderilen mesajlarda WorkOrderId boş; SQLite benzersiz
+        // indekste NULL değerleri birbirinden farklı sayar, yani aynı
+        // kişiye birden çok mesaj gönderilebilir — istenen de bu.)
         // Planlayıcı her çalıştığında aynı bildirimi yeniden üretirse
         // gelen kutusu çöpe döner ve kimse okumaz — iş emri
         // önerilerindeki idempotens ile aynı gerekçe.
@@ -183,26 +207,32 @@ public class MaintenanceDbContext : DbContext
             new Technician { Id = "TK-01", EmployeeNo = "10247", Name = "Ahmet Yılmaz",
                 Specialty = Specialty.Electrical,
                 Role = PersonnelRole.Technician,
+                Department = Department.ElectricalTesting,
                 MaxOpenOrders = 3, IsActive = true },
             new Technician { Id = "TK-02", EmployeeNo = "10318", Name = "Elif Demir",
                 Specialty = Specialty.Thermal,
                 Role = PersonnelRole.Engineer,
+                Department = Department.MaintenancePlanning,
                 MaxOpenOrders = 3, IsActive = true },
             new Technician { Id = "TK-03", EmployeeNo = "10455", Name = "Mehmet Kaya",
                 Specialty = Specialty.Sampling,
                 Role = PersonnelRole.Technician,
+                Department = Department.OilLaboratory,
                 MaxOpenOrders = 5, IsActive = true },
             new Technician { Id = "TK-04", EmployeeNo = "10502", Name = "Zeynep Şahin",
                 Specialty = Specialty.General,
                 Role = PersonnelRole.Supervisor,
+                Department = Department.Management,
                 MaxOpenOrders = 4, IsActive = true },
             new Technician { Id = "TK-05", EmployeeNo = "10611", Name = "Burak Aydın",
                 Specialty = Specialty.General,
                 Role = PersonnelRole.Technician,
+                Department = Department.FieldService,
                 MaxOpenOrders = 4, IsActive = true },
             new Technician { Id = "TK-06", EmployeeNo = "10740", Name = "Selin Öztürk",
                 Specialty = Specialty.Sampling,
                 Role = PersonnelRole.Engineer,
+                Department = Department.OilLaboratory,
                 MaxOpenOrders = 4, IsActive = true });
     }
 }

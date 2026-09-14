@@ -8,10 +8,25 @@ import api, { session } from '../api'
  * bilgisiyle kaydediliyor. Kim olduğu bilinmeyen bir kayıt için denetim
  * izi tutmanın anlamı yok.
  *
+ * Faz 10: girişle birlikte kişinin DEPARTMANI ve YETKİ LİSTESİ de gelir.
+ * Arayüz menüyü ve düğmeleri buna göre çizer; sunucu her istekte ayrıca
+ * kontrol eder.
+ *
  * Ekran, sistemin ne sunup ne sunmadığını AÇIKÇA yazıyor. Yarım bir
  * güvenlik katmanını tam gibi göstermek, hiç olmamasından kötüdür:
  * kullanıcı var olmayan bir güvenceye dayanarak davranır.
  */
+
+// Demo hesapları — yalnızca bu ekrandaki yardım tablosu için. Gerçek
+// departman bilgisi girişte sunucudan gelir.
+const DEMO_ACCOUNTS = [
+  { no: '10502', name: 'Zeynep Şahin', dept: 'Yönetim', hint: 'tam yetki' },
+  { no: '10318', name: 'Elif Demir', dept: 'Bakım Planlama', hint: 'iş emri planlama, atama' },
+  { no: '10455', name: 'Mehmet Kaya', dept: 'Yağ Laboratuvarı', hint: 'DGA, yağ testi' },
+  { no: '10740', name: 'Selin Öztürk', dept: 'Yağ Laboratuvarı', hint: 'DGA, yağ testi' },
+  { no: '10247', name: 'Ahmet Yılmaz', dept: 'Elektriksel Test', hint: 'TTR, buşing' },
+  { no: '10611', name: 'Burak Aydın', dept: 'Saha Bakım', hint: 'iş yürütme, gözlem' },
+]
 
 export default function LoginScreen({ onLogin }) {
   const [employeeNo, setEmployeeNo] = useState('')
@@ -34,6 +49,9 @@ export default function LoginScreen({ onLogin }) {
         name: result.name,
         role: result.role,
         specialty: result.specialty,
+        department: result.department,
+        departmentName: result.departmentName,
+        permissions: result.permissions || [],
         expiresAt: result.expiresAt,
       }
       session.save(result.token, user)
@@ -46,6 +64,10 @@ export default function LoginScreen({ onLogin }) {
       setBusy(false)
     }
   }
+
+  // Demo tablosundaki satıra tıklamak sicili doldurur. PIN'i doldurmaz:
+  // demo kuralı (son dört hane) ekranda yazılı, kullanıcı kendisi girer.
+  const pick = (no) => { setEmployeeNo(no); setPin(''); setError(null) }
 
   return (
     <div className="login-wrap">
@@ -63,7 +85,8 @@ export default function LoginScreen({ onLogin }) {
         <p className="note login-why">
           Girilen her ölçüm, <b>kimin kaydettiği</b> bilgisiyle saklanır.
           Bu yüzden giriş zorunludur: sorumlusu bilinmeyen bir kaydın
-          denetim değeri yoktur.
+          denetim değeri yoktur. Hangi ekranı kullanıp hangi testi
+          girebileceğiniz <b>departmanınıza</b> bağlıdır.
         </p>
 
         {error && <div className="np-problems login-error"><b>{error}</b></div>}
@@ -87,15 +110,19 @@ export default function LoginScreen({ onLogin }) {
         </button>
 
         <div className="login-demo">
-          <b>Demo hesapları</b> — PIN, sicilin son dört hanesidir.
+          <b>Demo hesapları</b> — PIN, sicilin son dört hanesidir. Satıra
+          tıklayınca sicil doldurulur.
           <table className="compare login-accounts">
             <tbody>
-              <tr><td className="num">10247</td><td>Ahmet Yılmaz</td>
-                <td className="muted">Teknisyen</td></tr>
-              <tr><td className="num">10318</td><td>Elif Demir</td>
-                <td className="muted">Mühendis</td></tr>
-              <tr><td className="num">10502</td><td>Zeynep Şahin</td>
-                <td className="muted">Süpervizör</td></tr>
+              {DEMO_ACCOUNTS.map((a) => (
+                <tr key={a.no} onClick={() => pick(a.no)}
+                  style={{ cursor: 'pointer' }}>
+                  <td className="num">{a.no}</td>
+                  <td>{a.name}</td>
+                  <td>{a.dept}</td>
+                  <td className="muted">{a.hint}</td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
@@ -108,7 +135,8 @@ export default function LoginScreen({ onLogin }) {
             <p><b>Var olanlar:</b> PIN veritabanında düz metin olarak
               saklanmaz (PBKDF2 + kişiye özel tuz); 5 hatalı denemeden
               sonra 15 dakika kilit; oturum süreli ve iptal edilebilir;
-              parola karşılaştırması sabit sürede yapılır.</p>
+              parola karşılaştırması sabit sürede yapılır; yetkiler
+              departmana bağlıdır ve her istekte sunucuda kontrol edilir.</p>
             <p><b>Olmayanlar:</b> HTTPS/TLS yok — bu demo yerel ağda
               çalışıyor, gerçek kurulumda şarttır, aksi halde oturum
               anahtarı ağda açık gider. Çok faktörlü doğrulama, parola

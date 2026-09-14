@@ -132,7 +132,10 @@ public class AuthService
         return (new LoginResponse(
             token, expiresAt, person.EmployeeNo, person.Name,
             person.Role.ToString(),
-            person.Specialty.ToString()), null);
+            person.Specialty.ToString(),
+            person.Department.ToString(),
+            DepartmentCatalog.Name(person.Department),
+            Permissions.For(person.Department)), null);
     }
 
     /// <summary>Belirteci doğrular ve sahibini döndürür.</summary>

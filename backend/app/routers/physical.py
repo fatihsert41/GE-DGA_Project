@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from .. import database
-from ..auth import Identity, require_identity
+from ..auth import Identity, require_permission
 from ..core import physical as core_physical
 from ..services import physical as physical_service
 
@@ -46,7 +46,7 @@ def list_inspections(transformer_id: str) -> dict:
 
 @router.post("/transformers/{transformer_id}/inspections")
 def create_inspection(transformer_id: str, body: InspectionIn,
-                      identity: Identity = Depends(require_identity)) -> dict:
+                      identity: Identity = Depends(require_permission("tests.inspection"))) -> dict:
     """Yeni gözlem turu kaydeder."""
     if database.get_transformer(transformer_id) is None:
         raise HTTPException(status_code=404,

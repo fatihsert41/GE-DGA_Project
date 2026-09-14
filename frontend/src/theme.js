@@ -9,14 +9,15 @@
  *  - SERIES:   kategorik palet; renk körlüğünde komşu ayrımı ΔE >= 9.
  */
 // Faz 9.7: nötr yüzeyler soğuk griye çevrildi (kurumsal görünüm).
+// Faz 11: ERP arayüzü — gri-lacivert nötrler, sistem yazı tipleri.
 // Risk rampası ve seri paleti DEĞİŞMEDİ — renk körlüğü doğrulamasından
 // geçmişlerdi; görsel moda için doğrulanmış bir paleti bozmak yanlış olur.
-export const ink = '#16191d'
-export const inkSoft = '#3d454e'
-export const muted = '#6b757f'
-export const rule = '#d3d8de'
+export const ink = '#1b2430'
+export const inkSoft = '#34414f'
+export const muted = '#5d6b79'
+export const rule = '#c3ccd5'
 export const surface = '#ffffff'
-export const paper = '#eceef1'
+export const paper = '#dfe4ea'
 
 /** Risk seviyesi -> renk. Sıralı veri olduğu için tek hüzmeli rampa. */
 export const SEVERITY = {
@@ -43,7 +44,7 @@ export const tooltip = {
     borderRadius: 2,
     color: ink,
     fontSize: 12,
-    fontFamily: "'JetBrains Mono', monospace",
+    fontFamily: "Consolas, 'Cascadia Mono', monospace",
     boxShadow: '0 2px 10px rgba(22,25,29,0.12)',
   },
   labelStyle: { color: muted },

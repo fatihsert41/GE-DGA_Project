@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import api from '../api'
+import { can } from '../permissions'
+import NoPermission from './NoPermission'
 
 /* Faz 9.35 — Varlık yaşam döngüsü.
  *
@@ -128,7 +130,10 @@ export default function LifecyclePanel({ id }) {
 
         {error && <div className="np-problems"><b>{String(error)}</b></div>}
 
-        {cur.next_states.length === 0 ? (
+        {/* Faz 10: durum değiştirmek varlık kaydı yetkisi ister. */}
+        {!can('assets.edit') ? (
+          <p className="note"><NoPermission compact permission="assets.edit" /></p>
+        ) : cur.next_states.length === 0 ? (
           <p className="empty">
             Bu uç durumdan çıkış yok ({cur.label_tr}).
           </p>

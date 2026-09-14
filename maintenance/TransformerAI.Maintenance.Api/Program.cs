@@ -308,6 +308,8 @@ app.MapGet("/technicians", async (TechnicianRepository repo, CancellationToken c
             w.Technician.Name,
             role = w.Technician.Role.ToString(),
             specialty = w.Technician.Specialty.ToString(),
+            department = w.Technician.Department.ToString(),
+            departmentName = DepartmentCatalog.Name(w.Technician.Department),
             w.Technician.MaxOpenOrders,
             w.Technician.IsActive,
             openOrders = w.OpenOrders,
@@ -323,8 +325,13 @@ app.MapGet("/technicians", async (TechnicianRepository repo, CancellationToken c
 app.MapPost("/workorders/{id}/assign",
     async (WorkOrderRepository orders, TechnicianRepository techs,
            AssignmentService assigner, MlServiceClient ml,
+           AuthService auth, HttpRequest http,
            string id, AssignRequest? request, CancellationToken ct) =>
 {
+    // Faz 10: işi kime vereceğine planlamacı karar verir.
+    var (_, denied) = await RequireAsync(auth, http, Permissions.WorkOrdersPlan, ct);
+    if (denied is not null) return denied;
+
     var order = await orders.GetAsync(id);
     if (order is null)
     {
@@ -453,8 +460,14 @@ app.MapGet("/workorders/suggestions",
 // POST çünkü sistemi DEĞİŞTİRİYOR; GET yan etkisiz olmalıdır.
 app.MapPost("/workorders/suggestions/apply",
     async (MlServiceClient ml, WorkOrderRepository repo, WorkOrderPlanner planner,
-           NotificationService notifications, CancellationToken ct) =>
+           NotificationService notifications, AuthService auth, HttpRequest http,
+           CancellationToken ct) =>
 {
+    // Önermek herkese açık (GET), UYGULAMAK planlama yetkisi ister.
+    // İki ayrı uç nokta olmasının Faz 7.5'teki gerekçesi tam olarak buydu.
+    var (_, denied) = await RequireAsync(auth, http, Permissions.WorkOrdersPlan, ct);
+    if (denied is not null) return denied;
+
     var fleet = await ml.GetFleetAsync(ct);
     if (fleet is null)
     {
@@ -532,8 +545,13 @@ app.MapGet("/workorders/{id}", async (WorkOrderRepository repo, string id) =>
 .WithName("GetWorkOrder");
 
 app.MapPost("/workorders", async (WorkOrderRepository repo,
-                                  CreateWorkOrderRequest request) =>
+                                  AuthService auth, HttpRequest http,
+                                  CreateWorkOrderRequest request,
+                                  CancellationToken ct) =>
 {
+    var (_, denied) = await RequireAsync(auth, http, Permissions.WorkOrdersPlan, ct);
+    if (denied is not null) return denied;
+
     if (string.IsNullOrWhiteSpace(request.TransformerId))
     {
         return Results.BadRequest(new { message = "transformerId zorunludur." });
@@ -550,8 +568,29 @@ app.MapPost("/workorders", async (WorkOrderRepository repo,
 .WithName("CreateWorkOrder");
 
 app.MapPatch("/workorders/{id}/status",
-    async (WorkOrderRepository repo, string id, UpdateStatusRequest request) =>
+    async (WorkOrderRepository repo, AuthService auth, HttpRequest http,
+           string id, UpdateStatusRequest request, CancellationToken ct) =>
 {
+    var (me, denied) = await RequireAsync(auth, http, Permissions.WorkOrdersExecute, ct);
+    if (denied is not null) return denied;
+
+    // Saha personeli yalnızca KENDİSİNE atanan işi yürütür. Planlama
+    // yetkisi olan (planlamacı, yönetim) her işin durumunu değiştirebilir:
+    // örneğin hastalanan birinin işini iptal etmek gerekebilir.
+    if (!Permissions.Has(me!.Department, Permissions.WorkOrdersPlan))
+    {
+        var current = await repo.GetAsync(id);
+        if (current is null)
+            return Results.NotFound(new { message = $"İş emri bulunamadı: {id}" });
+        if (current.TechnicianId != me.Id)
+            return Results.Json(new
+            {
+                message = "Bu iş emri size atanmadı. Yalnızca kendinize atanan " +
+                          "işlerin durumunu değiştirebilirsiniz.",
+                requiredPermission = Permissions.WorkOrdersPlan,
+            }, statusCode: StatusCodes.Status403Forbidden);
+    }
+
     var result = await repo.UpdateStatusAsync(id, request);
 
     if (result.Order is null)
@@ -630,6 +669,12 @@ app.MapGet("/auth/me", async (AuthService auth, HttpRequest http,
         person.Name,
         role = person.Role.ToString(),
         specialty = person.Specialty.ToString(),
+        // Faz 10: departman VERİTABANINDAN okunuyor, belirteçten değil.
+        // Yönetim birinin departmanını değiştirdiyse arayüz bunu sayfa
+        // yenilenince görür.
+        department = person.Department.ToString(),
+        departmentName = DepartmentCatalog.Name(person.Department),
+        permissions = Permissions.For(person.Department),
     });
 })
 .WithSummary("Belirtecin sahibini döndürür (oturum kontrolü).");
@@ -693,6 +738,120 @@ app.MapPost("/notifications/dispatch",
 .WithSummary("Bekleyen bildirimleri hemen gönderir (demo).");
 
 
+// ---------------------------------------------------------------------------
+// Departmanlar ve yetkiler (Faz 10)
+// ---------------------------------------------------------------------------
+
+// Katalog herkese açık: arayüz "bu işlemi hangi departman yapar?"
+// sorusunu buradan cevaplıyor. Yetki haritasını arayüzde tekrar yazmak
+// iki farklı gerçek yaratırdı.
+app.MapGet("/departments", () => Results.Ok(new
+{
+    departments = DepartmentCatalog.All(),
+    permissions = Permissions.Catalog,
+}))
+.WithSummary("Departmanlar, verdikleri yetkiler ve yetki adları.");
+
+app.MapPut("/technicians/{id}/department",
+    async (AuthService auth, HttpRequest http, MaintenanceDbContext db,
+           string id, ChangeDepartmentRequest request, CancellationToken ct) =>
+{
+    var (_, denied) = await RequireAsync(auth, http, Permissions.PersonnelManage, ct);
+    if (denied is not null) return denied;
+
+    if (!Enum.IsDefined(request.Department))
+        return Results.BadRequest(new { message = "Geçersiz departman." });
+
+    var person = await db.Technicians.FirstOrDefaultAsync(t => t.Id == id, ct);
+    if (person is null)
+        return Results.NotFound(new { message = $"Personel bulunamadı: {id}" });
+
+    // Kilitlenme koruması: son yöneticinin departmanı değiştirilirse
+    // artık kimse personel ve yetki yönetimi yapamaz — sistemi ancak
+    // veritabanına elle müdahale kurtarır.
+    if (person.Department == Department.Management
+        && request.Department != Department.Management)
+    {
+        var otherManagers = await db.Technicians.CountAsync(
+            t => t.Department == Department.Management && t.IsActive
+                 && t.Id != person.Id, ct);
+        if (otherManagers == 0)
+            return Results.Conflict(new
+            {
+                message = "Sistemde en az bir aktif Yönetim personeli kalmalı. " +
+                          "Önce başka birini Yönetim departmanına atayın.",
+            });
+    }
+
+    var previous = person.Department;
+    person.Department = request.Department;
+    await db.SaveChangesAsync(ct);
+
+    return Results.Ok(new
+    {
+        person.Id,
+        person.EmployeeNo,
+        person.Name,
+        department = person.Department.ToString(),
+        departmentName = DepartmentCatalog.Name(person.Department),
+        previousDepartment = previous.ToString(),
+        permissions = Permissions.For(person.Department),
+        // Belirteç imzalı olduğu için Python tarafındaki yetkiler kişi
+        // yeniden giriş yapana kadar eski kalır (bkz. TokenIssuer).
+        note = "Bakım servisinde hemen geçerli. Ölçüm servisindeki yetkilerin " +
+               "güncellenmesi için kişinin yeniden giriş yapması gerekir.",
+    });
+})
+.WithSummary("Personelin departmanını değiştirir (yönetim).");
+
+
+// ---------------------------------------------------------------------------
+// Elle bildirim gönderme — "e-posta yaz" (Faz 10)
+// ---------------------------------------------------------------------------
+
+app.MapPost("/notifications/messages",
+    async (AuthService auth, HttpRequest http, MaintenanceDbContext db,
+           NotificationService svc, SendMessageRequest request,
+           CancellationToken ct) =>
+{
+    var (me, denied) = await RequireAsync(auth, http, Permissions.NotificationsSend, ct);
+    if (denied is not null) return denied;
+
+    var personnel = await db.Technicians.AsNoTracking().ToListAsync(ct);
+    var (recipients, problems) = MessageRules.Resolve(request, personnel, me!.Id);
+    if (problems.Count > 0)
+        return Results.BadRequest(new { message = "Bildirim gönderilemedi.", problems });
+
+    var (messageId, created) = await svc.SendMessageAsync(
+        me, request, recipients, DateTime.UtcNow, ct);
+
+    return Results.Ok(new
+    {
+        messageId,
+        sent = created,
+        recipients = recipients.Select(r => new
+        {
+            r.EmployeeNo,
+            r.Name,
+            department = DepartmentCatalog.Name(r.Department),
+        }),
+    });
+})
+.WithSummary("Seçilen kişilere / departmanlara bildirim gönderir.");
+
+app.MapGet("/notifications/sent",
+    async (AuthService auth, HttpRequest http, NotificationService svc,
+           CancellationToken ct) =>
+{
+    var (me, denied) = await RequireAsync(auth, http, Permissions.NotificationsSend, ct);
+    if (denied is not null) return denied;
+
+    var items = await svc.SentAsync(me!.Id, ct: ct);
+    return Results.Ok(new { count = items.Count, items });
+})
+.WithSummary("Oturum sahibinin gönderdiği mesajlar ve okunma durumları.");
+
+
 app.Run();
 
 // Belirteç "Authorization: Bearer <token>" başlığından okunur.
@@ -705,4 +864,35 @@ static string? ReadToken(HttpRequest http)
     return header.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)
         ? header["Bearer ".Length..].Trim()
         : header.Trim();
+}
+
+// Oturum ve yetki kontrolü (Faz 10).
+//
+// Her korunan uç nokta ilk satırında bunu çağırır. İki farklı cevap var:
+//   401 — "kim olduğunu bilmiyorum" (giriş yok ya da oturum bitmiş)
+//   403 — "kim olduğunu biliyorum ama bu işe yetkin yok"
+// Arayüz birinde giriş ekranına, diğerinde "yetkiniz yok" mesajına gider.
+//
+// Ret mesajı işi KİME yönlendireceğini de söyler: "yetkiniz yok" tek
+// başına kullanıcıyı çıkmazda bırakır.
+static async Task<(Technician? Me, IResult? Denied)> RequireAsync(
+    AuthService auth, HttpRequest http, string permission, CancellationToken ct)
+{
+    var me = await auth.ResolveAsync(ReadToken(http), DateTime.UtcNow, ct);
+    if (me is null)
+        return (null, Results.Json(
+            new { message = "Oturum gerekli. Lütfen giriş yapın." },
+            statusCode: StatusCodes.Status401Unauthorized));
+
+    if (!Permissions.Has(me.Department, permission))
+        return (me, Results.Json(new
+        {
+            message = $"Bu işlem için yetkiniz yok: {Permissions.Label(permission)}. " +
+                      $"Departmanınız: {DepartmentCatalog.Name(me.Department)}.",
+            requiredPermission = permission,
+            department = me.Department.ToString(),
+            grantedTo = DepartmentCatalog.WithPermission(permission),
+        }, statusCode: StatusCodes.Status403Forbidden));
+
+    return (me, null);
 }

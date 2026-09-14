@@ -84,12 +84,27 @@ public class TokenIssuer
     /// ve ikisi tek oturum satırına düşerdi (birincil anahtar çakışması).
     /// Ayrıca belirtecin tahmin edilebilirliğini de kırar.
     /// </remarks>
+    /// <remarks>
+    /// <b>Yetkiler neden belirtecin içinde? (Faz 10)</b> Python servisi
+    /// test kayıtlarını kabul ederken "bu kişi yağ testi girebilir mi?"
+    /// sorusunu cevaplamalı. .NET'e sorsaydı Faz 7'deki bağımlılık yönü
+    /// bozulurdu. İmza yükü kurcalanamaz kıldığı için, yetki listesini
+    /// yüke yazmak güvenlidir.
+    ///
+    /// Bedeli: departmanı değiştirilen kişinin Python tarafındaki yetkisi
+    /// yeniden giriş yapana kadar eskisi gibi kalır. .NET tarafında
+    /// değişiklik ANINDA geçerlidir, çünkü .NET kişiyi her istekte
+    /// veritabanından okur.
+    /// </remarks>
     public record Payload(
         string EmployeeNo,
         string Name,
         string Role,
         long ExpiresAtUnix,
-        string Nonce);
+        string Nonce,
+        string Department = "",
+        string DepartmentName = "",
+        IReadOnlyList<string>? Permissions = null);
 
     private static readonly JsonSerializerOptions JsonOpts = new()
     {
@@ -104,7 +119,10 @@ public class TokenIssuer
             person.Name,
             person.Role.ToString(),
             new DateTimeOffset(expiresAtUtc, TimeSpan.Zero).ToUnixTimeSeconds(),
-            Convert.ToBase64String(RandomNumberGenerator.GetBytes(12)));
+            Convert.ToBase64String(RandomNumberGenerator.GetBytes(12)),
+            person.Department.ToString(),
+            DepartmentCatalog.Name(person.Department),
+            Models.Permissions.For(person.Department));
 
         var json = JsonSerializer.SerializeToUtf8Bytes(payload, JsonOpts);
         var body = Base64Url(json);

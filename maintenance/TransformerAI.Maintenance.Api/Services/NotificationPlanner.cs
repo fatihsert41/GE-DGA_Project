@@ -73,15 +73,21 @@ public class NotificationPlanner
         return targets;
     }
 
-    /// <summary>Atama yapılmamış iş için karar verebilecek roller.</summary>
+    /// <summary>Atama yapılmamış işi atayabilecek kişiler.</summary>
     /// <remarks>
-    /// Mühendis ve süpervizörlerin tamamına gidiyor: az sayıda kişi, ve
-    /// "kimse görmedi" riski "fazla kişi gördü" riskinden ağır basıyor.
+    /// Faz 9.2'de "mühendis ve süpervizörler"e gidiyordu, yani ROLE
+    /// bakıyordu. Faz 10'da departmanlar gelince bu yanlış kişiye gitmeye
+    /// başlardı: yağ laboratuvarındaki bir mühendis bildirimi alır ama
+    /// iş emri atama yetkisi yoktur — bildirim onun için gürültü, işi
+    /// atayabilecek planlamacı ise habersiz kalabilirdi.
+    ///
+    /// Artık ölçüt YETKİ: işi atayabilen herkes (bakım planlama + yönetim).
+    /// Az sayıda kişi, ve "kimse görmedi" riski "fazla kişi gördü"
+    /// riskinden ağır basıyor.
     /// </remarks>
     private static IEnumerable<Technician> DecisionMakers(
         IReadOnlyList<Technician> active)
-        => active.Where(p => p.Role is PersonnelRole.Engineer
-                                    or PersonnelRole.Supervisor)
+        => active.Where(p => Permissions.Has(p.Department, Permissions.WorkOrdersPlan))
                  .OrderBy(p => p.EmployeeNo);
 
     /// <summary>Bildirim metnini üretir.</summary>

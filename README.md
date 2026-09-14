@@ -6,7 +6,8 @@
 > sonucu **bakım iş emrine** dönüştüren polyglot bir sistem.
 
 **Üç servis:** Python (ML) · .NET (bakım planlama) · React (arayüz).
-**195 test** (145 Python + 50 .NET).
+**349 test** (232 Python + 117 .NET). Arayüz kurumsal ERP düzeninde:
+işlem kodları, modül ağacı, çoklu pencere, durum çubuğu.
 
 ---
 
@@ -25,6 +26,7 @@
 | **F — Kalan ömür** | Furan → DP → kağıdın tüketilen ömrü (DGA'nın göremediği) | `GET /transformers/{id}/oil-tests` |
 | **G — Tek skor** | Dört boyut (DGA · kağıt · elektriksel · yağ) → 0-100 sağlık endeksi, formülü açık | `GET /transformers/{id}/health` |
 | **H — Bağımsız duyu** | TTR, sargı direnci, PI, tan δ — yağın göremediği arızalar | `GET /transformers/{id}/electrical-tests` |
+| **I — Sorumluluk** | Departman bazlı yetki: her testi kendi birimi girer; personele bildirim gönderme | `GET /departments`, `POST /notifications/messages` |
 
 ---
 
@@ -149,12 +151,39 @@ Vite iki servise birden yönlendirir: `/api` → :8000, `/maint` → :5080.
 ## Testler
 
 ```powershell
-cd backend      ; pytest -q            # 145 test
-cd maintenance  ; dotnet test          # 50 test
+cd backend      ; pytest -q            # 232 test
+cd maintenance  ; dotnet test          # 117 test
 ```
 
-.NET testleri veritabanı ve HTTP kullanmaz (195 ms): iş kuralları saf
-sınıflarda tutulduğu için doğrudan test edilebiliyor.
+.NET testleri veritabanı ve HTTP kullanmaz (~250 ms): iş kuralları saf
+sınıflarda tutulduğu için doğrudan test edilebiliyor. Yetki haritası da
+böyle test ediliyor: "her test türünü tek bir departman girer" kuralı
+bir test olarak yazılı.
+
+---
+
+## Departmanlar ve yetkiler
+
+Giriş sicil numarası + PIN ile yapılır (demo: PIN = sicilin son 4 hanesi).
+Yetki **kişiye veya role değil departmana** bağlıdır ve işlem bazlıdır —
+"Testler ekranı" diye bir yetki yok, "yağ testi kaydetme" diye bir yetki var.
+
+| Departman | Demo hesabı | Yapabildikleri |
+|---|---|---|
+| **Yönetim** | 10502 | Tam yetki: her ekran, her test, personel yönetimi |
+| **Bakım Planlama** | 10318 | İş emri açma/atama, personel listesi |
+| **Yağ Laboratuvarı** | 10455, 10740 | DGA ölçümü, yağ kalitesi testi, numune analizi |
+| **Elektriksel Test** | 10247 | Elektriksel test, buşing/kademe testi |
+| **Saha Bakım** | 10611 | Kendisine atanan işi başlatma/bitirme, saha gözlemi |
+
+- Yetki haritası **tek yerde** (`Models/Department.cs`) ve imzalı giriş
+  belirtecine yazılıyor. Python yetkiyi belirteçten okur, .NET'e sormaz —
+  .NET kapalıyken de ölçüm girilebilir.
+- Kontrol **sunucuda**: yetkisiz istek 403 alır ve mesaj işi hangi
+  departmanın yapabileceğini söyler. Arayüzdeki kilitler yalnızca yol
+  gösterir.
+- Son Yönetim personelinin departmanı değiştirilemez; yeni kayıt en dar
+  yetkiyle başlar.
 
 ---
 
@@ -165,6 +194,8 @@ sınıflarda tutulduğu için doğrudan test edilebiliyor.
 | **Filo** | 9 trafo, önceliğe göre sıralı; risk dağılımı, alarm listesi, arama/filtre. Karta tıklayınca: gaz geçmişi + 6 aylık öngörü + gaz bazında trend tablosu |
 | **Numune Analizi** | Elle gaz girişi → tanı, SHAP grafiği, Duval üçgeni, yöntem karşılaştırması, gerçeklik kontrolü paneli |
 | **Bakım Planlama** | İş emirleri, sistemin ürettiği öneriler, teknisyen yük tablosu, atama |
+| **Personel** | Kayıtlar, departman ataması (yönetim), departman → yetki tablosu |
+| **Bildirimler (BL01)** | Tek ekran: gelen kutusu, okunmamışlar, yeni bildirim (kişiye / departmana / herkese — kayıtlı her personel gönderebilir) ve gönderilenler (kimin okuduğuyla) |
 
 Trafo detayı beş sekmeden oluşur: **Ölçümler ve Trend** (DGA) · **Yağ
 Kalitesi** (nem, BDV, asitlik, arayüzey gerilimi + kağıt yaşlanması) ·

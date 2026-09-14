@@ -15,19 +15,23 @@ public class NotificationPlannerTests
     private readonly NotificationPlanner _planner = new();
 
     private static Technician Person(string id, string employeeNo, string name,
-                                     PersonnelRole role, bool active = true)
+                                     PersonnelRole role, bool active = true,
+                                     Department department = Department.FieldService)
         => new()
         {
             Id = id, EmployeeNo = employeeNo, Name = name, Role = role,
-            IsActive = active,
+            IsActive = active, Department = department,
         };
 
     private static readonly Technician Tech =
-        Person("TK-01", "10247", "Ahmet Yılmaz", PersonnelRole.Technician);
+        Person("TK-01", "10247", "Ahmet Yılmaz", PersonnelRole.Technician,
+               department: Department.FieldService);
     private static readonly Technician Engineer =
-        Person("TK-02", "10318", "Elif Demir", PersonnelRole.Engineer);
+        Person("TK-02", "10318", "Elif Demir", PersonnelRole.Engineer,
+               department: Department.MaintenancePlanning);
     private static readonly Technician Supervisor =
-        Person("TK-04", "10502", "Zeynep Şahin", PersonnelRole.Supervisor);
+        Person("TK-04", "10502", "Zeynep Şahin", PersonnelRole.Supervisor,
+               department: Department.Management);
 
     private static readonly List<Technician> Everyone =
         new() { Tech, Engineer, Supervisor };
@@ -59,9 +63,28 @@ public class NotificationPlannerTests
 
         Assert.NotEmpty(targets);
         Assert.All(targets, t => Assert.Contains("atanmadı", t.Reason));
-        // Karar verebilecek roller haberdar olmalı:
-        Assert.Contains(targets, t => t.Recipient.Role == PersonnelRole.Engineer);
-        Assert.Contains(targets, t => t.Recipient.Role == PersonnelRole.Supervisor);
+        // İşi ATAYABİLECEK kişiler haberdar olmalı (Faz 10: role değil
+        // yetkiye bakılıyor):
+        Assert.Contains(targets, t => t.Recipient.Department == Department.MaintenancePlanning);
+        Assert.Contains(targets, t => t.Recipient.Department == Department.Management);
+        // Saha personeli atama yapamaz; ona "atanmadı" demek gürültüdür.
+        Assert.DoesNotContain(targets, t => t.Recipient.Id == "TK-01");
+    }
+
+    [Fact]
+    public void Atama_yetkisi_olmayan_muhendise_atanmamis_is_bildirimi_gitmez()
+    {
+        // Faz 9.2'de ölçüt ROLDÜ: her mühendis bu bildirimi alıyordu. Yağ
+        // laboratuvarındaki bir mühendisin iş emri atama yetkisi yok;
+        // bildirim onun için gürültü olur.
+        var labEngineer = Person("TK-06", "10740", "Selin Öztürk",
+            PersonnelRole.Engineer, department: Department.OilLaboratory);
+        var people = new List<Technician> { labEngineer, Engineer, Supervisor };
+
+        var targets = _planner.Recipients(Order(technicianId: null), people);
+
+        Assert.DoesNotContain(targets, t => t.Recipient.Id == "TK-06");
+        Assert.Contains(targets, t => t.Recipient.Id == "TK-02");
     }
 
     [Fact]

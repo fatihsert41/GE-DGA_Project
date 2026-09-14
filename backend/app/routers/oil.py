@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from ..auth import Identity, require_identity
+from ..auth import Identity, require_permission
 
 from .. import database
 from ..core import oil_quality
@@ -70,7 +70,7 @@ def list_oil_tests(transformer_id: str) -> dict:
 @router.post("/transformers/{transformer_id}/oil-tests")
 def create_oil_test(
         transformer_id: str, test: OilTestIn,
-        identity: Identity = Depends(require_identity)) -> dict:
+        identity: Identity = Depends(require_permission("tests.oil"))) -> dict:
     """Yeni bir yağ kalitesi testi kaydeder ve hemen değerlendirir."""
     if database.get_transformer(transformer_id) is None:
         raise HTTPException(status_code=404,

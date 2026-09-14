@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import api from '../api'
+import { can } from '../permissions'
+import NoPermission from './NoPermission'
 
 /* Faz 9.5 — Fiziksel saha gözlemi.
  *
@@ -145,7 +147,10 @@ export default function InspectionPanel({ id }) {
 
   if (error) return <div className="panel"><p className="empty">Hata: {error}</p></div>
 
-  if (adding) {
+  // Faz 10: saha gözlemini saha bakım ekibi (ve yönetim) girer.
+  const canWrite = can('tests.inspection')
+
+  if (adding && canWrite) {
     return <Form transformerId={id} schema={schema}
       onSaved={() => { setAdding(false); load() }}
       onCancel={() => setAdding(false)} />
@@ -153,11 +158,13 @@ export default function InspectionPanel({ id }) {
 
   if (!data) return <div className="panel"><p className="empty">Yükleniyor…</p></div>
 
-  const addButton = (
-    <button type="button" className="btn-add" onClick={() => setAdding(true)}>
-      + Yeni saha gözlemi
-    </button>
-  )
+  const addButton = canWrite
+    ? (
+      <button type="button" className="btn-add" onClick={() => setAdding(true)}>
+        + Yeni saha gözlemi
+      </button>
+    )
+    : <NoPermission compact permission="tests.inspection" />
 
   if (!data.available) {
     return (

@@ -89,9 +89,13 @@ Start-Process powershell -ArgumentList @(
 ) -WindowStyle Normal
 
 # 3) React / Arayuz
+# npm.cmd, npm DEGIL: "npm" aslinda npm.ps1 betigine gider ve betik
+# politikasi Restricted olan bilgisayarlarda (yeni Windows kurulumlarinin
+# varsayilani) engellenir. Diger iki servis .exe ile basladigi icin
+# etkilenmiyordu; sadece arayuz penceresi sessizce acilmiyordu.
 Start-Process powershell -ArgumentList @(
     "-NoExit", "-Command",
-    "cd '$root\frontend'; npm run dev"
+    "cd '$root\frontend'; npm.cmd run dev"
 ) -WindowStyle Normal
 
 Write-Host "Uc pencere acildi. Servislerin ayaga kalkmasi ~20 saniye surer." -ForegroundColor Cyan

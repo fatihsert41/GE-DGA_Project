@@ -18,8 +18,20 @@ from app.services import electrical as el_service
 # Gerçek sistemde imzayı yalnızca .NET atar; burada amaç .NET'i ayağa
 # kaldırmadan uç nokta davranışını sınamak.
 
+# Faz 10: belirteç yetki listesi de taşıyor. Varsayılan test kimliği
+# YÖNETİM (tam yetki), çünkü bu dosyadaki testler uç nokta davranışını
+# sınıyor, yetkiyi değil. Yetki reddi tests/test_permissions.py içinde.
+ALL_PERMISSIONS = [
+    "manager.view", "analysis.run", "personnel.view", "personnel.manage",
+    "tests.dga", "tests.oil", "tests.electrical", "tests.components",
+    "tests.inspection", "assets.edit", "workorders.plan",
+    "workorders.execute", "notifications.send",
+]
+
+
 def _token(employee_no="10502", name="Test Kullanıcı", role="Supervisor",
-           valid_seconds=3600):
+           valid_seconds=3600, department="Management",
+           department_name="Yönetim", permissions=None):
     import base64, hashlib, hmac, json, time
     from app import auth as auth_module
 
@@ -27,6 +39,9 @@ def _token(employee_no="10502", name="Test Kullanıcı", role="Supervisor",
         "employee_no": employee_no, "name": name, "role": role,
         "expires_at_unix": int(time.time()) + valid_seconds,
         "nonce": "test",
+        "department": department,
+        "department_name": department_name,
+        "permissions": ALL_PERMISSIONS if permissions is None else permissions,
     }
     body = base64.urlsafe_b64encode(
         json.dumps(payload).encode("utf-8")).decode().rstrip("=")

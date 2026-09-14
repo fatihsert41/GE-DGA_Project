@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from ..auth import Identity, require_identity
+from ..auth import Identity, require_permission
 
 from .. import database
 from ..core import electrical as core_electrical
@@ -132,7 +132,7 @@ def list_electrical_tests(transformer_id: str) -> dict:
 def create_electrical_test(
         transformer_id: str,
         test: ElectricalTestIn,
-        identity: Identity = Depends(require_identity)) -> dict:
+        identity: Identity = Depends(require_permission("tests.electrical"))) -> dict:
     """Yeni bir elektriksel test kaydeder ve hemen değerlendirir.
 
     Kimlik ZORUNLU: sorumlusu bilinmeyen bir ölçüm kaydı, denetim izi
@@ -206,7 +206,7 @@ def get_electrical_test(transformer_id: str, test_id: int) -> dict:
 @router.post("/transformers/{transformer_id}/electrical-tests/{test_id}/void")
 def void_electrical_test(
         transformer_id: str, test_id: int, body: VoidTestIn,
-        identity: Identity = Depends(require_identity)) -> dict:
+        identity: Identity = Depends(require_permission("tests.electrical"))) -> dict:
     """Hatalı bir test kaydını GEÇERSİZ işaretler — silmez.
 
     Silme uç noktası bilinçli olarak YOKTUR. Ölçüm kayıtları bir varlığın
@@ -231,7 +231,7 @@ def void_electrical_test(
 @router.delete("/transformers/{transformer_id}/electrical-tests/{test_id}/void")
 def unvoid_electrical_test(
         transformer_id: str, test_id: int,
-        identity: Identity = Depends(require_identity)) -> dict:
+        identity: Identity = Depends(require_permission("tests.electrical"))) -> dict:
     """Geçersiz işaretini kaldırır (yanlışlıkla işaretlenmişse)."""
     ok = database.void_test("electrical_tests", transformer_id, test_id, "")
     if not ok:

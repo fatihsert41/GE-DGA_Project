@@ -220,6 +220,13 @@ def build_overview(rows: List[Dict],
     needs_attention = [c for c in measured
                        if c["risk_level"] in ("high", "critical")]
 
+    # Yenileme listesi (DURUMA göre sıralı) elimizdeki kartlardan üretilir.
+    # Yönetim ekranı ayrı bir /health-index/fleet isteği attığında aynı
+    # filo ikinci kez hesaplanıyordu. İçeride import: health modülü de
+    # fleet'i içe aktarıyor, üst seviyede döngüsel import oluşurdu.
+    from . import health as health_service
+    renewal = health_service.build_renewal_list(cards)
+
     return {
         "summary": {
             "total": len(cards),
@@ -245,6 +252,7 @@ def build_overview(rows: List[Dict],
             # kadar önemli bir yönetim bilgisidir.
             "health": health_index.fleet_stats(
                 [c["health_score"] for c in cards]),
+            "renewal": renewal,
         },
         "transformers": cards,
     }

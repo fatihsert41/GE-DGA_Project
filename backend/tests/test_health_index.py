@@ -226,3 +226,31 @@ def test_bilesen_arizasi_tavan_uygular():
                    component_overall="kötü")
     assert r["capped"] is True
     assert "Buşing ve kademe" in r["critical_dimensions"]
+
+
+def test_yenileme_listesi_hazir_kartlardan_siralanir():
+    """Yenileme listesi filoyu yeniden hesaplamadan, eldeki kartlardan çıkar.
+
+    Sıralama: önce skor, eşitlikte HAM skor (tavan kuralı birden çok
+    trafoyu 45'te yığabiliyor). Skoru olmayan ayrı kovaya düşer.
+    """
+    from app.services.health import build_renewal_list
+
+    def card(tid, score, raw=None):
+        return {
+            "id": tid, "name": tid, "asset_class": "MPT",
+            "health_score": score,
+            "health": {"band": "poor", "band_tr": "Kötü",
+                       "coverage": {"level": "full"},
+                       "critical_dimensions": [], "renewal_priority": 0.1,
+                       "raw_score": score if raw is None else raw,
+                       "capped": raw is not None},
+        }
+
+    r = build_renewal_list([card("TR-B", 45.0, raw=70.0),
+                            card("TR-A", 45.0, raw=60.0),
+                            card("TR-C", 30.0),
+                            card("TR-D", None)])
+
+    assert [i["transformer_id"] for i in r["items"]] == ["TR-C", "TR-A", "TR-B"]
+    assert [i["transformer_id"] for i in r["unknown"]] == ["TR-D"]
