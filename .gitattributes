@@ -1,0 +1,11 @@
+# Satır sonu kuralları.
+#
+# Kabuk betikleri Linux container'ında çalışır ve HER ZAMAN LF olmalı.
+# Windows'ta git (core.autocrlf=true) çıkış sırasında LF'yi CRLF'ye çevirir;
+# CRLF'li bir betikte ilk satır "#!/bin/sh\r" olur ve container
+# "no such file or directory" hatasıyla hiç açılmaz. İki bilgisayarlı
+# çalışmada yeni bilgisayarın ilk "docker compose up" denemesi bu yüzden
+# patlardı.
+*.sh        text eol=lf
+Dockerfile  text eol=lf
+*.conf      text eol=lf
