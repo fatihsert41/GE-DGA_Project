@@ -34,13 +34,16 @@ ALL_PERMISSIONS = [
 
 def _token(employee_no="10502", name="Test Kullanıcı", role="Supervisor",
            valid_seconds=3600, department="Management",
-           department_name="Yönetim", permissions=None):
+           department_name="Yönetim", permissions=None, issued_at=None):
     import base64, hashlib, hmac, json, time
     from app import auth as auth_module
 
     payload = {
         "employee_no": employee_no, "name": name, "role": role,
         "expires_at_unix": int(time.time()) + valid_seconds,
+        # Güvenlik sertleştirme: Python üretim zamanı olmayan ya da 20 dk'dan
+        # yaşlı belirteci reddediyor. Varsayılan "şimdi".
+        "issued_at_unix": int(time.time()) if issued_at is None else issued_at,
         "nonce": "test",
         "department": department,
         "department_name": department_name,

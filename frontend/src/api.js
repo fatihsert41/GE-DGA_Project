@@ -119,6 +119,47 @@ const normalizePermissionError = (error) => {
   return Promise.reject(error)
 }
 
+// --- 401'de bir kez yenile ve yeniden dene (güvenlik sertleştirme) -------
+//
+// Python belirteci en fazla 20 dk kabul ediyor; App.jsx 10 dk'da bir yeniliyor.
+// Ama bilgisayar uyku modundan döndüğünde zamanlayıcı kaçmış olabilir: ilk
+// Python isteği 401 alır. Kullanıcıyı çıkarmak yerine belirteç BİR KEZ
+// yenilenir ve istek tekrarlanır. Yenileme de başarısızsa (oturum .NET'te
+// kapatılmış) hata olduğu gibi yukarı gider.
+//
+// Aynı anda birden çok istek 401 alırsa hepsi TEK yenilemeyi bekler: her biri
+// ayrı yenileseydi, döndürülen belirteçler birbirini geçersiz kılardı.
+let refreshing = null
+const refreshSession = () => {
+  if (!refreshing) {
+    refreshing = maint.post('/auth/refresh')
+      .then((r) => {
+        session.save(r.data.token, { ...session.user(), ...userFromLogin(r.data) })
+        return r.data
+      })
+      .finally(() => { refreshing = null })
+  }
+  return refreshing
+}
+
+const retryAfterRefresh = async (error) => {
+  const { config, response } = error
+  if (response?.status !== 401 || !config || config._retried || !session.token()) {
+    return Promise.reject(error)
+  }
+  config._retried = true
+  try {
+    await refreshSession()
+  } catch {
+    return Promise.reject(error)
+  }
+  config.headers.Authorization = `Bearer ${session.token()}`
+  return client(config)
+}
+
+// Sıra önemli: yeniden deneme, hata metnini sadeleştiren yakalayıcıdan ÖNCE
+// çalışmalı; yoksa ikinci deneme sadeleştirilmiş hatayla karşılaşırdı.
+client.interceptors.response.use(undefined, retryAfterRefresh)
 client.interceptors.response.use(clearCacheOnWrite, normalizePermissionError)
 maint.interceptors.response.use(clearCacheOnWrite)
 
@@ -135,6 +176,8 @@ export const api = {
     maint.post('/auth/login', { employeeNo, password }).then((r) => r.data),
   // Başarılıysa sunucu kişinin BÜTÜN oturumlarını kapatır ve yeni belirteç
   // döner; çağıran onu saklamalı (bkz. ChangePasswordScreen).
+  // Belirteci yeniler (bkz. App.jsx): eskisi geçersiz olur, yetkiler güncel gelir.
+  refreshToken: () => maint.post('/auth/refresh').then((r) => r.data),
   changePassword: (currentPassword, newPassword) =>
     maint.post('/auth/change-password', { currentPassword, newPassword })
       .then((r) => r.data),

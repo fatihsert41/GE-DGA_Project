@@ -5,16 +5,13 @@ using TransformerAI.Maintenance.Api.Models;
 
 namespace TransformerAI.Maintenance.Api.Services;
 
-/// <summary>Giriş, oturum, kilitleme ve parola değiştirme. (Faz 9.0b, Sistem Yönetimi)</summary>
+/// <summary>Giriş, oturum, kilitleme, parola değiştirme ve belirteç yenileme.</summary>
 /// <remarks>
 /// <b>Bu sınıf sistemin en hassas parçasıdır</b>, çünkü hataları
 /// SESSİZDİR: yanlış yazılmış bir güvenlik kontrolü hiçbir ekranda
 /// görünmeden çalışmaya devam eder. Bu yüzden buradaki her karar
 /// gerekçesiyle yazılı ve <c>AuthServiceTests</c> gerçek bir (bellek içi)
 /// veritabanıyla sınıyor.
-///
-/// <b>Neden servis, uç nokta değil?</b> <c>WorkOrderPlanner</c> ile aynı
-/// gerekçe: kural HTTP'den ayrı dursun ki doğrudan test edilebilsin.
 /// </remarks>
 public class AuthService
 {
@@ -25,8 +22,7 @@ public class AuthService
     /// <remarks>
     /// 5 seçildi: bir insan parolasını birkaç kez yanlış girebilir, ama
     /// 5'ten fazlası kaba kuvvettir. Çok düşük tutmak gerçek kullanıcıyı
-    /// sürekli kilitler — güvenlik önlemi, işi durdurduğu anda devre dışı
-    /// bırakılır.
+    /// sürekli kilitler.
     /// </remarks>
     public const int MaxFailedAttempts = 5;
 
@@ -37,11 +33,7 @@ public class AuthService
     public static readonly TimeSpan SessionLifetime = TimeSpan.FromHours(9);
 
     /// <summary>Geçici parolayla açılan oturumun ömrü.</summary>
-    /// <remarks>
-    /// Bu oturumun tek işi parola değiştirmek. 9 saat açık kalması, geçici
-    /// parolayı bilen ikinci kişiye (onu veren admin) gereksiz bir pencere
-    /// bırakırdı.
-    /// </remarks>
+    /// <remarks>Bu oturumun tek işi parola değiştirmek.</remarks>
     public static readonly TimeSpan PasswordChangeSessionLifetime = TimeSpan.FromMinutes(15);
 
     public AuthService(MaintenanceDbContext db, TokenIssuer tokens)
@@ -54,8 +46,7 @@ public class AuthService
     /// <remarks>
     /// Parolası geçiciyse BOŞ. Belirtece bu liste yazılır; Python servisi
     /// yetkiyi belirteçten okuduğu için geçici parolalı bir oturum Python'da
-    /// da hiçbir şey yazamaz. (.NET tarafında ayrıca <c>RequireAsync</c>
-    /// kontrol ediyor, çünkü orada yetki departmandan okunuyor.)
+    /// da hiçbir şey yazamaz.
     /// </remarks>
     public static IReadOnlyList<string> EffectivePermissions(Technician person) =>
         person.MustChangePassword ? Array.Empty<string>() : Permissions.For(person.Department);
@@ -76,13 +67,12 @@ public class AuthService
         {
             // Sabit gecikme: var olmayan sicil ANINDA reddedilirse, yanıt
             // süresi farkından "bu sicil var" çıkarımı yapılabilir.
-            // Parola doğrulaması ~100 ms sürdüğü için burada da bekliyoruz.
             await Task.Delay(100, ct);
             return (null, new LoginFailure(generic));
         }
 
         // Kilit kontrolü parola doğrulamasından ÖNCE: kilitliyken doğru
-        // parola girilse bile açılmamalı, yoksa kilitlemenin anlamı kalmaz.
+        // parola girilse bile açılmamalı.
         if (person.LockedUntil is { } until && until > now)
             return (null, new LoginFailure(
                 $"Çok fazla hatalı deneme. Giriş {Math.Ceiling((until - now).TotalMinutes):F0} " +
@@ -105,8 +95,7 @@ public class AuthService
         }
 
         // Pasif hesap kontrolü parola DOĞRULANDIKTAN SONRA: önce yapılsaydı
-        // "bu hesap pasif" cevabı, parolayı bilmeyen birine de sicilin
-        // var olduğunu söylerdi.
+        // parolayı bilmeyen birine de sicilin var olduğunu söylerdi.
         if (!person.IsActive)
             return (null, new LoginFailure(
                 "Bu hesap pasif durumda. Sistem Yöneticinize başvurun."));
@@ -124,24 +113,19 @@ public class AuthService
 
     /// <summary>Kullanıcının kendi parolasını değiştirmesi.</summary>
     /// <remarks>
-    /// Başarılı olunca kişinin BÜTÜN oturumları kapanır — bu istekteki de
-    /// dahil — ve yeni bir belirteç döner. Neden hepsi? Parola değiştirmenin
-    /// en yaygın sebebi "biri parolamı biliyor olabilir"dir; o kişinin açık
-    /// oturumu kalırsa değiştirmenin anlamı kalmaz.
+    /// Başarılı olunca kişinin BÜTÜN oturumları kapanır ve yeni bir belirteç
+    /// döner. Parola değiştirmenin en yaygın sebebi "biri parolamı biliyor
+    /// olabilir"dir; o kişinin açık oturumu kalırsa değiştirmenin anlamı kalmaz.
     /// </remarks>
     public async Task<ChangePasswordResult> ChangePasswordAsync(
         string? token, ChangePasswordRequest request, DateTime now, CancellationToken ct = default)
     {
-        // Geçici parolalı oturum da buraya girebilmeli: ResolveAsync
-        // yetkiye bakmaz, yalnızca oturumun geçerli olduğuna bakar.
         var person = await ResolveAsync(token, now, ct);
         if (person is null)
             return new(401, null, "Oturum gerekli. Lütfen giriş yapın.");
 
-        // Mevcut parola sorulur: açık bırakılmış bir oturumu ele geçiren
-        // biri parolayı değiştirip hesabı sahiplenemesin. Yanlış denemeler
-        // girişle AYNI sayaca yazılır; yoksa bu uç nokta kilitlenmeyen bir
-        // parola deneme kapısı olurdu.
+        // Yanlış "mevcut parola" denemeleri girişle AYNI sayaca yazılır; yoksa
+        // bu uç nokta kilitlenmeyen bir parola deneme kapısı olurdu.
         if (!PasswordHasher.Verify(request.CurrentPassword ?? "", person.PasswordHash, person.PasswordSalt))
         {
             if (await RegisterFailureAsync(person, now, ct))
@@ -172,6 +156,52 @@ public class AuthService
         return new(200, await OpenSessionAsync(person, now, ct), null);
     }
 
+    /// <summary>Belirteci yeniler: yenisini verir, eskisini geçersiz kılar.</summary>
+    /// <remarks>
+    /// <b>Neden var? (Güvenlik sertleştirme)</b> Python belirteci en fazla
+    /// 20 dakikalık kabul ediyor, çünkü kapatılan oturumu göremiyor. Arayüz
+    /// 10 dakikada bir yeniler. Yenileme BURADA, oturum satırına bakılarak
+    /// yapıldığı için kapatılmış oturum yenilenemez — Python'daki iptal
+    /// penceresi en fazla 20 dakikaya iner.
+    ///
+    /// <b>Belirteç döndürme (rotation):</b> eski belirteç yenilemeden sonra
+    /// .NET'te de geçersizdir. Çalınan eski bir belirteç, sahibi yeniledikten
+    /// sonra işe yaramaz.
+    ///
+    /// <b>Oturumun kendisi uzamaz:</b> bitiş zamanı giriş anında belirlenen
+    /// değer olarak kalır. Yenileme "oturumu sonsuza kadar açık tutma"
+    /// aracına dönüşmemeli.
+    ///
+    /// Yan kazanç: yetkiler yenilemede GÜNCEL departmandan yazılır. Departmanı
+    /// değişen kişinin Python tarafındaki yetkileri de 10 dakika içinde güncellenir.
+    /// </remarks>
+    public async Task<LoginResponse?> RefreshAsync(string? token, DateTime now,
+                                                   CancellationToken ct = default)
+    {
+        // İmza + oturum satırı + aktif hesap kontrolü.
+        var person = await ResolveAsync(token, now, ct);
+        if (person is null) return null;
+
+        var old = await _db.Sessions.FirstAsync(x => x.TokenHash == HashToken(token!), ct);
+        var permissions = EffectivePermissions(person);
+        var fresh = _tokens.Issue(person, now, old.ExpiresAt, permissions);
+
+        // Birincil anahtar belirtecin özeti; anahtar güncellenemez, satır
+        // değiştirilir. İkisi aynı SaveChanges içinde: ya ikisi ya hiçbiri.
+        _db.Sessions.Remove(old);
+        _db.Sessions.Add(new Session
+        {
+            TokenHash = HashToken(fresh),
+            TechnicianId = person.Id,
+            CreatedAt = old.CreatedAt,
+            ExpiresAt = old.ExpiresAt,
+            LastSeenAt = now,
+        });
+        await _db.SaveChangesAsync(ct);
+
+        return BuildResponse(person, fresh, old.ExpiresAt, permissions);
+    }
+
     /// <summary>Belirteci doğrular ve sahibini döndürür.</summary>
     public async Task<Technician?> ResolveAsync(string? token, DateTime now,
                                                 CancellationToken ct = default)
@@ -179,12 +209,8 @@ public class AuthService
         if (string.IsNullOrWhiteSpace(token)) return null;
 
         // İKİ KATMANLI DOĞRULAMA — ve ikisi de gerekli:
-        //
-        // 1) İmza: belirtecin kurcalanmadığını ve süresinin dolmadığını
-        //    kanıtlar. Python da bu kadarını yapabiliyor.
-        // 2) Oturum satırı: belirtecin İPTAL EDİLMEDİĞİNİ kanıtlar.
-        //    İmza tek başına bunu söyleyemez — çıkış yapılmış bir
-        //    belirtecin imzası hâlâ geçerlidir.
+        // 1) İmza: kurcalanmadı ve süresi dolmadı.
+        // 2) Oturum satırı: İPTAL EDİLMEDİ. İmza tek başına bunu söyleyemez.
         if (_tokens.Verify(token, now) is null) return null;
 
         var session = await _db.Sessions
@@ -218,12 +244,9 @@ public class AuthService
     /// <summary>Bir kişinin BÜTÜN oturumlarını kapatır; kapatılan sayısını döner.</summary>
     /// <remarks>
     /// Parola sıfırlama, pasife alma, departman değişikliği ve parola
-    /// değiştirmede kullanılır. Hepsinde ortak soru: "eski yetkiyle ya da
-    /// eski parolayla açılmış bir oturum hâlâ çalışmalı mı?" Cevap hayır.
-    ///
-    /// ⚠ SINIR: Python servisi oturum tablosunu bilmez, belirteci yalnızca
-    /// imzasından doğrular. Kapatılan oturumun belirteci Python tarafında
-    /// süresi dolana kadar geçerli kalır (bkz. TokenIssuer — bilinçli ödünleşim).
+    /// değiştirmede kullanılır. Python tarafında kapatılan oturumun belirteci
+    /// en fazla <c>MAX_TOKEN_AGE</c> (20 dk) daha geçerli kalabilir: yenileme
+    /// artık başarısız olacağı için ondan sonra düşer.
     /// </remarks>
     public async Task<int> RevokeAllSessionsAsync(string technicianId,
                                                   CancellationToken ct = default)
@@ -273,9 +296,7 @@ public class AuthService
         {
             person.LockedUntil = now.Add(LockDuration);
             person.FailedAttempts = 0;      // kilit açılınca sıfırdan başlar
-            // Kilitlenmeyi bir KİŞİ değil sistem yapar: actor boş. Sistem
-            // Yöneticisi "bu hesap neden kilitli?" sorusunu buradan görür —
-            // tekrarlanan kilitlenme bir saldırı işareti olabilir.
+            // Kilitlenmeyi bir KİŞİ değil sistem yapar: actor boş.
             _db.UserAuditEvents.Add(Audit(UserAuditActions.Locked, person, null, now,
                 $"{MaxFailedAttempts} hatalı deneme"));
         }
@@ -289,10 +310,7 @@ public class AuthService
         var lifetime = person.MustChangePassword ? PasswordChangeSessionLifetime : SessionLifetime;
         var expiresAt = now.Add(lifetime);
         var permissions = EffectivePermissions(person);
-
-        // Belirteç İMZALIDIR (bkz. TokenIssuer). Python servisi .NET'e
-        // sormadan doğrulayabiliyor; yetki listesi de belirtecin içinde.
-        var token = _tokens.Issue(person, expiresAt, permissions);
+        var token = _tokens.Issue(person, now, expiresAt, permissions);
 
         _db.Sessions.Add(new Session
         {
@@ -304,25 +322,24 @@ public class AuthService
         });
         await _db.SaveChangesAsync(ct);
 
-        return new LoginResponse(
-            token, expiresAt, person.EmployeeNo, person.Name,
-            person.Role.ToString(),
-            person.Specialty.ToString(),
-            person.Department.ToString(),
-            DepartmentCatalog.Name(person.Department),
-            permissions,
-            person.MustChangePassword);
+        return BuildResponse(person, token, expiresAt, permissions);
     }
+
+    private static LoginResponse BuildResponse(Technician person, string token, DateTime expiresAt,
+                                               IReadOnlyList<string> permissions) => new(
+        token, expiresAt, person.EmployeeNo, person.Name,
+        person.Role.ToString(),
+        person.Specialty.ToString(),
+        person.Department.ToString(),
+        DepartmentCatalog.Name(person.Department),
+        permissions,
+        person.MustChangePassword);
 
     /// <summary>Belirteç özeti.</summary>
     /// <remarks>
-    /// Burada PBKDF2 DEĞİL düz SHA-256 yeterli — ve doğrusu bu.
-    /// PBKDF2'nin yavaşlığı, <i>tahmin edilebilir</i> girdileri (insanın
-    /// seçtiği parolalar) korumak içindir. Belirteç 256 bit rastgele; kaba
-    /// kuvvetle bulunması zaten imkânsız.
-    ///
-    /// Kural: <b>yavaş özetleme düşük entropili sırlar için, hızlı
-    /// özetleme yüksek entropili sırlar için.</b>
+    /// Burada PBKDF2 DEĞİL düz SHA-256 yeterli: belirteç 256 bit rastgele,
+    /// kaba kuvvetle bulunması zaten imkânsız. Kural: <b>yavaş özetleme düşük
+    /// entropili sırlar için, hızlı özetleme yüksek entropili sırlar için.</b>
     /// </remarks>
     private static string HashToken(string token) =>
         Convert.ToBase64String(

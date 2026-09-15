@@ -706,6 +706,19 @@ app.MapPost("/auth/change-password",
 })
 .WithSummary("Kendi parolasını değiştirir; eski oturumlar kapanır, yeni belirteç döner.");
 
+// Belirteç yenileme (güvenlik sertleştirme). Python belirteci en fazla 20 dk
+// kabul ediyor (backend/app/auth.py MAX_TOKEN_AGE_SECONDS); arayüz 10 dk'da
+// bir buraya gelir. Yenileme oturum satırına bakar: kapatılmış oturum
+// yenilenemez, dolayısıyla Python'daki iptal penceresi en fazla 20 dk olur.
+app.MapPost("/auth/refresh", async (AuthService auth, HttpRequest http, CancellationToken ct) =>
+{
+    var refreshed = await auth.RefreshAsync(ReadToken(http), DateTime.UtcNow, ct);
+    return refreshed is null
+        ? Results.Json(new { message = "Oturum geçersiz veya süresi dolmuş." }, statusCode: 401)
+        : Results.Ok(refreshed);
+})
+.WithSummary("Belirteci yeniler (döndürür): eskisi geçersiz olur, yetkiler güncel yazılır.");
+
 
 
 // ---------------------------------------------------------------------------

@@ -1,23 +1,19 @@
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
 using TransformerAI.Maintenance.Api.Data;
 using TransformerAI.Maintenance.Api.Models;
 using TransformerAI.Maintenance.Api.Services;
 
 namespace TransformerAI.Maintenance.Tests;
 
-/// <summary>Giriş, kilitleme ve parola değiştirme — GERÇEK veritabanıyla. (Sistem Yönetimi)</summary>
+/// <summary>Giriş, kilitleme, parola değiştirme ve yenileme — GERÇEK veritabanıyla.</summary>
 /// <remarks>
-/// Diğer .NET testlerinin hepsi saf sınıfları sınıyordu; <c>AuthService</c>
-/// ise veritabanı olmadan anlamlı değil (kilit sayacı, oturum satırı,
-/// iptal). Bu yüzden her test kendi <b>bellek içi SQLite</b> veritabanını
-/// açıyor: gerçek EF Core sorguları çalışır, dosya oluşmaz, testler
-/// birbirini etkilemez.
+/// Her test kendi <b>bellek içi SQLite</b> veritabanını açıyor: gerçek EF Core
+/// sorguları çalışır, dosya oluşmaz, testler birbirini etkilemez.
 ///
-/// Neden bellek içi "InMemory" sağlayıcısı değil? O, ilişkisel veritabanı
-/// DEĞİL: benzersiz indeksleri ve SQL davranışını taklit etmez. SQLite
-/// gerçek bir veritabanı olduğu için üretimdeki davranışı sınar.
+/// Neden EF'in "InMemory" sağlayıcısı değil? O, ilişkisel veritabanı DEĞİL:
+/// benzersiz indeksleri ve SQL davranışını taklit etmez. SQLite gerçek bir
+/// veritabanı olduğu için üretimdeki davranışı sınar.
 ///
 /// Bağlantı test boyunca AÇIK kalmalı: bellek içi SQLite, son bağlantı
 /// kapandığı anda silinir.
@@ -25,6 +21,7 @@ namespace TransformerAI.Maintenance.Tests;
 public class AuthServiceTests : IDisposable
 {
     private static readonly DateTime Now = new(2026, 9, 15, 8, 0, 0, DateTimeKind.Utc);
+    private const string Secret = "test-anahtari-en-az-otuz-iki-karakter-uzun";
     private const string Temporary = "Gecici-Parola-7";
     private const string NewPassword = "Kademe-Revizyon-2026";
     private const string Tech = "10247";   // Ahmet Yılmaz — Elektriksel Test
@@ -47,7 +44,8 @@ public class AuthServiceTests : IDisposable
         // (parolasız). Testte migration zincirini çalıştırmaya gerek yok.
         _db.Database.EnsureCreated();
 
-        _tokens = new TokenIssuer(new ConfigurationBuilder().Build());
+        // Üretim kurallarıyla: testler geliştirme anahtarına dayanmasın.
+        _tokens = new TokenIssuer(Secret, isDevelopment: false);
         _auth = new AuthService(_db, _tokens);
 
         SetPassword(Tech, Temporary, mustChange: true);
@@ -102,12 +100,10 @@ public class AuthServiceTests : IDisposable
         Assert.Contains(_db.UserAuditEvents, e => e.Action == UserAuditActions.Locked
                                                   && e.ActorId == null);
 
-        // Kilitliyken DOĞRU parola da reddedilir.
         var (ok, error) = await _auth.LoginAsync(Tech, Temporary, Now.AddMinutes(1));
         Assert.Null(ok);
         Assert.Contains("tekrar denenebilir", error!.Message);
 
-        // Kilit süresi dolunca açılır.
         await LoginOk(Temporary, Now.Add(AuthService.LockDuration).AddMinutes(1));
     }
 
@@ -137,7 +133,6 @@ public class AuthServiceTests : IDisposable
         var (_, wrong) = await _auth.LoginAsync(Tech, "yanlis-parola-123", Now);
         Assert.StartsWith("Sicil numarası veya parola hatalı.", wrong!.Message);
 
-        // Parolayı bilen kişiye gerçek sebep söylenir.
         var (ok, right) = await _auth.LoginAsync(Tech, Temporary, Now);
         Assert.Null(ok);
         Assert.Contains("pasif", right!.Message);
@@ -157,11 +152,9 @@ public class AuthServiceTests : IDisposable
         Assert.False(result.Ok!.MustChangePassword);
         Assert.Contains(Permissions.TestsElectrical, result.Ok.Permissions);
 
-        // Eski belirteç ANINDA geçersiz, yenisi geçerli.
         Assert.Null(await _auth.ResolveAsync(first.Token, Now));
         Assert.NotNull(await _auth.ResolveAsync(result.Ok.Token, Now));
 
-        // Geçici parola artık çalışmaz, yenisi çalışır.
         var (old, _) = await _auth.LoginAsync(Tech, Temporary, Now);
         Assert.Null(old);
         await LoginOk(NewPassword);
@@ -184,7 +177,7 @@ public class AuthServiceTests : IDisposable
         Assert.Equal(400, same.Status);
         Assert.Contains(same.Problems!, p => p.Contains("aynı"));
 
-        Assert.True(Person(Tech).MustChangePassword);   // hiçbir şey değişmedi
+        Assert.True(Person(Tech).MustChangePassword);
     }
 
     [Fact]
@@ -197,14 +190,12 @@ public class AuthServiceTests : IDisposable
 
         Assert.Equal(400, result.Status);
         Assert.Equal(1, Person(Tech).FailedAttempts);
-        await LoginOk(Temporary);   // parola değişmedi
+        await LoginOk(Temporary);
     }
 
     [Fact]
     public async Task Parola_degistirme_kapisi_kaba_kuvvete_kilitlenir()
     {
-        // Açık bırakılmış bir oturumu ele geçiren biri, bu uç noktada sınırsız
-        // "mevcut parola" denemesi yapabilseydi girişteki kilit anlamsızlaşırdı.
         var login = await LoginOk(Temporary);
         AuthService.ChangePasswordResult? last = null;
         for (var i = 0; i < AuthService.MaxFailedAttempts; i++)
@@ -213,7 +204,7 @@ public class AuthServiceTests : IDisposable
 
         Assert.Equal(401, last!.Status);
         Assert.NotNull(Person(Tech).LockedUntil);
-        Assert.Null(await _auth.ResolveAsync(login.Token, Now));   // oturum da kapandı
+        Assert.Null(await _auth.ResolveAsync(login.Token, Now));
     }
 
     [Fact]
@@ -222,6 +213,56 @@ public class AuthServiceTests : IDisposable
         var result = await _auth.ChangePasswordAsync(
             null, new ChangePasswordRequest(Temporary, NewPassword), Now);
         Assert.Equal(401, result.Status);
+    }
+
+    // --- Belirteç yenileme (güvenlik sertleştirme) --------------------------------
+
+    [Fact]
+    public async Task Yenileme_belirteci_dondurur_ve_oturumu_uzatmaz()
+    {
+        SetPassword(Tech, NewPassword, mustChange: false);
+        var login = await LoginOk(NewPassword);
+        var later = Now.AddMinutes(10);
+
+        var refreshed = await _auth.RefreshAsync(login.Token, later);
+
+        Assert.NotNull(refreshed);
+        Assert.NotEqual(login.Token, refreshed!.Token);
+        // Eski belirteç .NET'te de ANINDA geçersiz (döndürme).
+        Assert.Null(await _auth.ResolveAsync(login.Token, later));
+        Assert.NotNull(await _auth.ResolveAsync(refreshed.Token, later));
+        // Oturumun sonu değişmez: yenileme sonsuz oturum aracı olmamalı.
+        Assert.Equal(login.ExpiresAt, refreshed.ExpiresAt);
+        // Yeni belirtecin yaşı yenileme anından başlar (Python bunu ölçüyor).
+        Assert.Equal(new DateTimeOffset(later).ToUnixTimeSeconds(),
+                     _tokens.Verify(refreshed.Token, later)!.IssuedAtUnix);
+    }
+
+    [Fact]
+    public async Task Yenileme_guncel_yetkileri_yazar()
+    {
+        SetPassword(Tech, NewPassword, mustChange: false);
+        var login = await LoginOk(NewPassword);
+        Assert.DoesNotContain(Permissions.TestsOil, login.Permissions);
+
+        var p = Person(Tech);
+        p.Department = Department.OilLaboratory;
+        _db.SaveChanges();
+
+        var refreshed = await _auth.RefreshAsync(login.Token, Now.AddMinutes(10));
+        Assert.Contains(Permissions.TestsOil, refreshed!.Permissions);
+    }
+
+    [Fact]
+    public async Task Kapatilan_oturum_yenilenemez()
+    {
+        // Python'daki iptal penceresini sınırlayan kural tam olarak bu.
+        SetPassword(Tech, NewPassword, mustChange: false);
+        var login = await LoginOk(NewPassword);
+
+        await _auth.RevokeAllSessionsAsync(Person(Tech).Id);
+
+        Assert.Null(await _auth.RefreshAsync(login.Token, Now.AddMinutes(10)));
     }
 
     // --- Oturum iptali ---------------------------------------------------------
@@ -238,6 +279,25 @@ public class AuthServiceTests : IDisposable
         Assert.Equal(2, closed);
         Assert.Null(await _auth.ResolveAsync(a.Token, Now));
         Assert.Null(await _auth.ResolveAsync(b.Token, Now));
+    }
+
+    [Fact]
+    public async Task Veritabanindan_okunan_zamanlar_UTC_isaretli()
+    {
+        // Canlı testte bulunan hata: SQLite tarihi metin saklar, EF okurken
+        // Kind=Unspecified döner, JSON'a "Z"siz yazılır ve tarayıcı YEREL saat
+        // sanar (Türkiye'de 3 saat kayma). Dönüştürücü bunu tek yerde düzeltir.
+        SetPassword(Tech, NewPassword, mustChange: false);
+        var login = await LoginOk(NewPassword);
+
+        // Bellekteki izlenen nesneyi bırak: değer gerçekten veritabanından okunsun.
+        _db.ChangeTracker.Clear();
+        var person = _db.Technicians.Single(t => t.EmployeeNo == Tech);
+        Assert.Equal(DateTimeKind.Utc, person.LastLoginAt!.Value.Kind);
+
+        var refreshed = await _auth.RefreshAsync(login.Token, Now.AddMinutes(5));
+        Assert.Equal(DateTimeKind.Utc, refreshed!.ExpiresAt.Kind);
+        Assert.Equal(login.ExpiresAt, refreshed.ExpiresAt);
     }
 
     [Fact]

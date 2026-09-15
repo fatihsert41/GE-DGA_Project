@@ -167,6 +167,37 @@ export default function App() {
       .catch(() => { session.clear(); setUser(null) })
   }, [])
 
+  // Belirteç yenileme (güvenlik sertleştirme). Python belirteci en fazla
+  // 20 dk kabul ediyor, çünkü .NET'te kapatılan oturumu göremiyor. 10 dk'da
+  // bir yenilemek, kullanıcıyı çıkarmadan bu sınırın altında kalmayı sağlar.
+  // Yan kazanç: yetkiler güncel departmandan gelir — departmanı değiştirilen
+  // kişinin menüsü sayfa yenilemeden güncellenir.
+  const userKey = user?.employeeNo
+  useEffect(() => {
+    if (!userKey) return undefined
+    const timer = setInterval(() => {
+      api.refreshToken()
+        .then((res) => {
+          const next = {
+            ...session.user(),
+            permissions: res.permissions || [],
+            department: res.department,
+            departmentName: res.departmentName,
+            mustChangePassword: Boolean(res.mustChangePassword),
+            expiresAt: res.expiresAt,
+          }
+          session.save(res.token, next)
+          setUser(next)
+        })
+        .catch((e) => {
+          // 401: oturum .NET'te kapatılmış (parola sıfırlandı, hesap pasife
+          // alındı). Kullanıcıyı giriş ekranına döndür.
+          if (e?.response?.status === 401) { session.clear(); setUser(null) }
+        })
+    }, 10 * 60 * 1000)
+    return () => clearInterval(timer)
+  }, [userKey])
+
   // Okunmamış bildirim sayısı ve bakım servisi bağlantısı: 60 sn'de bir.
   const [unread, setUnread] = useState(0)
 
