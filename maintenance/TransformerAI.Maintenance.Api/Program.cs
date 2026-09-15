@@ -1157,7 +1157,8 @@ app.MapGet("/rca/schema", () => Results.Ok(new
     criticalPriority = RcaRules.CriticalPriority,
     requiredWhen = new[]
     {
-        $"Tamamlanmış iş emrinin önceliği ≥ {RcaRules.CriticalPriority:0.0}",
+        string.Create(System.Globalization.CultureInfo.GetCultureInfo("tr-TR"),
+            $"Tamamlanmış iş emrinin önceliği ≥ {RcaRules.CriticalPriority:0.0}"),
         "Tamamlanmış onarım ya da değişim işi",
     },
 }))

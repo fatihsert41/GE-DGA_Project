@@ -1,3 +1,4 @@
+using System.Globalization;
 using TransformerAI.Maintenance.Api.Models;
 
 namespace TransformerAI.Maintenance.Api.Services;
@@ -25,6 +26,17 @@ public class NotificationPlanner
     /// </remarks>
     public const double SupervisorThreshold = 2.5;
 
+    /// <summary>Bildirim metinlerinin kültürü — SUNUCUNUN kültüründen bağımsız.</summary>
+    /// <remarks>
+    /// <b>CI'da bulunan hata:</b> tarih <c>ToString("d MMMM yyyy")</c> ile
+    /// kültür belirtilmeden yazılıyordu. Türkçe Windows'ta "14 Eylül 2026",
+    /// kültür ayarı olmayan Linux'ta (Docker, GitHub Actions) "14 September
+    /// 2026" çıkıyordu; öncelik de "2,80" ile "2.80" arasında değişiyordu.
+    /// Yani aynı kod, kurulduğu makineye göre farklı dilde bildirim
+    /// gönderirdi. Kullanıcıya giden metin kültürü açıkça seçmeli.
+    /// </remarks>
+    private static readonly CultureInfo Tr = CultureInfo.GetCultureInfo("tr-TR");
+
     /// <summary>Bir bildirimin kime, hangi gerekçeyle gideceği.</summary>
     public record Target(Technician Recipient, string Reason);
 
@@ -49,7 +61,7 @@ public class NotificationPlanner
         //
         // Bu, sistemin sessiz kalabileceği en tehlikeli durum: kural bir
         // iş emri üretti, ama kimseye atanmadığı için kimsenin gelen
-        // kutusunda görünmüyor. Kimse atanmamışsa bölge sorumlularına
+        // kutusunda görünmüyor. Kimse atanmamışsa işi atayabilecek kişilere
         // haber verilir ki atamayı biri yapsın.
         if (assignee is null)
         {
@@ -66,7 +78,7 @@ public class NotificationPlanner
             {
                 if (targets.Any(t => t.Recipient.Id == sup.Id)) continue;
                 targets.Add(new Target(sup,
-                    $"Yüksek öncelikli iş ({order.Priority:0.00})."));
+                    string.Create(Tr, $"Yüksek öncelikli iş ({order.Priority:0.00}).")));
             }
         }
 
@@ -78,12 +90,9 @@ public class NotificationPlanner
     /// Faz 9.2'de "mühendis ve süpervizörler"e gidiyordu, yani ROLE
     /// bakıyordu. Faz 10'da departmanlar gelince bu yanlış kişiye gitmeye
     /// başlardı: yağ laboratuvarındaki bir mühendis bildirimi alır ama
-    /// iş emri atama yetkisi yoktur — bildirim onun için gürültü, işi
-    /// atayabilecek planlamacı ise habersiz kalabilirdi.
+    /// iş emri atama yetkisi yoktur.
     ///
     /// Artık ölçüt YETKİ: işi atayabilen herkes (bakım planlama + yönetim).
-    /// Az sayıda kişi, ve "kimse görmedi" riski "fazla kişi gördü"
-    /// riskinden ağır basıyor.
     /// </remarks>
     private static IEnumerable<Technician> DecisionMakers(
         IReadOnlyList<Technician> active)
@@ -110,7 +119,7 @@ public class NotificationPlanner
         };
 
         var due = order.DueDate is { } d
-            ? d.ToString("d MMMM yyyy")
+            ? d.ToString("d MMMM yyyy", Tr)
             : "tarih belirlenmedi";
 
         var subject = $"{order.TransformerId} · {kind} · son tarih {due}";
@@ -120,7 +129,7 @@ public class NotificationPlanner
             $"Varlık: {order.TransformerId}" +
             (transformerName is null ? "" : $" ({transformerName})") + "\n" +
             $"İş türü: {kind}\n" +
-            $"Öncelik: {order.Priority:0.00}\n" +
+            string.Create(Tr, $"Öncelik: {order.Priority:0.00}\n") +
             $"Son tarih: {due}\n\n" +
             $"{order.Title}\n{order.Reason}";
 

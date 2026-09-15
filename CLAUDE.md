@@ -67,10 +67,14 @@ Testler: `cd backend; pytest -q` (18 test).
 - `.venv`, `node_modules`, `*.db`, `model.joblib` git'e girmez (.gitignore).
 - ML katmanı Python'da kalır; CRUD/iş mantığı için .NET düşünülüyor (aşağıya bak).
 
-## YARIN BURADAN BAŞLA (14 Eylül 2026 sonu itibarıyla)
+## YARIN BURADAN BAŞLA (15 Eylül 2026 sonu itibarıyla)
+
+⚠ **İki bilgisayar:** yeni `C:\Users\Lenovo\...`, eski `C:\Users\Esma\...`.
+Oturuma `git fetch; git status -sb` ile başla, geride ise önce pull.
 
 ```powershell
-cd C:\Users\Lenovo\Desktop\Python\GE-DGA_Project   # 14 Eyl: yeni bilgisayar
+cd <proje klasörü>
+docker compose up --build  # SEÇENEK: tek komut, http://localhost:8080 (.env gerekli)
 .\start.ps1                # üç servisi birden başlatır (~22 sn)
 .\start.ps1 -Check         # sadece durum kontrolü
 .\start.ps1 -Stop          # hepsini durdurur
@@ -78,7 +82,9 @@ cd C:\Users\Lenovo\Desktop\Python\GE-DGA_Project   # 14 Eyl: yeni bilgisayar
 
 Arayüz: http://localhost:5173 · API: http://localhost:8000/docs
 
-**Durum:** Faz 0-11 BİTTİ. **349 test** (232 Python + 117 .NET).
+**Durum:** Faz 0-12 + Sistem Yönetimi + Sağlamlaştırma BİTTİ (15 Eyl).
+**525 test** (300 Python + 225 .NET) · CI: `.github/workflows/ci.yml` ·
+Docker: `docker-compose.yml`. Sıradaki: Faz 13 (doküman yönetimi).
 Üç servis: Python :8000 · .NET :5080 · React :5173.
 
 **Faz 11 — ERP arayüzü (Canias tarzı) TAMAM (14 Eyl).** Kullanıcı:
@@ -302,9 +308,42 @@ Testler: `TokenIssuerTests` (11) + `AuthServiceTests` yenileme+UTC (4) ·
 `tests/test_auth_hardening.py` (18) → **300 Python + 214 .NET**. Canlı akış
 (.NET kopya DB + gerçek Python, yetim işçi temizlendikten sonra) 12/12.
 
-**SIRADAKİ: Zayıf yanlar 2/4 — .NET HTTP entegrasyon testleri** (elle yazılan
-uçtan uca betikleri WebApplicationFactory testlerine çevir), sonra CI, Docker.
-Ardından 12.6 (Mühendislik ekranları son hâli, Faz 12'yi kapatır).
+**✅ Zayıf yanlar 2/4 — .NET HTTP entegrasyon testleri TAMAM.**
+`TransformerAI.Maintenance.Tests/Integration/`: `MaintenanceApiFactory`
+(WebApplicationFactory; her test kendi geçici SQLite DOSYASI; ortam "Testing"
+→ geliştirme anahtarı reddedilir), `ApiClient`, `AuthHttpTests`,
+`AdminHttpTests`, `RcaHttpTests`. Elle çalıştırılan uçtan uca betikler (RCA
+20, admin 36, güvenlik 12) kalıcı testlere çevrildi. `Program.cs` sonunda
+`public partial class Program { }`. DbContext kaydı testte DEĞİŞTİRİLİYOR
+(yalnızca eklemek yetmez: EF yapılandırmaları biriktirir). Arka plan bildirim
+servisi KALDIRILMADI: "bütün IHostedService'leri sil" ASP.NET'in kendi web
+sunucusu servisini de silerdi. → **225 .NET**.
+
+**✅ Zayıf yanlar 3/4 — CI TAMAM.** `.github/workflows/ci.yml`: python (pip →
+`app.ml.train --field-like` → pytest; model git'te olmadığı için eğitim ŞART),
+dotnet (`dotnet test -c Release`), frontend (`npm ci` + build). Üçü paralel,
+ubuntu; aynı dala yeni push eski turu iptal eder.
+
+**✅ Zayıf yanlar 4/4 — Docker TAMAM.** `docker-compose.yml` (backend,
+maintenance, frontend :8080; birimler backend-data, maintenance-data;
+`TRANSFORMERAI_AUTH_SECRET` .env'den ZORUNLU). `backend/Dockerfile` modeli imaj
+oluşturulurken eğitir, `docker-entrypoint.sh` DB yoksa seed eder.
+`maintenance/Dockerfile` iki aşamalı (sdk → aspnet), Production.
+`frontend/Dockerfile` node derleme → nginx; `frontend/nginx.conf` /api ve
+/maint öneklerini keserek yönlendirir (vite.config.js ile aynı) + güvenlik
+başlıkları. `database.DB_PATH` artık `TRANSFORMERAI_DB_PATH` ile verilebilir
+(varsayılan değişmedi). `scripts/reset-demo.ps1 [-Docker]`: demo verisini
+sıfırlar (onay ister; `-Force` ile sormaz).
+⚠ Docker Desktop bu (eski) bilgisayarda `%LOCALAPPDATA%\Programs\DockerDesktop`
+altında; motor kapalıysa `docker info` "dockerDesktopLinuxEngine" hatası verir.
+
+**✅ 12.6 TAMAM — Faz 12 kapandı.** MH01–MH04 dördü de menüde ve çalışıyor;
+README ekranlar, departmanlar, API, testler, yol haritası ve sınırlılıklar
+bölümleri güncellendi.
+
+**SIRADAKİ: Faz 13 — Doküman / çizim yönetimi** (`docs/FAZ12-15-YOL-HARITASI.md`;
+DWG desteği sorusu o faza gelince sorulacak). Sağlamlaştırmadan kalan isteğe
+bağlı iş: CI'a Playwright ile arayüz duman testi.
 
 **Yol haritası belgesi: `docs/FAZ12-15-YOL-HARITASI.md`**.
 Önerilen sıra: **12 Mühendislik departmanı + onay akışı** (test onay

@@ -29,6 +29,10 @@ public static class RcaRules
     /// </remarks>
     public const double CriticalPriority = 2.5;
 
+    /// <summary>Kullanıcıya giden metinlerin kültürü — sunucunun kültüründen bağımsız.</summary>
+    private static readonly System.Globalization.CultureInfo Tr =
+        System.Globalization.CultureInfo.GetCultureInfo("tr-TR");
+
     public const int TextMin = 20;
     public const int TextMax = 2000;
     public const int SimilarLimit = 5;
@@ -73,7 +77,9 @@ public static class RcaRules
     {
         var reasons = new List<string>();
         if (order.Priority >= CriticalPriority)
-            reasons.Add($"Öncelik {order.Priority:0.00} ≥ {CriticalPriority:0.0}: kritik iş emri.");
+            // Kültür AÇIKÇA tr-TR: sunucunun kültürüne bırakılsaydı Linux/Docker'da
+            // "2.80", Türkçe Windows'ta "2,80" yazardı (CI'da Linux turunda bulundu).
+            reasons.Add(string.Create(Tr, $"Öncelik {order.Priority:0.00} ≥ {CriticalPriority:0.0}: kritik iş emri."));
         if (order.Kind is WorkOrderKind.Repair or WorkOrderKind.Replacement)
             reasons.Add("Onarım / değişim işi: arıza gerçekleşmiş.");
         return reasons;
