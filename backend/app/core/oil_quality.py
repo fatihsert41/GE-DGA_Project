@@ -119,36 +119,65 @@ DP_BANDS = [
 ]
 
 
-def assess_parameter(name: str, value: Optional[float],
-                     vclass: str) -> Dict[str, object]:
-    """Tek bir yağ parametresini değerlendirir."""
+def _grade(value: Optional[float], direction: str,
+           good: float, acceptable: float) -> str:
+    """Değeri iki sınıra göre iyi / kabul / kötü olarak derecelendirir."""
+    if value is None:
+        return "bilinmiyor"
+    if direction == "lower_better":
+        return ("iyi" if value <= good
+                else "kabul" if value <= acceptable else "kötü")
+    return ("iyi" if value >= good
+            else "kabul" if value >= acceptable else "kötü")
+
+
+def assess_parameter(name: str, value: Optional[float], vclass: str,
+                     override: Optional[Dict[str, object]] = None
+                     ) -> Dict[str, object]:
+    """Tek bir yağ parametresini değerlendirir.
+
+    ``override``: varlığa özel eşik kaydı (Faz 12.4, ``core/asset_limits``).
+    Verilirse hüküm istisna sınırlarıyla verilir, AMA standart sınırlar ve
+    standart hüküm de sonuçta taşınır: eşik değişikliği sessiz olmamalı.
+    """
     spec = LIMITS.get(name)
     if spec is None:
         return {"parameter": name, "condition": "bilinmiyor"}
 
-    thresholds = spec["thresholds"][vclass]      # type: ignore[index]
-    good, acceptable = thresholds
+    std_good, std_acceptable = spec["thresholds"][vclass]  # type: ignore[index]
+    direction = str(spec["direction"])
 
-    if value is None:
-        condition = "bilinmiyor"
-    elif spec["direction"] == "lower_better":
-        condition = ("iyi" if value <= good
-                     else "kabul" if value <= acceptable else "kötü")
+    if override is not None:
+        good = float(override["good_limit"])              # type: ignore[arg-type]
+        acceptable = float(override["acceptable_limit"])  # type: ignore[arg-type]
     else:
-        condition = ("iyi" if value >= good
-                     else "kabul" if value >= acceptable else "kötü")
+        good, acceptable = std_good, std_acceptable
 
-    return {
+    result: Dict[str, object] = {
         "parameter": name,
         "label": spec["label"],
         "unit": spec["unit"],
         "value": value,
-        "condition": condition,
+        "condition": _grade(value, direction, good, acceptable),
         "good_limit": good,
         "acceptable_limit": acceptable,
+        "limit_source": "asset_override" if override is not None else "standard",
+        "standard_good_limit": std_good,
+        "standard_acceptable_limit": std_acceptable,
+        "standard_condition": _grade(value, direction, std_good, std_acceptable),
         "standard": spec["standard"],
         "meaning": spec["meaning"],
     }
+    if override is not None:
+        result["override"] = {
+            "id": override.get("id"),
+            "reason": override.get("reason"),
+            "valid_from": override.get("valid_from"),
+            "valid_until": override.get("valid_until"),
+            "proposed_by_name": override.get("proposed_by_name"),
+            "decided_by_name": override.get("decided_by_name"),
+        }
+    return result
 
 
 def estimate_dp(furan_2fal_mgl: Optional[float],
@@ -219,38 +248,71 @@ def estimate_dp(furan_2fal_mgl: Optional[float],
     }
 
 
+def _overall(conditions: List[str]) -> str:
+    """Genel durum EN KÖTÜ parametreye göre belirlenir.
+
+    Ortalama almak yanıltıcı olurdu: üç iyi bir kötüyü gizleyemez, çünkü
+    tek bir parametrenin kötü olması trafoyu riske atmaya yeter.
+    """
+    known = [c for c in conditions if c != "bilinmiyor"]
+    if not known:
+        return "bilinmiyor"
+    if "kötü" in known:
+        return "kötü"
+    if "kabul" in known:
+        return "kabul"
+    return "iyi"
+
+
 def assess(test: Dict[str, object], hv_kv: Optional[float] = None,
-           insulation_type: Optional[str] = None) -> Dict[str, object]:
-    """Bir yağ kalitesi testini bütün olarak değerlendirir."""
+           insulation_type: Optional[str] = None,
+           overrides: Optional[Dict[str, Dict[str, object]]] = None
+           ) -> Dict[str, object]:
+    """Bir yağ kalitesi testini bütün olarak değerlendirir.
+
+    ``overrides``: parametre → varlığa özel eşik (Faz 12.4). Yalnızca BU
+    testin tarihinde yürürlükte olanlar verilmeli; seçimi
+    ``core/asset_limits.select_for_test`` yapar.
+    """
     vclass = voltage_class(hv_kv)
+    overrides = overrides or {}
 
     parameters = [
-        assess_parameter(name, _num(test.get(name)), vclass)
+        assess_parameter(name, _num(test.get(name)), vclass, overrides.get(name))
         for name in LIMITS
     ]
 
     paper = estimate_dp(_num(test.get("furan_2fal_mgl")), insulation_type)
 
-    # Genel durum EN KÖTÜ parametreye göre belirlenir. Ortalama almak
-    # yanıltıcı olurdu: üç iyi bir kötüyü gizleyemez, çünkü tek bir
-    # parametrenin kötü olması trafoyu riske atmaya yeter.
     known = [p for p in parameters if p["condition"] != "bilinmiyor"]
-    if not known:
-        overall = "bilinmiyor"
-    elif any(p["condition"] == "kötü" for p in known):
-        overall = "kötü"
-    elif any(p["condition"] == "kabul" for p in known):
-        overall = "kabul"
-    else:
-        overall = "iyi"
+    overall = _overall([str(p["condition"]) for p in parameters])
+    # Aynı test standart eşiklerle değerlendirilseydi. İstisna yoksa ikisi
+    # zaten aynıdır; varsa fark GÖRÜNÜR olmalı.
+    overall_standard = _overall(
+        [str(p.get("standard_condition", p["condition"])) for p in parameters])
+
+    applied = [p for p in parameters if p.get("limit_source") == "asset_override"]
 
     problems = [f"{p['label']}: {p['value']} {p['unit']} "
-                f"(sınır {p['acceptable_limit']})"
+                f"(sınır {p['acceptable_limit']}"
+                + (", varlığa özel" if p.get("limit_source") == "asset_override" else "")
+                + ")"
                 for p in known if p["condition"] == "kötü"]
+
+    warnings: List[str] = []
+    if applied and overall != overall_standard:
+        warnings.append(
+            f"Standart eşiklerle genel hüküm '{overall_standard}' olurdu; "
+            "varlığa özel eşik ("
+            + ", ".join(str(p["label"]) for p in applied)
+            + f") nedeniyle '{overall}'.")
 
     return {
         "voltage_class": vclass,
         "overall": overall,
+        "overall_standard": overall_standard,
+        "overrides_applied": [p["parameter"] for p in applied],
+        "warnings": warnings,
         "parameters": parameters,
         "problems": problems,
         "measured_count": len(known),

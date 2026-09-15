@@ -24,6 +24,7 @@ const NotificationsPanel = lazy(() => import('./components/NotificationsPanel'))
 const ManagerDashboard = lazy(() => import('./components/ManagerDashboard'))
 const ReviewQueue = lazy(() => import('./components/ReviewQueue'))
 const ModelReviewQueue = lazy(() => import('./components/ModelReviewQueue'))
+const LimitsQueue = lazy(() => import('./components/LimitsQueue'))
 
 const Loading = () => (
   <div className="panel"><p className="empty">Yükleniyor…</p></div>
@@ -77,6 +78,9 @@ const VIEWS = [
   // Faz 12.3 — model kararsız kaldığında mühendis gerçek tanıyı seçer.
   { id: 'model-reviews', code: 'MH02', label: 'Model İnceleme', module: 'engineering',
     permission: 'engineering.review_model' },
+  // Faz 12.4 — tek trafo için süreli, gerekçeli, dört gözlü eşik istisnası.
+  { id: 'limits', code: 'MH03', label: 'Varlığa Özel Eşik', module: 'engineering',
+    permission: 'engineering.limits' },
   { id: 'manager', code: 'YN01', label: 'Yönetim Özeti', module: 'admin',
     permission: 'manager.view' },
   { id: 'personnel', code: 'PR01', label: 'Personel', module: 'admin',
@@ -452,6 +456,13 @@ export default function App() {
                       ? <TransformerDetail id={selected.id} meta={selected}
                           onBack={() => setSelected(null)} />
                       : <ModelReviewQueue onOpenTransformer={(id) => setSelected({ id })} />
+                  )}
+
+                  {view === 'limits' && (
+                    selected
+                      ? <TransformerDetail id={selected.id} meta={selected}
+                          onBack={() => setSelected(null)} />
+                      : <LimitsQueue onOpenTransformer={(id) => setSelected({ id })} />
                   )}
 
                   {view === 'manager' && (

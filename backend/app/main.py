@@ -11,9 +11,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from . import database
 from .ml import predictor
 from .routers import (compare, components, electrical, explain, fleet,
-                      health_index,
-                      lifecycle, model_reviews, oil, physical, predict,
-                      reviews, schematic,
+                      health_index, lifecycle, limits, model_reviews, oil,
+                      physical, predict, reviews, schematic,
                       transformers, trend)
 from .services import review as review_service
 
@@ -49,6 +48,7 @@ app.include_router(components.router)
 app.include_router(schematic.router)
 app.include_router(reviews.router)
 app.include_router(model_reviews.router)
+app.include_router(limits.router)
 
 
 @app.on_event("startup")

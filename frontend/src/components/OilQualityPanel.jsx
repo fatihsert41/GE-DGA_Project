@@ -176,12 +176,35 @@ function OilParameters({ assessment }) {
                   </div>
                 </td>
                 <td><b>{p.value}</b> <span className="unit">{p.unit}</span></td>
-                <td className="muted">{p.good_limit}</td>
-                <td className="muted">{p.acceptable_limit}</td>
+                {/* Faz 12.4: varlığa özel eşik uygulanmışsa standart sınır
+                    da yanında durur. Eşik değişikliği SESSİZ olmamalı. */}
+                <td className="muted">
+                  {p.good_limit}
+                  {p.limit_source === 'asset_override' && (
+                    <div className="limit-std">standart {p.standard_good_limit}</div>
+                  )}
+                </td>
+                <td className="muted">
+                  {p.acceptable_limit}
+                  {p.limit_source === 'asset_override' && (
+                    <div className="limit-std">standart {p.standard_acceptable_limit}</div>
+                  )}
+                </td>
                 <td>
                   <span className={`badge sm ${CONDITION_CLASS[p.condition]}`}>
                     {p.condition}
                   </span>
+                  {p.limit_source === 'asset_override' && (
+                    <div>
+                      <span className="limit-tag"
+                        title={`${p.override?.reason || ''} · ${p.override?.valid_until || ''} tarihine kadar`}>
+                        varlığa özel eşik
+                      </span>
+                      {p.standard_condition !== p.condition && (
+                        <div className="limit-std">standartla: {p.standard_condition}</div>
+                      )}
+                    </div>
+                  )}
                 </td>
                 <td className="muted" style={{ fontSize: '0.74rem' }}>
                   {p.standard}

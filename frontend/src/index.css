@@ -1938,3 +1938,17 @@ button.primary:hover { background: linear-gradient(#4679b0, #2a5a8d); border-col
 .review-chip.expert {
   background: var(--erp-select); color: var(--ink); border-color: var(--accent);
 }
+
+/* ---------------------------------------------------------------------
+   Faz 12.4 — Varlığa özel eşik (MH03)
+   İstisna uygulanan sınır, standart sınırla YAN YANA gösterilir:
+   eşik değişikliği ekranda da sessiz olmamalı.
+   ------------------------------------------------------------------- */
+.limit-tag {
+  display: inline-block; margin-top: 4px; padding: 1px 6px;
+  font-size: 0.68rem; font-weight: 600; white-space: nowrap;
+  border: 1px solid var(--medium); color: var(--ink);
+  background: var(--surface-2); border-radius: 3px;
+}
+.limit-std { font-size: 0.7rem; color: var(--muted); margin-top: 2px; }
+.np-bad { color: var(--critical); font-weight: 600; }

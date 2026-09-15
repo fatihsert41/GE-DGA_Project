@@ -160,6 +160,21 @@ export const api = {
   modelReviewLabel: (id, body) =>
     client.post(`/model-reviews/${id}/label`, body).then((r) => r.data),
 
+  // --- Varlığa özel eşik (Faz 12.4) ---------------------------------------
+  // Önbelleğe ALINMIYOR: istisnanın durumu başka mühendislerin kararıyla
+  // ve süre dolunca kendiliğinden değişir.
+  limitsSchema: () => client.get('/limits/schema').then((r) => r.data),
+  limitsQueue: (folder = 'pending') =>
+    client.get('/limits/queue', { params: { folder } }).then((r) => r.data),
+  transformerLimits: (id) =>
+    client.get(`/transformers/${id}/limits`).then((r) => r.data),
+  proposeLimit: (id, body) =>
+    client.post(`/transformers/${id}/limits`, body).then((r) => r.data),
+  limitDecision: (overrideId, body) =>
+    client.post(`/limits/${overrideId}/decision`, body).then((r) => r.data),
+  revokeLimit: (overrideId, body) =>
+    client.post(`/limits/${overrideId}/revoke`, body).then((r) => r.data),
+
   health: () => client.get('/health').then((r) => r.data),
   predict: (payload) => client.post('/predict', payload).then((r) => r.data),
   explain: (gases) => client.post('/explain', gases).then((r) => r.data),
