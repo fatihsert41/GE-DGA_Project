@@ -1349,3 +1349,8 @@ static async Task<(Technician? Me, IResult? Denied)> RequireAsync(
 
     return (me, null);
 }
+// Entegrasyon testleri için (TransformerAI.Maintenance.Tests): üst düzey
+// ifadelerle yazılan uygulamanın derleyicinin ürettiği Program sınıfı
+// varsayılan olarak internal'dır. WebApplicationFactory<Program> onu
+// görebilsin diye public yapılıyor. Davranışı hiçbir şekilde değiştirmez.
+public partial class Program { }
