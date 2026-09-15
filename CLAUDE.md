@@ -311,7 +311,11 @@ Testler: `tests/test_electrical.py` (20) + `tests/test_electrical_api.py`
 * Kalibrasyon katmanı (`docs/FAZ6-IYILESTIRME-YOL-HARITASI.md` 1. sıra) —
   ölçüldü ama uygulanmadı: hizmet modeli kendi alanında ECE 0.021 ile
   zaten kalibre çıktı, bu yüzden aciliyeti düştü.
-* Zaman serisi özellikleri (gaz üretim hızı) — trend altyapısı hazır.
+* ~~Zaman serisi özellikleri (gaz üretim hızı)~~ — **ÖLÇÜLDÜ, RAFA KALDIRILDI
+  (15 Eyl).** `core/rate.py` + `ml/rate_eval.py` depoda ama ürüne bağlı
+  değil: 106 seride 0 erken yakalama (sentetik en yüksek TDCG hızı ~2.5
+  ppm/gün, IEEE 1991 eşiği 10). Yeniden açma koşulları:
+  `docs/DENEY-GAZ-URETIM-HIZI.md`.
 * Faz 8.6-8.7: termal model (IEEE C57.91), bileşen izleme (buşing/OLTC).
 
 **Claude için teknik notlar:**
