@@ -8,6 +8,7 @@ Two tables:
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
@@ -40,7 +41,11 @@ NAMEPLATE_COLUMNS = [
 ]
 NAMEPLATE_FIELDS = [name for name, _ in NAMEPLATE_COLUMNS]
 
-DB_PATH = Path(__file__).resolve().parents[1] / "dga.db"
+# Varsayılan: backend/dga.db (yerel çalışma). Docker'da veritabanı imajın
+# içinde değil kalıcı birimde durmalı; TRANSFORMERAI_DB_PATH ile verilir
+# (backend/Dockerfile: /data/dga.db).
+DB_PATH = Path(os.environ.get("TRANSFORMERAI_DB_PATH")
+               or Path(__file__).resolve().parents[1] / "dga.db")
 
 
 def _connect() -> sqlite3.Connection:

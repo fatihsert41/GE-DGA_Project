@@ -1,0 +1,11 @@
+# İmaja GİRMEYECEKLER: yerel ortam, önbellek, veritabanı ve yerel model.
+# Model imajın içinde yeniden eğitiliyor; yerel kopyası tutarsızlık yaratırdı.
+.venv/
+__pycache__/
+**/__pycache__/
+.pytest_cache/
+*.db
+*.db-*
+artifacts/*.joblib
+data/
+tests/

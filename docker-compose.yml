@@ -1,0 +1,50 @@
+# TransformerAI — tek komutla kurulum (Zayıf yanlar 4/4)
+#
+#   copy .env.example .env      # TRANSFORMERAI_AUTH_SECRET'i doldurun
+#   docker compose up --build   # http://localhost:8080
+#
+# Neden? Yeni bir bilgisayarda projeyi açmak şunları gerektiriyordu: Python
+# venv + paketler, model eğitimi, demo verisi, .NET SDK, Node, üç terminal.
+# İki bilgisayar arasında bu adımlar elle tekrarlandı ve veritabanları
+# ayrıştı. Burada hepsi imajların içinde; tek ön koşul Docker.
+#
+# Üretim kuralları geçerli: iki servis de imza anahtarı OLMADAN açılmaz.
+
+services:
+  backend:
+    build: ./backend
+    environment:
+      TRANSFORMERAI_AUTH_SECRET: ${TRANSFORMERAI_AUTH_SECRET:?TRANSFORMERAI_AUTH_SECRET .env dosyasinda tanimli olmali}
+      TRANSFORMERAI_CORS_ORIGINS: ${TRANSFORMERAI_CORS_ORIGINS:-http://localhost:8080}
+    volumes:
+      - backend-data:/data
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=5)"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+
+  maintenance:
+    build: ./maintenance
+    environment:
+      TRANSFORMERAI_AUTH_SECRET: ${TRANSFORMERAI_AUTH_SECRET:?TRANSFORMERAI_AUTH_SECRET .env dosyasinda tanimli olmali}
+    volumes:
+      - maintenance-data:/data
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
+      - maintenance
+
+# Birimler: veritabanları container'dan bağımsız yaşar. Demo verisini
+# sıfırlamak = birimleri silmek (scripts/reset-demo.ps1).
+volumes:
+  backend-data:
+  maintenance-data:

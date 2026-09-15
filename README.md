@@ -6,8 +6,10 @@
 > sonucu **bakım iş emrine** dönüştüren polyglot bir sistem.
 
 **Üç servis:** Python (ML) · .NET (bakım planlama) · React (arayüz).
-**349 test** (232 Python + 117 .NET). Arayüz kurumsal ERP düzeninde:
-işlem kodları, modül ağacı, çoklu pencere, durum çubuğu.
+**525 test** (300 Python + 225 .NET, HTTP entegrasyon testleri dahil) — her
+push'ta GitHub Actions'ta çalışır. `docker compose up` ile tek komutla kurulur.
+Arayüz kurumsal ERP düzeninde: işlem kodları, modül ağacı, çoklu pencere,
+durum çubuğu.
 
 ---
 
@@ -27,6 +29,8 @@ işlem kodları, modül ağacı, çoklu pencere, durum çubuğu.
 | **G — Tek skor** | Dört boyut (DGA · kağıt · elektriksel · yağ) → 0-100 sağlık endeksi, formülü açık | `GET /transformers/{id}/health` |
 | **H — Bağımsız duyu** | TTR, sargı direnci, PI, tan δ — yağın göremediği arızalar | `GET /transformers/{id}/electrical-tests` |
 | **I — Sorumluluk** | Departman bazlı yetki: her testi kendi birimi girer; personele bildirim gönderme | `GET /departments`, `POST /notifications/messages` |
+| **J — İkinci göz** | Mühendislik: sınır dışı test onayı, model tanısına uzman etiketi, varlığa özel eşik, kök neden analizi — hepsi dört gözlü ve denetim izli | MH01–MH04 |
+| **K — Hesap güvenliği** | Parola politikası, geçici parola, kilitleme, belirteç yenileme, görev ayrılığı (hesap açan ≠ işi yapan) | `POST /auth/refresh`, `/admin/users` |
 
 ---
 
@@ -97,6 +101,22 @@ ortak veritabanı mikroservis mimarisinin en yaygın hatasıdır.
 
 ## Hızlı başlangıç
 
+### Seçenek A — Docker (tek komut)
+
+Tek ön koşul **Docker**. Model imaj oluşturulurken eğitilir, demo verisi ilk
+açılışta yüklenir:
+
+```powershell
+copy .env.example .env          # TRANSFORMERAI_AUTH_SECRET'i doldurun
+docker compose up --build       # http://localhost:8080
+```
+
+Anahtar üretmek için: `python -c "import secrets; print(secrets.token_urlsafe(48))"`.
+Anahtarsız servisler **açılmayı reddeder** (üretim kuralları). Demo verisini
+sıfırlamak: `.\scripts\reset-demo.ps1 -Docker`.
+
+### Seçenek B — Yerel geliştirme
+
 Gereksinimler: **Python 3.12+**, **Node 18+**, **.NET 10 SDK**.
 
 Kurulum bir kez yapıldıysa üç servisi tek komutla başlatabilirsiniz:
@@ -151,14 +171,23 @@ Vite iki servise birden yönlendirir: `/api` → :8000, `/maint` → :5080.
 ## Testler
 
 ```powershell
-cd backend      ; pytest -q            # 232 test
-cd maintenance  ; dotnet test          # 117 test
+cd backend      ; pytest -q            # 300 test
+cd maintenance  ; dotnet test          # 225 test
 ```
 
-.NET testleri veritabanı ve HTTP kullanmaz (~250 ms): iş kuralları saf
-sınıflarda tutulduğu için doğrudan test edilebiliyor. Yetki haritası da
-böyle test ediliyor: "her test türünü tek bir departman girer" kuralı
-bir test olarak yazılı.
+Üç katman:
+
+- **Saf kurallar** (çoğunluk): iş kuralları veritabanı ve HTTP bilmeyen
+  sınıflarda — yetki haritası, parola politikası, RCA kuralları, dört göz.
+- **Veritabanı** (`AuthServiceTests`): bellek içi SQLite ile giriş, kilit,
+  parola değiştirme, belirteç yenileme.
+- **HTTP entegrasyon** (`Integration/`): `WebApplicationFactory` uygulamayı
+  bellekte gerçek boru hattıyla başlatır; her test kendi geçici veritabanıyla
+  giriş → yetki → iş emri → kök neden analizi akışlarını uçtan uca sınar.
+
+**CI** (`.github/workflows/ci.yml`): her push'ta üç paralel iş — Python
+(model eğitimi + testler), .NET (testler), arayüz (üretim derlemesi). Testler
+Linux'ta çalışır; Windows'a özgü varsayımlar orada ortaya çıkar.
 
 ---
 
@@ -179,7 +208,9 @@ Yetki **kişiye veya role değil departmana** bağlıdır ve işlem bazlıdır �
 
 | Departman | Demo hesabı | Yapabildikleri |
 |---|---|---|
-| **Yönetim** | 10502 | Tam yetki: her ekran, her test, personel yönetimi |
+| **Sistem Yönetimi** | 10001 | Kullanıcı hesabı açma, parola sıfırlama, kilit açma, pasife alma — **operasyon yetkisi yok** |
+| **Yönetim** | 10502 | Bütün operasyon ekranları ve işlemleri — **kullanıcı hesabı açamaz** |
+| **Mühendislik** | 10833, 10921 | Test onayı, model incelemesi, varlığa özel eşik, kök neden analizi — test girmez, iş yürütmez |
 | **Bakım Planlama** | 10318 | İş emri açma/atama, personel listesi |
 | **Yağ Laboratuvarı** | 10455, 10740 | DGA ölçümü, yağ kalitesi testi, numune analizi |
 | **Elektriksel Test** | 10247 | Elektriksel test, buşing/kademe testi |
@@ -191,8 +222,13 @@ Yetki **kişiye veya role değil departmana** bağlıdır ve işlem bazlıdır �
 - Kontrol **sunucuda**: yetkisiz istek 403 alır ve mesaj işi hangi
   departmanın yapabileceğini söyler. Arayüzdeki kilitler yalnızca yol
   gösterir.
-- Son Yönetim personelinin departmanı değiştirilemez; yeni kayıt en dar
-  yetkiyle başlar.
+- **Görev ayrılığı:** hesap açan (Sistem Yönetimi) işi yapamaz, işi yapan
+  (Yönetim) hesap açamaz; ölçen (laboratuvar) onaylayamaz, onaylayan
+  (Mühendislik) ölçemez.
+- **Yetki yükseltme koruması:** kimse kendi departmanını değiştiremez; son
+  aktif Sistem Yöneticisi ve son aktif Yönetim personeli pasife alınamaz.
+- Geçici parolayla açılan oturum parola değişene kadar hiçbir işlem yapamaz;
+  bütün hesap işlemleri denetim izine yazılır. Yeni kayıt en dar yetkiyle başlar.
 
 ---
 
@@ -203,14 +239,21 @@ Yetki **kişiye veya role değil departmana** bağlıdır ve işlem bazlıdır �
 | **Filo** | 9 trafo, önceliğe göre sıralı; risk dağılımı, alarm listesi, arama/filtre. Karta tıklayınca: gaz geçmişi + 6 aylık öngörü + gaz bazında trend tablosu |
 | **Numune Analizi** | Elle gaz girişi → tanı, SHAP grafiği, Duval üçgeni, yöntem karşılaştırması, gerçeklik kontrolü paneli |
 | **Bakım Planlama** | İş emirleri, sistemin ürettiği öneriler, teknisyen yük tablosu, atama |
-| **Personel** | Kayıtlar, departman ataması (yönetim), departman → yetki tablosu |
-| **Bildirimler (BL01)** | Tek ekran: gelen kutusu, okunmamışlar, yeni bildirim (kişiye / departmana / herkese — kayıtlı her personel gönderebilir) ve gönderilenler (kimin okuduğuyla) |
+| **Test Onay Kuyruğu (MH01)** | Sınır dışı yağ/elektriksel/buşing testleri: onayla · tekrar ölçülsün · reddet (dört göz) |
+| **Model İnceleme (MH02)** | Modelin emin olmadığı tanılar; uzman etiketi gerçek etiketli veri olarak birikir |
+| **Varlığa Özel Eşik (MH03)** | Tek trafo için süreli, gerekçeli, dört gözlü yağ eşiği istisnası; onaydan önce etki önizlemesi |
+| **Kök Neden Analizi (MH04)** | Kapanan kritik iş emrine bulgu → neden → önlem; benzer geçmiş analizler önerilir |
+| **Yönetim Özeti (YN01)** | Filo sağlığı, sınıf × bant matrisi, yenileme adayları, iş yükü |
+| **Personel (PR01)** | Kayıtlar, departman ataması, departman → yetki tablosu |
+| **Kullanıcı Yönetimi (AD01)** | Hesap açma (geçici parola bir kez gösterilir), sıfırlama, kilit açma, pasife alma, denetim izi |
+| **Bildirimler (BL01)** | Tek ekran: gelen kutusu, okunmamışlar, yeni bildirim (kişiye / departmana / herkese) ve gönderilenler |
+| **Parolamı Değiştir (PW01)** | Herkes kendi parolasını değiştirir; diğer oturumlar kapanır |
 
-Trafo detayı beş sekmeden oluşur: **Ölçümler ve Trend** (DGA) · **Yağ
-Kalitesi** (nem, BDV, asitlik, arayüzey gerilimi + kağıt yaşlanması) ·
-**Elektriksel** (TTR, sargı direnci, yalıtım direnci/PI, tan δ) ·
-**Sağlık Endeksi** (dört boyutun birleşimi, skorun aritmetiği satır satır) ·
-**Künye** (nameplate, türetilmiş değerlerle).
+Trafo detayı dokuz sekmeden oluşur: **Ölçümler ve Trend** · **Şema** (bütün
+boyutlar tek görselde) · **Yağ Kalitesi** · **Elektriksel** (TTR, sargı
+direnci, PI, tan δ) · **Buşing/Kademe** · **Saha Gözlemi** · **Sağlık
+Endeksi** (altı boyut, skorun aritmetiği satır satır) · **Künye** ·
+**Yaşam Döngüsü**.
 
 ---
 
@@ -327,6 +370,12 @@ maintenance/            .NET — bakım planlama servisi
 frontend/src/           React (Vite)
 ├── components/         FleetOverview, TransformerDetail, MaintenancePanel, ...
 └── theme.js            grafik renkleri (tek kaynak)
+
+docker-compose.yml      üç servis + kalıcı birimler (tek komut kurulum)
+.env.example            ortam değişkenleri şablonu (.env git'e girmez)
+.github/workflows/      CI: Python + .NET + arayüz, her push'ta
+scripts/reset-demo.ps1  demo verisini sıfırla (yerel veya Docker)
+start.ps1               yerel geliştirme: üç servisi başlat / durdur / kontrol
 ```
 
 ---
@@ -344,6 +393,9 @@ frontend/src/           React (Vite)
 | `GET` | `/compare/reality-check` | Sentetik test vs gerçek veri performansı |
 | `GET` | `/fleet/overview` | Filo: her trafonun son tanısı, risk, öncelik |
 | `GET` | `/trend/{id}` | Trafonun trendi + kritik olma süresi |
+| `GET` | `/reviews/queue` · `POST /reviews/{tür}/{id}/decision` | Test onay kuyruğu (MH01) |
+| `GET` | `/model-reviews/queue` · `POST /model-reviews/{id}/label` | Model inceleme / uzman etiketi (MH02) |
+| `GET` | `/limits/queue` · `POST /transformers/{id}/limits` | Varlığa özel eşik (MH03) |
 
 ### .NET — Bakım servisi (:5080)
 
@@ -358,6 +410,10 @@ frontend/src/           React (Vite)
 | `PATCH` | `/workorders/{id}/status` | Durum güncelle |
 | `POST` | `/workorders/{id}/assign` | Teknisyen ata (boş gövde = otomatik) |
 | `GET` | `/technicians` | Teknisyenler ve anlık yükleri |
+| `POST` | `/auth/login` · `/auth/logout` · `/auth/refresh` · `/auth/change-password` | Giriş, çıkış, belirteç yenileme (döndürme), parola değiştirme |
+| `GET`/`POST` | `/admin/users` (+ `/reset-password`, `/unlock`, `/deactivate`, `/activate`) | Kullanıcı yönetimi — yalnızca Sistem Yönetimi |
+| `GET` | `/admin/audit` | Hesap işlemleri denetim izi |
+| `GET` | `/rca/pending` · `POST /workorders/{id}/rca` · `GET /rca/similar` | Kök neden analizi (MH04) |
 
 ---
 
@@ -391,7 +447,14 @@ Faz 6'daki doğrulama için kullanılan gerçek veri seti açık kaynaklıdır v
 - [x] **Faz 5** — Filo yönetimi (genel bakış, detay, alarm, filtre)
 - [x] **Faz 6** — Gerçek veri doğrulaması, emniyet ölçütleri, belirsizlik
 - [x] **Faz 7** — .NET bakım planlama servisi (polyglot mimari)
-- [ ] **Faz 8+** — RUL, PostgreSQL, kimlik doğrulama, Docker, CI/CD
+- [x] **Faz 8–9** — Yağ/kağıt, elektriksel testler, buşing/kademe, saha gözlemi, sağlık endeksi, kimlik
+- [x] **Faz 10–11** — Departman yetkileri, bildirimler, ERP arayüzü
+- [x] **Faz 12** — Mühendislik: test onayı, uzman etiketi, varlığa özel eşik, kök neden analizi
+- [x] **Sistem Yönetimi** — parola ile giriş, kullanıcı yönetimi, denetim izi
+- [x] **Sağlamlaştırma** — güvenlik sertleştirme, HTTP entegrasyon testleri, CI, Docker
+- [ ] **Faz 13** — Doküman / çizim yönetimi
+- [ ] **Faz 14** — Stok ve yedek parça
+- [ ] **Faz 15** — Akıllı cihaz (IED) filosu
 
 ---
 
@@ -408,3 +471,10 @@ Faz 6'daki doğrulama için kullanılan gerçek veri seti açık kaynaklıdır v
   katmanı sonraki adım olarak belgelenmiştir.
 - İş emri numaraları tek servis örneği varsayar; yatay ölçeklemede
   veritabanı dizisi (sequence) gerekir.
+- **HTTPS yoktur.** Docker kurulumu yerel ağ içindir; gerçek kurulumda nginx
+  önüne TLS sertifikası şarttır, aksi hâlde parola ve belirteç ağda açık gider.
+- Python servisi oturum tablosunu görmez: .NET'te kapatılan bir oturumun
+  belirteci Python'da **en fazla 20 dakika** daha geçerli kalabilir (imzalı
+  belirteç + yenileme ödünleşimi; önceden 9 saatti).
+- Gaz üretim hızı (IEEE C57.104) ölçütü denendi ve ölçüldüğünde hiçbir kararı
+  değiştirmediği için **rafa kaldırıldı**: `docs/DENEY-GAZ-URETIM-HIZI.md`.

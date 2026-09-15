@@ -169,6 +169,30 @@ public class NotificationPlannerTests
     }
 
     [Fact]
+    public void Bildirim_metni_sunucu_kulturunden_bagimsiz_turkce()
+    {
+        // CI'da (Linux) bulunan hata: kültür belirtilmeden yazılan tarih
+        // "14 September", öncelik "2.80" çıkıyordu. Burada iş parçacığının
+        // kültürü kasıtlı olarak Invariant yapılıyor ki hata Windows'ta da
+        // yakalansın, yalnızca Linux CI'a kalmasın.
+        var previous = System.Globalization.CultureInfo.CurrentCulture;
+        System.Globalization.CultureInfo.CurrentCulture = System.Globalization.CultureInfo.InvariantCulture;
+        try
+        {
+            var (subject, body) = _planner.Compose(
+                Order(priority: 2.8, kind: WorkOrderKind.Repair), "İş emri size atandı.");
+
+            Assert.Contains("14 Eylül", subject);
+            Assert.DoesNotContain("September", subject);
+            Assert.Contains("Öncelik: 2,80", body);
+        }
+        finally
+        {
+            System.Globalization.CultureInfo.CurrentCulture = previous;
+        }
+    }
+
+    [Fact]
     public void Son_tarihi_olmayan_is_emri_metni_patlatmaz()
     {
         var order = Order();

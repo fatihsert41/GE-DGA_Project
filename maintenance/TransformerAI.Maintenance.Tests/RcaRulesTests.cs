@@ -67,6 +67,24 @@ public class RcaRulesTests
     }
 
     [Fact]
+    public void Gerekce_metni_sunucu_kulturunden_bagimsiz()
+    {
+        // Linux/Docker'da kültür Invariant: "2.80" yazılırdı. Metin tr-TR sabit.
+        var previous = System.Globalization.CultureInfo.CurrentCulture;
+        System.Globalization.CultureInfo.CurrentCulture = System.Globalization.CultureInfo.InvariantCulture;
+        try
+        {
+            var reason = Assert.Single(RcaRules.RequiredBecause(Order(priority: 2.8)));
+            Assert.Contains("2,80", reason);
+            Assert.Contains("2,5", reason);
+        }
+        finally
+        {
+            System.Globalization.CultureInfo.CurrentCulture = previous;
+        }
+    }
+
+    [Fact]
     public void Iki_sebep_birden_varsa_ikisi_de_gosterilir()
     {
         var reasons = RcaRules.RequiredBecause(Order(WorkOrderKind.Repair, priority: 3.2));
