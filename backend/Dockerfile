@@ -20,7 +20,14 @@ COPY requirements.txt .
 # denemesinde 27 dakika sonra "Connection broken: Broken pipe" ile koptu
 # (aynı anda başka bir container da aynı paketleri indiriyordu). Kopan
 # bağlantıda pip varsayılan olarak az dener; yavaş ağda derleme boşa gider.
-RUN pip install --no-cache-dir --retries 10 --timeout 120 -r requirements.txt
+#
+# xgboost → xgboost-cpu: Linux'ta "xgboost" paketi GPU desteği için 342 MB'lık
+# nvidia-nccl-cu12 kütüphanesini de indiriyor. Container'da GPU yok, model
+# CPU'da eğitiliyor. xgboost-cpu aynı projenin resmi CPU sürümü; Python'da
+# yine "import xgboost". requirements.txt DEĞİŞMEDİ: yerel çalışma ve CI
+# aynı paketi kullanmaya devam ediyor, yalnızca imaj küçülüyor.
+RUN sed 's/^xgboost==/xgboost-cpu==/' requirements.txt > requirements-docker.txt \
+    && pip install --no-cache-dir --retries 10 --timeout 120 -r requirements-docker.txt
 
 COPY app ./app
 RUN mkdir -p artifacts && python -m app.ml.train --field-like

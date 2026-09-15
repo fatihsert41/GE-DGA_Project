@@ -83,7 +83,7 @@ docker compose up --build  # SEÇENEK: tek komut, http://localhost:8080 (.env ge
 Arayüz: http://localhost:5173 · API: http://localhost:8000/docs
 
 **Durum:** Faz 0-12 + Sistem Yönetimi + Sağlamlaştırma BİTTİ (15 Eyl).
-**525 test** (300 Python + 225 .NET) · CI: `.github/workflows/ci.yml` ·
+**527 test** (300 Python + 227 .NET) · CI: `.github/workflows/ci.yml` ·
 Docker: `docker-compose.yml`. Sıradaki: Faz 13 (doküman yönetimi).
 Üç servis: Python :8000 · .NET :5080 · React :5173.
 
@@ -336,6 +336,27 @@ başlıkları. `database.DB_PATH` artık `TRANSFORMERAI_DB_PATH` ile verilebilir
 sıfırlar (onay ister; `-Force` ile sormaz).
 ⚠ Docker Desktop bu (eski) bilgisayarda `%LOCALAPPDATA%\Programs\DockerDesktop`
 altında; motor kapalıysa `docker info` "dockerDesktopLinuxEngine" hatası verir.
+
+**Linux ve Docker doğrulaması (15 Eyl) — push'tan ÖNCE yapıldı:**
+* .NET testleri `mcr.microsoft.com/dotnet/sdk:10.0` container'ında 227/227;
+  Python testleri backend imajının İÇİNDE 300/300 (tests klasörü bağlanarak).
+* ⚠ **Linux'ta bulunan hata — kültür:** `NotificationPlanner` tarihi ve
+  önceliği kültür belirtmeden yazıyordu: Türkçe Windows "14 Eylül / 2,80",
+  Linux/Docker "14 September / 2.80". Kullanıcıya giden metinler artık
+  `tr-TR` ile yazılıyor (`NotificationPlanner`, `RcaRules`, RCA şeması).
+  Regresyon testleri kültürü kasıtlı Invariant yapıyor → hata Windows'ta da
+  yakalanır. KURAL: kullanıcıya giden sayı/tarih biçimlendirmesinde kültürü
+  AÇIKÇA ver.
+* ⚠ **Docker tuzağı — xgboost:** Linux'ta `xgboost` paketi 342 MB'lık
+  `nvidia-nccl-cu12` GPU kütüphanesini de indiriyor; ilk derleme 27 dk sonra
+  ağ kopmasıyla düştü. `backend/Dockerfile` imaja `xgboost-cpu` kuruyor
+  (requirements.txt DEĞİŞMEDİ); derleme 2 dakikaya indi.
+* ⚠ **Satır sonu:** `.gitattributes` → `*.sh`, `Dockerfile`, `*.conf` her zaman
+  LF. CRLF'li `docker-entrypoint.sh` container'ı "no such file" ile açmazdı.
+* `docker compose up`: üç servis ayakta, nginx /api ve /maint yönlendiriyor,
+  .NET belirteci nginx üzerinden Python'da kabul, demo filo ilk açılışta
+  yüklendi, gerçek anahtar kullanılıyor. Yerel `.env` (git'e girmez) bu
+  bilgisayarda oluşturuldu; yeni bilgisayarda `.env.example`'dan üretilmeli.
 
 **✅ 12.6 TAMAM — Faz 12 kapandı.** MH01–MH04 dördü de menüde ve çalışıyor;
 README ekranlar, departmanlar, API, testler, yol haritası ve sınırlılıklar
