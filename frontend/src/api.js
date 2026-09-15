@@ -285,8 +285,19 @@ export const api = {
     assign: (id, technicianId = null) =>
       maint.post(`/workorders/${id}/assign`, { technicianId })
         .then((r) => r.data),
-    setStatus: (id, status) =>
-      maint.patch(`/workorders/${id}/status`, { status }).then((r) => r.data),
+    // Tamamlarken not ZORUNLU (sunucu kuralı). Önceden not gönderilmiyordu
+    // ve "Bitir" her seferinde reddediliyordu.
+    setStatus: (id, status, note = null) =>
+      maint.patch(`/workorders/${id}/status`, { status, note }).then((r) => r.data),
+
+    // --- Kök neden analizi (Faz 12.5) ---------------------------------
+    rcaSchema: () => maint.get('/rca/schema').then((r) => r.data),
+    rcaPending: () => maint.get('/rca/pending').then((r) => r.data),
+    rcaList: (params = {}) => maint.get('/rca', { params }).then((r) => r.data),
+    rcaSimilar: (params) => maint.get('/rca/similar', { params }).then((r) => r.data),
+    workOrderRca: (id) => maint.get(`/workorders/${id}/rca`).then((r) => r.data),
+    createRca: (id, body) =>
+      maint.post(`/workorders/${id}/rca`, body).then((r) => r.data),
   },
 }
 

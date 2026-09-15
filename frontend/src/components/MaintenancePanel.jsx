@@ -180,6 +180,10 @@ function TechnicianTable({ technicians }) {
 
 function WorkOrderTable({ orders, onAssign, onStatus, busyId }) {
   const me = session.user()
+  // Tamamlama notu formu: hangi iş kapatılıyor + not. Sunucu notsuz
+  // kapatmayı reddediyor (yapılan işin kaydı olmadan bakım geçmişi olmaz).
+  const [finishing, setFinishing] = useState(null)
+  const [note, setNote] = useState('')
   const canPlan = can('workorders.plan')
   // Saha personeli yalnızca KENDİSİNE atanan işi yürütür. Sunucu aynı
   // kuralı ayrıca uygular; burada düğmeyi hiç göstermiyoruz ki kullanıcı
@@ -247,7 +251,7 @@ function WorkOrderTable({ orders, onAssign, onStatus, busyId }) {
                   {o.status === 'InProgress' && canRun(o) && (
                     <button type="button" className="chip"
                       disabled={busyId === o.id}
-                      onClick={() => onStatus(o.id, 'Done')}>Bitir</button>
+                      onClick={() => { setFinishing(o.id); setNote('') }}>Bitir</button>
                   )}
                 </td>
               </tr>
@@ -255,6 +259,32 @@ function WorkOrderTable({ orders, onAssign, onStatus, busyId }) {
           </tbody>
         </table>
       </div>
+
+      {finishing && (
+        <form className="review-form"
+          onSubmit={(e) => {
+            e.preventDefault()
+            onStatus(finishing, 'Done', note.trim())
+            setFinishing(null)
+          }}>
+          <div className="field np-field">
+            <label htmlFor="finish-note">
+              {finishing} · yapılan iş<span className="np-hint"> · zorunlu</span>
+            </label>
+            <textarea id="finish-note" rows={3} maxLength={1000} value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder="ör. B fazı buşingi değiştirildi, kapasitans ölçümü tekrarlandı." />
+          </div>
+          <div className="msg-actions">
+            <button type="submit" className="erp-tb primary-tb" disabled={!note.trim()}>
+              İşi tamamla
+            </button>
+            <button type="button" className="erp-tb" onClick={() => setFinishing(null)}>
+              Vazgeç
+            </button>
+          </div>
+        </form>
+      )}
     </div>
   )
 }
@@ -321,10 +351,11 @@ export default function MaintenancePanel() {
     }
   }
 
-  const handleStatus = async (id, status) => {
-    setBusyId(id)
+  const handleStatus = async (id, status, note = null) => {
+    setBusyId(id); setNotice(null); setError(null)
     try {
-      await api.maintenance.setStatus(id, status)
+      await api.maintenance.setStatus(id, status, note)
+      if (status === 'Done') setNotice(`${id} tamamlandı.`)
       await load()
     } catch (e) {
       setError(e?.response?.data?.message || e.message)
