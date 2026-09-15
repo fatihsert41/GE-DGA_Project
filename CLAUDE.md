@@ -259,10 +259,52 @@ ilk girişte değişir · önce bu, sonra 12.6.
 Testler: `PasswordHasherTests`, `UserAdminRulesTests`, `AuthServiceTests`,
 `PermissionTests` güncellendi → 282 Python + **199 .NET**. Uçtan uca (PIN
 dönemi DB kopyası, migration dahil) 36/36.
-⚠ Bilinen sınır: kapatılan oturumun belirteci Python'da süresi dolana kadar
-geçerli (imzalı belirteç ödünleşimi, TokenIssuer).
+⚠ Bilinen sınır (DARALTILDI, aşağıya bak): kapatılan oturumun belirteci
+Python'da en fazla 20 dk geçerli kalabilir.
 
-**SIRADAKİ: 12.6 Mühendislik ekranları MH01–04 son hâli + belgeler (Faz 12'yi kapatır).**
+**✅ Zayıf yanlar 1/4 — Güvenlik sertleştirme TAMAM (15 Eyl).**
+Kullanıcı: "projenin zayıf yanlarında da çözüme gidelim". Plan (sırayla):
+1 güvenlik ✅ · 2 .NET HTTP entegrasyon testleri · 3 GitHub Actions CI ·
+4 Docker Compose + demo sıfırlama. (Sentetik veri kodla çözülmez — doğru yol
+12.3 uzman etiketleri; arayüz görsel doğrulaması CI'dan sonra Playwright.)
+* **Hızlı başarısızlık:** geliştirme DIŞINDA anahtar yoksa / geliştirme
+  anahtarıysa / 32 karakterden kısaysa servis AÇILMAZ. .NET
+  `TokenIssuer.ResolveSecret` (ortam: `ASPNETCORE_ENVIRONMENT`), Python
+  `auth.resolve_secret` (ortam: `TRANSFORMERAI_ENV`, tanımsızsa development)
+  — AYNI kurallar, iki tarafta ayrı test. Canlı denendi: ikisi de reddetti.
+* **İptal penceresi 9 saat → en fazla 20 dk:** belirteçte `issued_at_unix`;
+  Python `MAX_TOKEN_AGE_SECONDS = 1200` (+60 sn saat farkı payı), üretim
+  zamanı olmayan belirteci REDDEDER. .NET `POST /auth/refresh` belirteci
+  DÖNDÜRÜR (eskisi anında geçersiz), oturum sonunu UZATMAZ, kapatılmış oturumu
+  yenilemez, yetkileri GÜNCEL departmandan yazar. Arayüz 10 dk'da bir yeniler
+  (`App.jsx`); Python 401 verirse `api.js` TEK paylaşılan yenilemeyle bir kez
+  yeniden dener (uyku modu sonrası). Python hâlâ .NET'e hiç sormuyor.
+* Python CORS `*` → `TRANSFORMERAI_CORS_ORIGINS` (varsayılan
+  http://localhost:5173). `.env.example` eklendi (anahtar `secrets.token_urlsafe`
+  ile üretilir; `.env` git'e girmez).
+* `start.ps1` DEĞİŞMEDİ: yerelde .NET launch profili Development, Python
+  varsayılan development → geliştirme anahtarı yerelde çalışmaya devam eder.
+⚠ `bin/.../TransformerAI.Maintenance.Api.exe` DOĞRUDAN çalıştırılırsa ortam
+Production'dır ve anahtarsız AÇILMAZ — betiklerde `ASPNETCORE_ENVIRONMENT=Development` ver.
+* ⚠ **Canlı testte bulunan hata — tarihler 3 saat kayıyordu:** SQLite tarihi
+  metin saklar, EF okurken `Kind=Unspecified` döner, JSON'a "Z"siz yazılır,
+  tarayıcı YEREL saat sanar. Belirti: girişteki oturum bitişi "Z"li,
+  yenilemedeki aynı an "Z"siz. Etkisi: son giriş, iş emri, RCA tarihleri.
+  Düzeltme TEK yerde: `MaintenanceDbContext.ConfigureConventions` bütün
+  `DateTime`/`DateTime?` okumalarını UTC işaretler (migration gerektirmedi).
+* ⚠ **Canlı testte bulunan tuzak — yetim uvicorn işçisi:** ilk canlı turda
+  yaşlı belirteçler Python'da KABUL edildi; kod doğruydu. 8000'i İKİ süreç
+  dinliyordu: yeni sunucu + 09:04'ten kalma, üst süreci ölmüş bir `--reload`
+  işçisi (`spawn_main`). Windows aynı porta iki dinleyiciye izin veriyor,
+  istekler yer yer ESKİ koda gidiyordu. `start.ps1 -Stop` artık süreç
+  AĞACINI ve yetim işçileri durduruyor; başlatma port doluysa reddediyor.
+Testler: `TokenIssuerTests` (11) + `AuthServiceTests` yenileme+UTC (4) ·
+`tests/test_auth_hardening.py` (18) → **300 Python + 214 .NET**. Canlı akış
+(.NET kopya DB + gerçek Python, yetim işçi temizlendikten sonra) 12/12.
+
+**SIRADAKİ: Zayıf yanlar 2/4 — .NET HTTP entegrasyon testleri** (elle yazılan
+uçtan uca betikleri WebApplicationFactory testlerine çevir), sonra CI, Docker.
+Ardından 12.6 (Mühendislik ekranları son hâli, Faz 12'yi kapatır).
 
 **Yol haritası belgesi: `docs/FAZ12-15-YOL-HARITASI.md`**.
 Önerilen sıra: **12 Mühendislik departmanı + onay akışı** (test onay
@@ -438,6 +480,11 @@ Testler: `tests/test_electrical.py` (20) + `tests/test_electrical_api.py`
   önce `taskkill //F //IM "TransformerAI.Maintenance.Api.exe"`.
 * Uvicorn `--reload` ile başlatılmalı, yoksa kod değişince eski kod
   çalışmaya devam eder (bugün üç kez buna takıldık).
+* ⚠ "Kodu değiştirdim ama servis eski davranıyor" → ÖNCE `netstat -ano |
+  findstr :8000` bak. İKİ LISTENING satırı varsa biri yetim `--reload`
+  işçisidir (üst süreci ölmüş `spawn_main`); istekler ona da gider.
+  `.\start.ps1 -Stop` ile hepsini durdur, sonra başlat. Portu dinleyen
+  süreci tek başına öldürmek yetmez: `taskkill /PID <pid> /T /F` (ağaç).
 
 ---
 

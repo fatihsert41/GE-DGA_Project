@@ -56,6 +56,38 @@ public class MaintenanceDbContext : DbContext
     /// <summary>user_audit_events tablosu (Sistem Yönetimi).</summary>
     public DbSet<UserAuditEvent> UserAuditEvents => Set<UserAuditEvent>();
 
+    /// <summary>Veritabanından okunan her tarih UTC olarak işaretlenir.</summary>
+    /// <remarks>
+    /// <b>Bulunan hata (güvenlik sertleştirmesinin canlı testinde):</b> SQLite
+    /// tarih türü tanımaz, tarihi METİN olarak saklar. EF Core okurken
+    /// <c>DateTimeKind.Unspecified</c> döndürür; JSON'a "Z" eki OLMADAN yazılır
+    /// (<c>2026-09-15T16:28:58</c>). Tarayıcı "Z"siz bir zaman metnini YEREL
+    /// saat sanar — Türkiye'de her zaman damgası 3 saat kayar: son giriş, iş
+    /// emri tamamlanma, kök neden analizi tarihleri.
+    ///
+    /// Belirti: giriş cevabındaki oturum bitişi bellekten geldiği için "Z"li,
+    /// yenileme cevabındaki aynı an veritabanından geldiği için "Z"siz yazıldı.
+    ///
+    /// Kodun her yerinde zaten <c>DateTime.UtcNow</c> yazılıyor; bu dönüştürücü
+    /// yalnızca okurken "bu UTC'dir" bilgisini geri koyar. Tek yerde, bütün
+    /// tablolar için — her uç noktada ayrı ayrı düzeltmek bir yeri unuturdu.
+    /// </remarks>
+    protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
+    {
+        configurationBuilder.Properties<DateTime>().HaveConversion<UtcDateTimeConverter>();
+        configurationBuilder.Properties<DateTime?>().HaveConversion<NullableUtcDateTimeConverter>();
+    }
+
+    private sealed class UtcDateTimeConverter()
+        : Microsoft.EntityFrameworkCore.Storage.ValueConversion.ValueConverter<DateTime, DateTime>(
+            v => v,
+            v => DateTime.SpecifyKind(v, DateTimeKind.Utc));
+
+    private sealed class NullableUtcDateTimeConverter()
+        : Microsoft.EntityFrameworkCore.Storage.ValueConversion.ValueConverter<DateTime?, DateTime?>(
+            v => v,
+            v => v.HasValue ? DateTime.SpecifyKind(v.Value, DateTimeKind.Utc) : v);
+
     /// <summary>Tablo/sütun ayrıntılarını burada tanımlıyoruz.</summary>
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

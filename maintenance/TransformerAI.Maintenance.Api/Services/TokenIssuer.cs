@@ -16,85 +16,120 @@ namespace TransformerAI.Maintenance.Api.Services;
 /// Kimlik doğrulama bu kuralı tehdit ediyor: Python'un da "bu belirteç
 /// geçerli mi?" sorusunu cevaplaması gerek. Naif çözüm Python'un .NET'e
 /// HTTP isteği atması olurdu — ama o zaman <b>bağımlılık yönü tersine
-/// döner</b> ve .NET kapandığında Python'a kayıt girilemez. Faz 7'de
-/// özellikle kaçındığımız şey buydu.
+/// döner</b> ve .NET kapandığında Python'a kayıt girilemez.
 ///
 /// Çözüm: belirteci <b>kendi kendini doğrulayabilir</b> hâle getirmek.
-/// Belirteç iki parçadan oluşur:
 ///
 /// <code>
 ///     &lt;yük(base64)&gt;.&lt;imza(base64)&gt;
 /// </code>
 ///
-/// Yük kimliği açıkça taşır (sicil, ad, rol, bitiş). İmza, paylaşılan
-/// gizli anahtarla hesaplanan HMAC-SHA256'dır. Anahtarı bilmeden geçerli
-/// bir imza üretilemez, dolayısıyla yük kurcalanamaz. Python anahtarı
-/// bildiği için imzayı <b>tek başına</b> doğrular — ağ isteği yok,
-/// bağımlılık yok.
+/// Yük kimliği açıkça taşır. İmza, paylaşılan gizli anahtarla hesaplanan
+/// HMAC-SHA256'dır. Anahtarı bilmeden geçerli bir imza üretilemez.
 ///
-/// <b>Bedeli ve onu neden kabul ediyoruz</b>
+/// <b>Bedeli: iptal penceresi — ve nasıl daraltıldı</b>
 ///
-/// İmzalı belirteç <i>iptal edilemez</i>: Python, .NET'te oturumun
-/// kapatıldığını bilemez. Yani bir belirteç kapatıldıktan sonra da
-/// süresi dolana kadar Python tarafında geçerli kalır.
+/// İmzalı belirteç tek başına <i>iptal edilemez</i>: Python, .NET'te
+/// oturumun kapatıldığını bilemez. İlk sürümde bu pencere belirtecin
+/// ömrü kadardı (9 saat).
 ///
-/// Bu yüzden .NET <b>her iki mekanizmayı birden</b> kullanır: imzayı
-/// doğrular VE oturum satırının hâlâ var olduğunu kontrol eder. Böylece
-/// .NET tarafında iptal anında etkilidir; Python tarafında iptal
-/// penceresi belirtecin ömrü kadardır.
+/// Güvenlik sertleştirmesiyle belirtece <b>üretim zamanı</b>
+/// (<c>issued_at_unix</c>) eklendi. Python en fazla 20 dakikalık belirteci
+/// kabul ediyor; arayüz 10 dakikada bir <c>/auth/refresh</c> ile yeni
+/// belirteç alıyor. Yenileme .NET'te oturum satırına bakar — kapatılmış
+/// oturum yenilenemez. Böylece iptal penceresi 9 saatten <b>en fazla
+/// 20 dakikaya</b> indi ve Python hâlâ .NET'e hiç sormuyor.
 ///
-/// Bu, dağıtık sistemlerdeki klasik ödünleşimdir ve bilinçli seçilmiştir:
-/// <b>Python'un ayakta kalması, Python tarafındaki anlık iptalden daha
-/// değerlidir.</b> Kaydın kim tarafından girildiğini yanlış bilmek değil
-/// söz konusu olan; en fazla, işten ayrılmış birinin belirteci birkaç
-/// saat daha kayıt girebilir — ve o kayıt yine kendi adına yazılır,
-/// yani izlenebilirlik bozulmaz.
+/// <b>GİZLİ ANAHTAR — hızlı başarısızlık</b>
 ///
-/// ⚠ GİZLİ ANAHTAR: Demo için sabit bir geliştirme anahtarı kullanılıyor
-/// ve bu, kaynak koda gömülü olduğu için <b>gizli değildir</b>. Gerçek
-/// kurulumda ortam değişkeninden ya da bir sır yöneticisinden okunmalı.
-/// Uygulama, geliştirme anahtarıyla çalışırken açılışta uyarı basar.
+/// Geliştirme anahtarı kaynak kodda ve <b>gizli değildir</b>. Onunla
+/// çalışan bir üretim sunucusunda HERKES geçerli belirteç üretebilir.
+/// Bu yüzden geliştirme ortamı DIŞINDA anahtar yoksa, geliştirme anahtarı
+/// verilmişse ya da anahtar kısaysa servis açılmayı REDDEDER. Sessizce
+/// güvensiz çalışmaktansa gürültüyle çalışmamak iyidir.
 /// </remarks>
 public class TokenIssuer
 {
-    /// <summary>Geliştirme anahtarı — GİZLİ DEĞİLDİR.</summary>
+    /// <summary>Geliştirme anahtarı — GİZLİ DEĞİLDİR. Yalnızca Development ortamında.</summary>
     public const string DevelopmentSecret = "transformerai-dev-secret-degistirin";
+
+    /// <summary>Gerçek anahtarın en az uzunluğu.</summary>
+    /// <remarks>
+    /// HMAC-SHA256 için 256 bit (32 bayt) anahtar önerilir. Karakter sayısı
+    /// bayt sayısına eşit değil ama "en az 32 karakter" kısa, tahmin
+    /// edilebilir anahtarları ("parola123") eler. Python tarafında aynı sınır.
+    /// </remarks>
+    public const int MinSecretLength = 32;
+
+    /// <summary>Ortam değişkeninin adı — Python tarafıyla AYNI.</summary>
+    public const string SecretVariable = "TRANSFORMERAI_AUTH_SECRET";
 
     private readonly byte[] _key;
 
     /// <summary>Geliştirme anahtarı mı kullanılıyor?</summary>
     public bool IsDevelopmentSecret { get; }
 
-    public TokenIssuer(IConfiguration config)
+    /// <summary>Uygulamanın kullandığı kurucu (bağımlılık enjeksiyonu).</summary>
+    public TokenIssuer(IConfiguration config, IHostEnvironment env)
+        : this(Environment.GetEnvironmentVariable(SecretVariable) ?? config["Auth:SharedSecret"],
+               env.IsDevelopment())
     {
-        // Öncelik: ortam değişkeni > appsettings > geliştirme anahtarı.
-        var secret = Environment.GetEnvironmentVariable("TRANSFORMERAI_AUTH_SECRET")
-                     ?? config["Auth:SharedSecret"];
+    }
 
-        IsDevelopmentSecret = string.IsNullOrWhiteSpace(secret);
-        if (IsDevelopmentSecret) secret = DevelopmentSecret;
+    /// <summary>Anahtarı doğrudan alan kurucu — testler için.</summary>
+    public TokenIssuer(string? configuredSecret, bool isDevelopment)
+    {
+        var (secret, isDevSecret) = ResolveSecret(configuredSecret, isDevelopment);
+        IsDevelopmentSecret = isDevSecret;
+        _key = Encoding.UTF8.GetBytes(secret);
+    }
 
-        _key = Encoding.UTF8.GetBytes(secret!);
+    /// <summary>Kullanılacak anahtarı seçer; güvensiz yapılandırmada İSTİSNA fırlatır.</summary>
+    /// <remarks>Saf fonksiyon: ortam okumaz, test edilebilir. Python'daki
+    /// <c>auth.resolve_secret</c> ile aynı kurallar.</remarks>
+    public static (string Secret, bool IsDevelopmentSecret) ResolveSecret(string? configured,
+                                                                          bool isDevelopment)
+    {
+        if (string.IsNullOrWhiteSpace(configured))
+        {
+            if (isDevelopment)
+                return (DevelopmentSecret, true);
+
+            throw new InvalidOperationException(
+                $"Belirteç imza anahtarı tanımlı değil. Geliştirme ortamı dışında " +
+                $"{SecretVariable} ortam değişkeni ZORUNLU (en az {MinSecretLength} karakter). " +
+                "Geliştirme anahtarı kaynak kodda ve gizli değildir; onunla çalışmak " +
+                "herkesin geçerli belirteç üretebilmesi demektir.");
+        }
+
+        if (configured == DevelopmentSecret)
+        {
+            if (isDevelopment)
+                return (DevelopmentSecret, true);
+            throw new InvalidOperationException(
+                "Geliştirme anahtarı geliştirme ortamı dışında kullanılamaz: kaynak kodda yazılı.");
+        }
+
+        if (configured.Length < MinSecretLength)
+            throw new InvalidOperationException(
+                $"Belirteç imza anahtarı çok kısa ({configured.Length} karakter); " +
+                $"en az {MinSecretLength} karakter olmalı.");
+
+        return (configured, false);
     }
 
     /// <summary>Belirteç yükü — kimliğin kendisi.</summary>
     /// <remarks>
-    /// <c>nonce</c> (tek kullanımlık rastgele değer) neden var? Aynı
-    /// kişi, aynı saniyede iki kez giriş yaparsa aynı belirteç üretilirdi
-    /// ve ikisi tek oturum satırına düşerdi (birincil anahtar çakışması).
-    /// Ayrıca belirtecin tahmin edilebilirliğini de kırar.
-    /// </remarks>
-    /// <remarks>
-    /// <b>Yetkiler neden belirtecin içinde? (Faz 10)</b> Python servisi
-    /// test kayıtlarını kabul ederken "bu kişi yağ testi girebilir mi?"
-    /// sorusunu cevaplamalı. .NET'e sorsaydı Faz 7'deki bağımlılık yönü
-    /// bozulurdu. İmza yükü kurcalanamaz kıldığı için, yetki listesini
-    /// yüke yazmak güvenlidir.
+    /// <c>nonce</c>: aynı kişi aynı saniyede iki kez giriş yaparsa aynı
+    /// belirteç üretilmesin (oturum tablosunda birincil anahtar çakışması).
     ///
-    /// Bedeli: departmanı değiştirilen kişinin Python tarafındaki yetkisi
-    /// yeniden giriş yapana kadar eskisi gibi kalır. .NET tarafında
-    /// değişiklik ANINDA geçerlidir, çünkü .NET kişiyi her istekte
-    /// veritabanından okur.
+    /// <b>Yetkiler neden belirtecin içinde? (Faz 10)</b> Python servisi
+    /// "bu kişi yağ testi girebilir mi?" sorusunu .NET'e sormadan
+    /// cevaplamalı. İmza yükü kurcalanamaz kıldığı için güvenli.
+    ///
+    /// <b><c>IssuedAtUnix</c> (güvenlik sertleştirme):</b> Python'un
+    /// belirteç yaşını ölçebilmesi için. 0 = eski belirteç (yaşı bilinmiyor);
+    /// Python bunu REDDEDER.
     /// </remarks>
     public record Payload(
         string EmployeeNo,
@@ -104,7 +139,8 @@ public class TokenIssuer
         string Nonce,
         string Department = "",
         string DepartmentName = "",
-        IReadOnlyList<string>? Permissions = null);
+        IReadOnlyList<string>? Permissions = null,
+        long IssuedAtUnix = 0);
 
     private static readonly JsonSerializerOptions JsonOpts = new()
     {
@@ -113,22 +149,23 @@ public class TokenIssuer
 
     /// <summary>Bir personel için imzalı belirteç üretir.</summary>
     /// <param name="person">Belirtecin sahibi.</param>
-    /// <param name="expiresAtUtc">Bitiş zamanı.</param>
+    /// <param name="issuedAtUtc">Üretim zamanı — Python yaşı buna göre ölçer.</param>
+    /// <param name="expiresAtUtc">Bitiş zamanı (oturumun sonu).</param>
     /// <param name="permissions">Belirtece yazılacak yetkiler. Verilmezse
-    /// departmanın yetkileri. Geçici parolalı oturumda BOŞ liste verilir
-    /// (bkz. AuthService.EffectivePermissions).</param>
-    public string Issue(Technician person, DateTime expiresAtUtc,
+    /// departmanın yetkileri. Geçici parolalı oturumda BOŞ liste verilir.</param>
+    public string Issue(Technician person, DateTime issuedAtUtc, DateTime expiresAtUtc,
                         IReadOnlyList<string>? permissions = null)
     {
         var payload = new Payload(
             person.EmployeeNo,
             person.Name,
             person.Role.ToString(),
-            new DateTimeOffset(expiresAtUtc, TimeSpan.Zero).ToUnixTimeSeconds(),
+            ToUnix(expiresAtUtc),
             Convert.ToBase64String(RandomNumberGenerator.GetBytes(12)),
             person.Department.ToString(),
             DepartmentCatalog.Name(person.Department),
-            permissions ?? Models.Permissions.For(person.Department));
+            permissions ?? Models.Permissions.For(person.Department),
+            ToUnix(issuedAtUtc));
 
         var json = JsonSerializer.SerializeToUtf8Bytes(payload, JsonOpts);
         var body = Base64Url(json);
@@ -136,6 +173,11 @@ public class TokenIssuer
     }
 
     /// <summary>İmzayı ve süreyi doğrular; geçersizse null.</summary>
+    /// <remarks>
+    /// Yaş sınırı burada YOK, bilinçli: .NET her istekte oturum satırına da
+    /// baktığı için iptal anında etkili. Yaş sınırı yalnızca oturum tablosunu
+    /// göremeyen Python için gerekli.
+    /// </remarks>
     public Payload? Verify(string? token, DateTime nowUtc)
     {
         if (string.IsNullOrWhiteSpace(token)) return null;
@@ -167,6 +209,9 @@ public class TokenIssuer
         var expires = DateTimeOffset.FromUnixTimeSeconds(payload.ExpiresAtUnix);
         return expires.UtcDateTime <= nowUtc ? null : payload;
     }
+
+    private static long ToUnix(DateTime utc) =>
+        new DateTimeOffset(DateTime.SpecifyKind(utc, DateTimeKind.Utc)).ToUnixTimeSeconds();
 
     private byte[] Sign(string body) =>
         HMACSHA256.HashData(_key, Encoding.UTF8.GetBytes(body));

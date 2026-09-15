@@ -168,6 +168,12 @@ Giriş sicil numarası + parola ile yapılır. Demo hesapların geçici parolas�
 `Demo-<sicil>` (ör. `Demo-10502`); ilk girişte kendi parolanızı belirlemeniz
 zorunludur. Yeni kullanıcıları **10001 · Kerem Aksoy (Sistem Yönetimi)** AD01
 ekranından açar; Yönetim departmanı kullanıcı hesabı açamaz.
+
+**Üretim / Docker kurulumu:** `.env.example` dosyasını `.env` olarak kopyalayıp
+`TRANSFORMERAI_AUTH_SECRET` değerini doldurun (en az 32 karakter, iki serviste
+aynı). Geliştirme ortamı dışında anahtar yoksa servisler **açılmayı reddeder** —
+kaynak koddaki geliştirme anahtarıyla çalışan bir sunucuda herkes geçerli
+belirteç üretebilirdi. Yerel geliştirmede (`start.ps1`) ayar gerekmez.
 Yetki **kişiye veya role değil departmana** bağlıdır ve işlem bazlıdır —
 "Testler ekranı" diye bir yetki yok, "yağ testi kaydetme" diye bir yetki var.
 

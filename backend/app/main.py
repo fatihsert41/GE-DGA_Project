@@ -5,16 +5,36 @@ Interactive docs:     http://localhost:8000/docs
 """
 from __future__ import annotations
 
+import os
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from . import database
+from . import auth, database
 from .ml import predictor
 from .routers import (compare, components, electrical, explain, fleet,
                       health_index, lifecycle, limits, model_reviews, oil,
                       physical, predict, reviews, schematic,
                       transformers, trend)
 from .services import review as review_service
+
+# Güvenlik sertleştirme: yanlış yapılandırmayla (üretimde anahtar yok ya da
+# geliştirme anahtarı) servis HİÇ AÇILMAZ. Import anında çağrılıyor ki hata,
+# ilk kimlikli isteğe kadar gizli kalmasın.
+auth.validate_configuration()
+
+
+def _cors_origins() -> list[str]:
+    """İzin verilen tarayıcı kökenleri.
+
+    Önceden ``["*"]`` idi: herhangi bir web sitesi, kullanıcının tarayıcısı
+    üzerinden bu API'ye istek atabilirdi. Arayüz Vite vekili üzerinden AYNI
+    kökenden geldiği için CORS'a aslında ihtiyacı yok; varsayılan yalnızca
+    arayüzün adresi. Başka bir köken gerekirse ortam değişkeniyle eklenir.
+    """
+    raw = os.environ.get("TRANSFORMERAI_CORS_ORIGINS", "http://localhost:5173")
+    return [origin.strip() for origin in raw.split(",") if origin.strip()]
+
 
 app = FastAPI(
     title="TransformerAI - DGA Fault Prediction API",
@@ -28,7 +48,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # demo; restrict in production
+    allow_origins=_cors_origins(),
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -58,6 +78,9 @@ def _startup() -> None:
     # sınıflandır (sınır dışı olanlar mühendis kuyruğuna düşer).
     # Yinelenebilir: yalnızca durumu boş satırlara dokunur.
     review_service.backfill()
+    if auth.using_development_secret():
+        print("[UYARI] Belirtec imzasi GELISTIRME anahtariyla dogrulaniyor; "
+              "bu anahtar kaynak kodda ve GIZLI DEGILDIR.")
 
 
 @app.get("/", tags=["meta"])
