@@ -14,7 +14,7 @@ from __future__ import annotations
 from typing import Dict, List, Optional
 
 from .. import database
-from ..core import oil_quality
+from ..core import asset_limits, oil_quality
 from ..core import review as review_core
 
 
@@ -34,10 +34,16 @@ def assess_test(transformer_id: str, test: Dict[str, object]
                 ) -> Dict[str, object]:
     """Tek bir testi künye bağlamıyla değerlendirir."""
     ctx = _context(transformer_id)
+    # Faz 12.4: yalnızca BU TESTİN TARİHİNDE yürürlükte olan varlığa özel
+    # eşikler uygulanır. Bugün onaylanan bir istisna, geçen yılki bir testin
+    # hükmünü sonradan değiştirmez.
+    overrides = asset_limits.select_for_test(
+        database.active_limit_overrides(transformer_id), test.get("sampled_at"))
     result = oil_quality.assess(
         test,
         hv_kv=ctx["hv_kv"],                     # type: ignore[arg-type]
         insulation_type=ctx["insulation_type"],  # type: ignore[arg-type]
+        overrides=overrides,                     # type: ignore[arg-type]
     )
     result["test"] = test
     result["context"] = ctx

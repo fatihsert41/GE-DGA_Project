@@ -164,8 +164,37 @@ ANLIK GÖRÜNTÜ olarak kopyalanır). Kararlar:
   CSV olarak dışa aktarılıyor; eğitime katmak ayrı, ÖLÇÜLEREK yapılacak iş.
 Demo DB: 26 düşük güvenli ölçüm kuyrukta (son ölçüm: TR-08, TR-09).
 Testler: `tests/test_model_reviews.py` (13) → **261 Python** + 123 .NET.
-**SIRADAKİ: 12.4 varlığa özel eşik** (gerekçe + süre + onaylayan zorunlu;
-sessiz eşik değişikliği yasak).
+**✅ 12.4 TAMAM (15 Eyl, eski bilgisayarda) — Varlığa özel eşik (MH03).**
+Kurallar `core/asset_limits.py` (saf); servis `services/limits.py`; uç
+noktalar `routers/limits.py` (`GET /limits/schema`, `GET /limits/queue?
+folder=pending|active|closed|all`, `GET|POST /transformers/{id}/limits`,
+`POST /limits/{oid}/decision`, `POST /limits/{oid}/revoke`). Yetki
+`engineering.limits`. Yeni tablo `limit_overrides` (standart sınırlar da
+kayda KOPYALANIR; kayıt silinmez). Kararlar:
+* **Yalnızca yağ kalitesi eşikleri** (nem, BDV, asitlik, IFT) — tasarıma
+  bağlılar. Elektriksel/buşing eşikleri ARIZA İMZASI, istisna alamaz.
+* Gerekçe ≥20 · süre zorunlu, ≤365 gün, **bugünden önce başlayamaz** ·
+  standarttan en fazla **%50** sapma (25 yerine 250 = yazım hatası).
+* **Dört göz:** öneren onaylayamaz/reddedemez (403). Bekleyen istisna
+  UYGULANMAZ. Geri çekme dört göz İSTEMEZ (standarda dönmek korumacı).
+* Trafo+parametre başına tek açık istisna: **kısmi benzersiz indeks**
+  (`WHERE status IN ('pending','active')`) → yarışta 409.
+* Uygulama **test tarihine** göre (`select_for_test`): geçmiş testin
+  hükmü değişmez. Süre dolunca her okumada `expired` olur.
+* **Sessiz değil:** `oil_quality.assess` artık `overall_standard`,
+  `overrides_applied`, `warnings` ve parametre başına `limit_source`,
+  `standard_*_limit`, `standard_condition` döner. Yağ panelinde
+  "varlığa özel eşik" etiketi + standart sınır yan yana.
+* Onay ekranı **etki önizlemesi** gösterir: son test bu sınırlarla
+  değerlendirilseydi hüküm değişir mi (`impact.changes_verdict`).
+⚠ Onay kuyruğu (12.2) sınıflandırması testin KAYIT anındaki hükmüyle
+kalır; sonradan onaylanan istisna eski `pending` kaydı geri almaz.
+Demo DB'de istisna YOK (kasıtlı: sahte kayıt üretilmedi; akış arayüzden
+iki mühendisle denenmeli — 10833 önerir, 10921 onaylar).
+Testler: `tests/test_asset_limits.py` (21) → **282 Python** + 123 .NET.
+Ayrıca: gaz üretim hızı deneyi ölçüldü ve rafa kaldırıldı
+(`docs/DENEY-GAZ-URETIM-HIZI.md`).
+**SIRADAKİ: 12.5 kök neden analizi (RCA, MH04).**
 
 **Yol haritası belgesi: `docs/FAZ12-15-YOL-HARITASI.md`**.
 Önerilen sıra: **12 Mühendislik departmanı + onay akışı** (test onay

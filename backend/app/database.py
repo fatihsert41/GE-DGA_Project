@@ -239,6 +239,55 @@ def init_db() -> None:
                ON expert_labels(transformer_id)"""
         )
 
+        # Varlığa özel eşikler (Faz 12.4). Standart sınırlar da kayda
+        # KOPYALANIR (standard_*): kod içindeki standart ileride değişse
+        # bile, istisnanın neyin yerine geçtiği geçmişte okunabilmeli.
+        # Kayıt silinmez; reddedilen, geri çekilen ve süresi dolan
+        # istisnalar durum alanıyla ayrılır.
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS limit_overrides (
+                id                        INTEGER PRIMARY KEY AUTOINCREMENT,
+                transformer_id            TEXT NOT NULL,
+                parameter                 TEXT NOT NULL,
+                voltage_class             TEXT NOT NULL,
+                good_limit                REAL NOT NULL,
+                acceptable_limit          REAL NOT NULL,
+                standard_good_limit       REAL NOT NULL,
+                standard_acceptable_limit REAL NOT NULL,
+                valid_from                TEXT NOT NULL,
+                valid_until               TEXT NOT NULL,
+                reason                    TEXT NOT NULL,
+                status                    TEXT NOT NULL,
+                proposed_at               TEXT NOT NULL,
+                proposed_by_id            TEXT,
+                proposed_by_name          TEXT,
+                decided_at                TEXT,
+                decided_by_id             TEXT,
+                decided_by_name           TEXT,
+                decision_note             TEXT,
+                revoked_at                TEXT,
+                revoked_by_id             TEXT,
+                revoked_by_name           TEXT,
+                revoke_note               TEXT
+            )
+            """
+        )
+        # KISMİ benzersiz indeks: bir trafonun bir parametresi için aynı anda
+        # yalnızca BİR açık (bekleyen ya da yürürlükte) istisna olabilir.
+        # Kapanmış kayıtlar sınırsız birikebilir. Kontrol veritabanında, çünkü
+        # iki mühendis aynı anda öneri gönderirse uygulama katmanındaki
+        # kontrol ikisini de geçirirdi (Faz 12.2'deki yarışla aynı ders).
+        conn.execute(
+            """CREATE UNIQUE INDEX IF NOT EXISTS uq_limit_overrides_open
+               ON limit_overrides(transformer_id, parameter)
+               WHERE status IN ('pending', 'active')"""
+        )
+        conn.execute(
+            """CREATE INDEX IF NOT EXISTS idx_limit_overrides_transformer
+               ON limit_overrides(transformer_id)"""
+        )
+
 
 
 # Mühendislik onay akışına giren tablolar (Faz 12.2). Tablo adı SQL'e
@@ -1149,3 +1198,118 @@ def labeled_measurements() -> List[Dict]:
                FROM expert_labels l JOIN measurements m ON m.id = l.measurement_id
                ORDER BY l.labeled_at ASC, l.id ASC""").fetchall()
     return [_measurement_dict(r) for r in rows]
+
+
+# ---------------------------------------------------------------------------
+# Varlığa özel eşikler — mühendislik istisnası (Faz 12.4)
+# ---------------------------------------------------------------------------
+
+def create_limit_override(transformer_id: str, values: Dict[str, object],
+                          proposer: Dict[str, str]) -> Optional[int]:
+    """İstisna önerisi kaydeder ve id'sini döner.
+
+    Aynı trafo ve parametre için açık (bekleyen/yürürlükte) bir istisna
+    varsa kısmi benzersiz indeks eklemeyi reddeder ve ``None`` döner.
+    """
+    try:
+        with _connect() as conn:
+            cur = conn.execute(
+                """INSERT INTO limit_overrides (
+                       transformer_id, parameter, voltage_class,
+                       good_limit, acceptable_limit,
+                       standard_good_limit, standard_acceptable_limit,
+                       valid_from, valid_until, reason, status,
+                       proposed_at, proposed_by_id, proposed_by_name)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?)""",
+                (transformer_id, values["parameter"], values["voltage_class"],
+                 float(values["good_limit"]),               # type: ignore[arg-type]
+                 float(values["acceptable_limit"]),         # type: ignore[arg-type]
+                 float(values["standard_good_limit"]),      # type: ignore[arg-type]
+                 float(values["standard_acceptable_limit"]),  # type: ignore[arg-type]
+                 values["valid_from"], values["valid_until"], values["reason"],
+                 _now(), proposer.get("employee_no"), proposer.get("name")))
+            return int(cur.lastrowid)
+    except sqlite3.IntegrityError:
+        return None
+
+
+def get_limit_override(override_id: int) -> Optional[Dict]:
+    with _connect() as conn:
+        row = conn.execute("SELECT * FROM limit_overrides WHERE id = ?",
+                           (int(override_id),)).fetchone()
+    return dict(row) if row else None
+
+
+def list_limit_overrides(statuses: Optional[List[str]] = None,
+                         transformer_id: Optional[str] = None) -> List[Dict]:
+    """İstisnalar — en yeni öneri üstte. Filtreler isteğe bağlı."""
+    clauses: List[str] = []
+    params: List[object] = []
+    if statuses:
+        clauses.append(f"status IN ({', '.join('?' for _ in statuses)})")
+        params.extend(statuses)
+    if transformer_id:
+        clauses.append("transformer_id = ?")
+        params.append(transformer_id)
+    where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+    with _connect() as conn:
+        rows = conn.execute(
+            f"""SELECT * FROM limit_overrides {where}
+                ORDER BY proposed_at DESC, id DESC""", tuple(params)).fetchall()
+    return [dict(r) for r in rows]
+
+
+def active_limit_overrides(transformer_id: str) -> List[Dict]:
+    """Trafonun yürürlükteki istisnaları (tarih penceresi çağıranda)."""
+    return list_limit_overrides(["active"], transformer_id)
+
+
+def decide_limit_override(override_id: int, status: str, note: Optional[str],
+                          reviewer: Dict[str, str]) -> bool:
+    """Onay/ret yazar. YALNIZCA bekleyen kayda yazılır (yarışta False)."""
+    with _connect() as conn:
+        cur = conn.execute(
+            """UPDATE limit_overrides
+               SET status = ?, decided_at = ?, decided_by_id = ?,
+                   decided_by_name = ?, decision_note = ?
+               WHERE id = ? AND status = 'pending'""",
+            (status, _now(), reviewer.get("employee_no"), reviewer.get("name"),
+             note, int(override_id)))
+        return cur.rowcount > 0
+
+
+def revoke_limit_override(override_id: int, note: str,
+                          who: Dict[str, str]) -> bool:
+    """Geri çekme yazar. YALNIZCA yürürlükteki kayda yazılır."""
+    with _connect() as conn:
+        cur = conn.execute(
+            """UPDATE limit_overrides
+               SET status = 'revoked', revoked_at = ?, revoked_by_id = ?,
+                   revoked_by_name = ?, revoke_note = ?
+               WHERE id = ? AND status = 'active'""",
+            (_now(), who.get("employee_no"), who.get("name"), note,
+             int(override_id)))
+        return cur.rowcount > 0
+
+
+def expire_limit_overrides(today_iso: str) -> int:
+    """Bitiş tarihi geçmiş açık istisnaları 'expired' yapar.
+
+    Bekleyenler de kapanır: süresi onay beklerken dolan bir öneri artık
+    onaylanamaz, ama açık kaldığı sürece aynı parametreye yeni öneriyi
+    engellerdi.
+    """
+    with _connect() as conn:
+        cur = conn.execute(
+            """UPDATE limit_overrides SET status = 'expired'
+               WHERE status IN ('pending', 'active') AND valid_until < ?""",
+            (today_iso,))
+        return cur.rowcount
+
+
+def limit_override_counts() -> Dict[str, int]:
+    with _connect() as conn:
+        rows = conn.execute(
+            """SELECT status, COUNT(*) AS n FROM limit_overrides
+               GROUP BY status""").fetchall()
+    return {r["status"]: int(r["n"]) for r in rows}
