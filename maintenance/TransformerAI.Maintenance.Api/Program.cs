@@ -107,26 +107,27 @@ using (var scope = app.Services.CreateScope())
     var db = scope.ServiceProvider.GetRequiredService<MaintenanceDbContext>();
     db.Database.Migrate();
 
-    // --- Demo PIN'leri (Faz 9.0b) ------------------------------------------
+    // --- Demo geçici parolaları (Sistem Yönetimi) ----------------------------
     //
-    // Neden migration'ın HasData'sında değil? Çünkü PIN özeti RASTGELE tuz
+    // Parolası olmayan hesaplara GEÇİCİ parola atanır ve ilk girişte
+    // değiştirilmesi zorunlu kılınır.
+    //
+    // Neden migration'ın HasData'sında değil? Parola özeti RASTGELE tuz
     // içerir; migration ise deterministik olmalıdır (aynı dosya her yerde
-    // aynı sonucu üretmeli). Sabit bir özet gömseydik, tuzun tüm amacı
-    // ortadan kalkardı — herkes aynı tuzu kullanırdı.
+    // aynı sonucu üretmeli).
     //
-    // ⚠ DEMO KURALI: PIN = sicil numarasının SON DÖRT HANESİ.
-    // Gerçek bir sistemde PIN kullanıcıya kapalı zarfla verilir ve ilk
-    // girişte değiştirtilir. Burada tahmin edilebilir olması bilinçli:
-    // bu bir güvenlik gösterimi değil, izlenebilirlik altyapısıdır.
-    var pinless = db.Technicians.Where(t => t.PinHash == "").ToList();
-    foreach (var person in pinless)
+    // ⚠ DEMO KURALI: geçici parola = "Demo-" + sicil (ör. Demo-10502).
+    // Tahmin edilebilir olması bilinçli ve ZARARSIZ: bu parolayla açılan
+    // oturumun yetki listesi BOŞTUR, kullanıcı kendi parolasını belirlemeden
+    // hiçbir işlem yapamaz. Gerçek kurulumda Sistem Yöneticisi her kişiye
+    // AD01 ekranından rastgele geçici parola üretir.
+    var passwordless = db.Technicians.Where(t => t.PasswordHash == "").ToList();
+    foreach (var person in passwordless)
     {
-        var demoPin = person.EmployeeNo.Length >= 4
-            ? person.EmployeeNo[^4..]
-            : person.EmployeeNo.PadLeft(4, '0');
-        var (hash, salt) = PinHasher.Hash(demoPin);
-        person.PinHash = hash;
-        person.PinSalt = salt;
+        var (hash, salt) = PasswordHasher.Hash(DemoTemporaryPassword(person.EmployeeNo));
+        person.PasswordHash = hash;
+        person.PasswordSalt = salt;
+        person.MustChangePassword = true;
     }
     var issuer = scope.ServiceProvider.GetRequiredService<TokenIssuer>();
     if (issuer.IsDevelopmentSecret)
@@ -139,15 +140,15 @@ using (var scope = app.Services.CreateScope())
             "degiskenini ayarlayin (Python tarafinda da ayni deger).");
     }
 
-    if (pinless.Count > 0)
+    if (passwordless.Count > 0)
     {
         db.SaveChanges();
         Console.WriteLine(
-            $"[DEMO] {pinless.Count} personele PIN atandi. " +
-            "PIN = sicil numarasinin son 4 hanesi.");
-        foreach (var person in pinless)
-            Console.WriteLine($"  {person.EmployeeNo}  {person.Name,-16} " +
-                              $"rol={person.Role}  PIN={person.EmployeeNo[^4..]}");
+            $"[DEMO] {passwordless.Count} hesaba gecici parola atandi. " +
+            "Ilk giriste degistirilmesi zorunlu.");
+        foreach (var person in passwordless)
+            Console.WriteLine($"  {person.EmployeeNo}  {person.Department,-20} " +
+                              $"gecici parola: {DemoTemporaryPassword(person.EmployeeNo)}");
     }
 }
 
@@ -267,8 +268,15 @@ app.MapGet("/workorders", async (WorkOrderRepository repo,
 // açma sonradan bunun ÜSTÜNE takılabilir. Tersi mümkün değil: kimliksiz
 // kurulan bir modelde geçmiş kayıtlar sonsuza kadar sahipsiz kalır.
 app.MapGet("/personnel/by-employee-no/{employeeNo}",
-    async (MaintenanceDbContext db, string employeeNo, CancellationToken ct) =>
+    async (MaintenanceDbContext db, AuthService auth, HttpRequest http,
+           string employeeNo, CancellationToken ct) =>
 {
+    // Sistem Yönetimi: parola ile girişe geçilince bu uç nokta KİMLİKSİZ
+    // kalamazdı — hangi sicillerin var olduğunu herkese söylüyordu
+    // (kullanıcı sayımı). Artık personel görme yetkisi istiyor.
+    var (_, denied) = await RequireAsync(auth, http, Permissions.PersonnelView, ct);
+    if (denied is not null) return denied;
+
     var person = await db.Technicians
         .AsNoTracking()
         .FirstOrDefaultAsync(t => t.EmployeeNo == employeeNo, ct);
@@ -639,13 +647,13 @@ app.MapPatch("/workorders/{id}/status",
 app.MapPost("/auth/login", async (AuthService auth, LoginRequest request,
                                   CancellationToken ct) =>
 {
-    var (ok, error) = await auth.LoginAsync(request.EmployeeNo, request.Pin,
+    var (ok, error) = await auth.LoginAsync(request.EmployeeNo, request.Password,
                                             DateTime.UtcNow, ct);
     // 401: kimlik doğrulanamadı. Kilitlenme de 401 döner (403 değil),
     // çünkü kullanıcı hâlâ kimliğini kanıtlayamamış durumda.
     return ok is not null ? Results.Ok(ok) : Results.Json(error, statusCode: 401);
 })
-.WithSummary("Sicil numarası ve PIN ile giriş.");
+.WithSummary("Sicil numarası ve parola ile giriş.");
 
 app.MapPost("/auth/logout", async (AuthService auth, HttpRequest http,
                                    CancellationToken ct) =>
@@ -676,10 +684,27 @@ app.MapGet("/auth/me", async (AuthService auth, HttpRequest http,
         // yenilenince görür.
         department = person.Department.ToString(),
         departmentName = DepartmentCatalog.Name(person.Department),
-        permissions = Permissions.For(person.Department),
+        // Geçici parolalıysa boş: arayüz menü yerine parola ekranını açar.
+        permissions = AuthService.EffectivePermissions(person),
+        mustChangePassword = person.MustChangePassword,
     });
 })
 .WithSummary("Belirtecin sahibini döndürür (oturum kontrolü).");
+
+// Kullanıcının kendi parolasını değiştirmesi. Yetki İSTEMEZ (geçici
+// parolalı oturumun tek yapabildiği iş bu), ama geçerli oturum ve mevcut
+// parola ister. Başarılıysa bütün oturumlar kapanır, yeni belirteç döner.
+app.MapPost("/auth/change-password",
+    async (AuthService auth, HttpRequest http, ChangePasswordRequest request,
+           CancellationToken ct) =>
+{
+    var result = await auth.ChangePasswordAsync(ReadToken(http), request, DateTime.UtcNow, ct);
+    return result.Status == 200
+        ? Results.Ok(result.Ok)
+        : Results.Json(new { message = result.Message, problems = result.Problems },
+                       statusCode: result.Status);
+})
+.WithSummary("Kendi parolasını değiştirir; eski oturumlar kapanır, yeni belirteç döner.");
 
 
 
@@ -758,36 +783,32 @@ app.MapPut("/technicians/{id}/department",
     async (AuthService auth, HttpRequest http, MaintenanceDbContext db,
            string id, ChangeDepartmentRequest request, CancellationToken ct) =>
 {
-    var (_, denied) = await RequireAsync(auth, http, Permissions.PersonnelManage, ct);
+    var (me, denied) = await RequireAsync(auth, http, Permissions.PersonnelManage, ct);
     if (denied is not null) return denied;
 
-    if (!Enum.IsDefined(request.Department))
-        return Results.BadRequest(new { message = "Geçersiz departman." });
-
-    var person = await db.Technicians.FirstOrDefaultAsync(t => t.Id == id, ct);
+    var all = await db.Technicians.ToListAsync(ct);
+    var person = all.FirstOrDefault(t => t.Id == id);
     if (person is null)
         return Results.NotFound(new { message = $"Personel bulunamadı: {id}" });
 
-    // Kilitlenme koruması: son yöneticinin departmanı değiştirilirse
-    // artık kimse personel ve yetki yönetimi yapamaz — sistemi ancak
-    // veritabanına elle müdahale kurtarır.
-    if (person.Department == Department.Management
-        && request.Department != Department.Management)
-    {
-        var otherManagers = await db.Technicians.CountAsync(
-            t => t.Department == Department.Management && t.IsActive
-                 && t.Id != person.Id, ct);
-        if (otherManagers == 0)
-            return Results.Conflict(new
-            {
-                message = "Sistemde en az bir aktif Yönetim personeli kalmalı. " +
-                          "Önce başka birini Yönetim departmanına atayın.",
-            });
-    }
+    // Kurallar UserAdminRules içinde (Sistem Yönetimi fazında taşındı):
+    //   * kişi KENDİ departmanını değiştiremez — yetki yükseltme koruması
+    //   * son aktif Yönetim ve son aktif Sistem Yöneticisi taşınamaz
+    if (UserAdminRules.CanChangeDepartment(me!.Id, person, request.Department, all) is { } block)
+        return Results.Json(new { message = block.Message }, statusCode: block.Status);
 
     var previous = person.Department;
+    var changed = previous != request.Department;
     person.Department = request.Department;
+    if (changed)
+        db.UserAuditEvents.Add(AuthService.Audit(
+            UserAuditActions.DepartmentChanged, person, me, DateTime.UtcNow,
+            $"{DepartmentCatalog.Name(previous)} → {DepartmentCatalog.Name(request.Department)}"));
     await db.SaveChangesAsync(ct);
+
+    // Yetkiler değişti: açık oturumlar kapatılır ki kişi yeni yetkilerle
+    // yeniden girsin. Kapatılmasaydı arayüzdeki menü eski yetkilerle kalırdı.
+    var closedSessions = changed ? await auth.RevokeAllSessionsAsync(person.Id, ct) : 0;
 
     return Results.Ok(new
     {
@@ -798,10 +819,11 @@ app.MapPut("/technicians/{id}/department",
         departmentName = DepartmentCatalog.Name(person.Department),
         previousDepartment = previous.ToString(),
         permissions = Permissions.For(person.Department),
-        // Belirteç imzalı olduğu için Python tarafındaki yetkiler kişi
-        // yeniden giriş yapana kadar eski kalır (bkz. TokenIssuer).
-        note = "Bakım servisinde hemen geçerli. Ölçüm servisindeki yetkilerin " +
-               "güncellenmesi için kişinin yeniden giriş yapması gerekir.",
+        closedSessions,
+        // Belirteç imzalı olduğu için Python tarafındaki eski yetkiler, eski
+        // belirtecin süresi dolana kadar geçerli kalabilir (bkz. TokenIssuer).
+        note = "Kişinin açık oturumları kapatıldı; yeni yetkiler yeniden girişte geçerli. " +
+               "Ölçüm servisindeki eski belirteç süresi dolana kadar eski yetkiyi taşıyabilir.",
     });
 })
 .WithSummary("Personelin departmanını değiştirir (yönetim).");
@@ -853,6 +875,253 @@ app.MapGet("/notifications/sent",
 })
 .WithSummary("Oturum sahibinin gönderdiği mesajlar ve okunma durumları.");
 
+
+// ---------------------------------------------------------------------------
+// Sistem Yönetimi — kullanıcı hesapları (AD01)
+// ---------------------------------------------------------------------------
+//
+// Hepsi `users.manage` ister; bu yetki YALNIZCA Sistem Yönetimi
+// departmanında (Yönetim'de bile yok). Kurallar Services/UserAdminRules.cs
+// içinde; burada yalnızca veritabanı ve HTTP.
+//
+// Kayıt SİLİNMEZ, pasife alınır: iş emirleri, testler ve kök neden
+// analizleri kişiye bağlı. Silmek geçmişi sahipsiz bırakırdı.
+
+app.MapGet("/admin/users", async (AuthService auth, HttpRequest http,
+                                  MaintenanceDbContext db, CancellationToken ct) =>
+{
+    var (_, denied) = await RequireAsync(auth, http, Permissions.UsersManage, ct);
+    if (denied is not null) return denied;
+
+    var now = DateTime.UtcNow;
+    var people = await db.Technicians.AsNoTracking()
+        .OrderBy(t => t.EmployeeNo)
+        .ToListAsync(ct);
+    return Results.Ok(new { count = people.Count, items = people.Select(p => UserView(p, now)) });
+})
+.WithSummary("Kullanıcı hesapları (Sistem Yönetimi).");
+
+app.MapPost("/admin/users",
+    async (AuthService auth, HttpRequest http, MaintenanceDbContext db,
+           CreateUserRequest request, CancellationToken ct) =>
+{
+    var (me, denied) = await RequireAsync(auth, http, Permissions.UsersManage, ct);
+    if (denied is not null) return denied;
+
+    var (draft, problems) = UserAdminRules.ValidateCreate(request);
+    if (problems.Count > 0)
+        return Results.BadRequest(new { message = "Kullanıcı oluşturulamadı.", problems });
+
+    var user = draft!;
+    if (await db.Technicians.AnyAsync(t => t.EmployeeNo == user.EmployeeNo, ct))
+        return Results.Conflict(new { message = $"Bu sicil numarası zaten kayıtlı: {user.EmployeeNo}" });
+
+    // Geçici parolayı SİSTEM üretir ve yalnızca bu cevapta, bir kez gösterir.
+    // Veritabanına yalnızca özeti yazılır; kaybedilirse sıfırlanır.
+    var temporary = UserAdminRules.GenerateTemporaryPassword();
+    var now = DateTime.UtcNow;
+    (user.PasswordHash, user.PasswordSalt) = PasswordHasher.Hash(temporary);
+    user.MustChangePassword = true;
+    user.CreatedAt = now;
+    user.CreatedByName = $"{me!.Name} ({me.EmployeeNo})";
+
+    // İç kimlik (TK-nn) eşzamanlı iki istekte çakışabilir: birincil anahtar
+    // ikinciyi reddeder, yeniden deneriz (iş emri numarasındaki desen).
+    for (var attempt = 0; ; attempt++)
+    {
+        user.Id = UserAdminRules.NextId(await db.Technicians.Select(t => t.Id).ToListAsync(ct));
+        db.Technicians.Add(user);
+        db.UserAuditEvents.Add(AuthService.Audit(UserAuditActions.Created, user, me, now,
+            $"{DepartmentCatalog.Name(user.Department)} · {user.Role}"));
+        try
+        {
+            await db.SaveChangesAsync(ct);
+            break;
+        }
+        catch (DbUpdateException) when (attempt < 5)
+        {
+            db.ChangeTracker.Clear();
+            if (await db.Technicians.AnyAsync(t => t.EmployeeNo == user.EmployeeNo, ct))
+                return Results.Conflict(new { message = $"Bu sicil numarası az önce kaydedildi: {user.EmployeeNo}" });
+        }
+    }
+
+    return Results.Created($"/admin/users/{user.Id}", new
+    {
+        user = UserView(user, now),
+        temporaryPassword = temporary,
+        note = "Geçici parola YALNIZCA şimdi gösteriliyor ve hiçbir yerde saklanmıyor. " +
+               "Kullanıcıya güvenli bir yoldan iletin; ilk girişte değiştirmesi zorunlu.",
+    });
+})
+.WithSummary("Yeni kullanıcı; geçici parolayı sistem üretir ve bir kez gösterir.");
+
+app.MapPost("/admin/users/{id}/reset-password",
+    async (AuthService auth, HttpRequest http, MaintenanceDbContext db,
+           string id, CancellationToken ct) =>
+{
+    var (me, denied) = await RequireAsync(auth, http, Permissions.UsersManage, ct);
+    if (denied is not null) return denied;
+
+    var person = await db.Technicians.FirstOrDefaultAsync(t => t.Id == id, ct);
+    if (person is null)
+        return Results.NotFound(new { message = $"Kullanıcı bulunamadı: {id}" });
+    if (UserAdminRules.CanResetPassword(me!.Id, person) is { } block)
+        return Results.Json(new { message = block.Message }, statusCode: block.Status);
+
+    var temporary = UserAdminRules.GenerateTemporaryPassword();
+    var now = DateTime.UtcNow;
+    (person.PasswordHash, person.PasswordSalt) = PasswordHasher.Hash(temporary);
+    person.MustChangePassword = true;
+    person.FailedAttempts = 0;
+    person.LockedUntil = null;
+    db.UserAuditEvents.Add(AuthService.Audit(UserAuditActions.PasswordReset, person, me, now, null));
+    await db.SaveChangesAsync(ct);
+
+    // Eski parolayla açılmış oturumlar kapanır: sıfırlamanın sebebi çoğu
+    // zaman "parola başkasının elinde olabilir"dir.
+    var closedSessions = await auth.RevokeAllSessionsAsync(person.Id, ct);
+
+    return Results.Ok(new
+    {
+        user = UserView(person, now),
+        temporaryPassword = temporary,
+        closedSessions,
+        note = "Yeni geçici parola YALNIZCA şimdi gösteriliyor. Kişinin açık oturumları kapatıldı.",
+    });
+})
+.WithSummary("Parolayı sıfırlar; yeni geçici parola bir kez gösterilir, oturumlar kapanır.");
+
+app.MapPost("/admin/users/{id}/unlock",
+    async (AuthService auth, HttpRequest http, MaintenanceDbContext db,
+           string id, CancellationToken ct) =>
+{
+    var (me, denied) = await RequireAsync(auth, http, Permissions.UsersManage, ct);
+    if (denied is not null) return denied;
+
+    var person = await db.Technicians.FirstOrDefaultAsync(t => t.Id == id, ct);
+    if (person is null)
+        return Results.NotFound(new { message = $"Kullanıcı bulunamadı: {id}" });
+
+    var now = DateTime.UtcNow;
+    if (person.LockedUntil is not { } until || until <= now)
+        return Results.Conflict(new { message = $"{person.Name} kilitli değil." });
+
+    person.LockedUntil = null;
+    person.FailedAttempts = 0;
+    db.UserAuditEvents.Add(AuthService.Audit(UserAuditActions.Unlocked, person, me, now, null));
+    await db.SaveChangesAsync(ct);
+
+    return Results.Ok(new { user = UserView(person, now) });
+})
+.WithSummary("Hatalı denemeler nedeniyle kilitlenen hesabın kilidini açar.");
+
+app.MapPost("/admin/users/{id}/deactivate",
+    async (AuthService auth, HttpRequest http, MaintenanceDbContext db,
+           string id, DeactivateUserRequest request, CancellationToken ct) =>
+{
+    var (me, denied) = await RequireAsync(auth, http, Permissions.UsersManage, ct);
+    if (denied is not null) return denied;
+
+    var all = await db.Technicians.ToListAsync(ct);
+    var person = all.FirstOrDefault(t => t.Id == id);
+    if (person is null)
+        return Results.NotFound(new { message = $"Kullanıcı bulunamadı: {id}" });
+    if (UserAdminRules.CanDeactivate(me!.Id, person, all, request.Reason) is { } block)
+        return Results.Json(new { message = block.Message }, statusCode: block.Status);
+
+    var now = DateTime.UtcNow;
+    person.IsActive = false;
+    person.DeactivatedAt = now;
+    person.DeactivationReason = request.Reason!.Trim();
+    db.UserAuditEvents.Add(AuthService.Audit(UserAuditActions.Deactivated, person, me, now,
+        person.DeactivationReason));
+    await db.SaveChangesAsync(ct);
+
+    var closedSessions = await auth.RevokeAllSessionsAsync(person.Id, ct);
+
+    // Pasif kişinin üzerindeki açık işler kendiliğinden BAŞKASINA ATANMAZ:
+    // kime gideceği planlamanın kararı. Ama görünür kılınır.
+    var openOrders = await db.WorkOrders.CountAsync(o => o.TechnicianId == person.Id
+        && (o.Status == WorkOrderStatus.Planned || o.Status == WorkOrderStatus.InProgress), ct);
+
+    return Results.Ok(new
+    {
+        user = UserView(person, now),
+        closedSessions,
+        openOrders,
+        warning = openOrders > 0
+            ? $"{person.Name} üzerinde {openOrders} açık iş emri var. Bakım Planlama bu işleri başka birine atamalı."
+            : null,
+        note = "Bakım servisinde anında geçerli. Ölçüm servisindeki belirteç süresi dolana kadar geçerli kalabilir.",
+    });
+})
+.WithSummary("Hesabı pasife alır (silmez); oturumlar kapanır.");
+
+app.MapPost("/admin/users/{id}/activate",
+    async (AuthService auth, HttpRequest http, MaintenanceDbContext db,
+           string id, CancellationToken ct) =>
+{
+    var (me, denied) = await RequireAsync(auth, http, Permissions.UsersManage, ct);
+    if (denied is not null) return denied;
+
+    var person = await db.Technicians.FirstOrDefaultAsync(t => t.Id == id, ct);
+    if (person is null)
+        return Results.NotFound(new { message = $"Kullanıcı bulunamadı: {id}" });
+    if (person.IsActive)
+        return Results.Conflict(new { message = $"{person.Name} zaten aktif." });
+
+    // Yeniden etkinleştirmede eski parola GEÇERLİ OLMAZ: hesap uzun süre
+    // kapalı kaldıysa eski parola çoktan sızmış olabilir.
+    var temporary = UserAdminRules.GenerateTemporaryPassword();
+    var now = DateTime.UtcNow;
+    (person.PasswordHash, person.PasswordSalt) = PasswordHasher.Hash(temporary);
+    person.IsActive = true;
+    person.MustChangePassword = true;
+    person.FailedAttempts = 0;
+    person.LockedUntil = null;
+    var previousReason = person.DeactivationReason;
+    person.DeactivatedAt = null;
+    person.DeactivationReason = null;
+    db.UserAuditEvents.Add(AuthService.Audit(UserAuditActions.Activated, person, me, now,
+        previousReason is null ? null : $"Önceki pasife alma gerekçesi: {previousReason}"));
+    await db.SaveChangesAsync(ct);
+
+    return Results.Ok(new
+    {
+        user = UserView(person, now),
+        temporaryPassword = temporary,
+        note = "Hesap etkinleştirildi. Yeni geçici parola YALNIZCA şimdi gösteriliyor.",
+    });
+})
+.WithSummary("Pasif hesabı etkinleştirir; yeni geçici parola üretir.");
+
+app.MapGet("/admin/audit", async (AuthService auth, HttpRequest http,
+                                  MaintenanceDbContext db, int? limit, CancellationToken ct) =>
+{
+    var (_, denied) = await RequireAsync(auth, http, Permissions.UsersManage, ct);
+    if (denied is not null) return denied;
+
+    var take = Math.Clamp(limit ?? 100, 1, 500);
+    var events = await db.UserAuditEvents.AsNoTracking()
+        .OrderByDescending(e => e.At)
+        .ThenByDescending(e => e.Id)
+        .Take(take)
+        .ToListAsync(ct);
+
+    return Results.Ok(new
+    {
+        count = events.Count,
+        items = events.Select(e => new
+        {
+            e.Id, e.At, e.Action,
+            actionLabel = UserAuditActions.Label(e.Action),
+            e.TargetId, e.TargetEmployeeNo, e.TargetName,
+            e.ActorEmployeeNo, e.ActorName, e.Detail,
+        }),
+    });
+})
+.WithSummary("Kullanıcı hesabı denetim izi — en yeni üstte.");
 
 // ---------------------------------------------------------------------------
 // Kök neden analizi — MH04 (Faz 12.5)
@@ -986,6 +1255,37 @@ app.Run();
 // Belirteç "Authorization: Bearer <token>" başlığından okunur.
 // Standart biçim; ileride gerçek bir kimlik sağlayıcıya geçilirse
 // istemci tarafında değişiklik gerekmez.
+// Kullanıcı hesabının yönetim ekranındaki görünümü. Technician nesnesini
+// doğrudan döndürmüyoruz: kimlik alanları [JsonIgnore] ile gizli, ama
+// yönetim ekranı kilit ve son giriş bilgisini GÖRMELİ. Neyi açtığımızı tek
+// yerde, açıkça seçiyoruz. Parola özeti ve tuzu burada da YOK.
+static object UserView(Technician t, DateTime now) => new
+{
+    t.Id,
+    t.EmployeeNo,
+    t.Name,
+    role = t.Role.ToString(),
+    specialty = t.Specialty.ToString(),
+    department = t.Department.ToString(),
+    departmentName = DepartmentCatalog.Name(t.Department),
+    t.MaxOpenOrders,
+    t.IsActive,
+    mustChangePassword = t.MustChangePassword,
+    locked = t.LockedUntil is { } until && until > now,
+    lockedUntil = t.LockedUntil,
+    failedAttempts = t.FailedAttempts,
+    lastLoginAt = t.LastLoginAt,
+    passwordChangedAt = t.PasswordChangedAt,
+    createdAt = t.CreatedAt,
+    createdByName = t.CreatedByName,
+    deactivatedAt = t.DeactivatedAt,
+    deactivationReason = t.DeactivationReason,
+};
+
+// ⚠ DEMO geçici parola kuralı. Bu parolayla açılan oturumun yetki listesi
+// boş olduğu için tahmin edilebilir olması zarar vermez (bkz. açılış bloğu).
+static string DemoTemporaryPassword(string employeeNo) => $"Demo-{employeeNo}";
+
 static string? ReadToken(HttpRequest http)
 {
     var header = http.Headers.Authorization.ToString();
@@ -1012,6 +1312,17 @@ static async Task<(Technician? Me, IResult? Denied)> RequireAsync(
         return (null, Results.Json(
             new { message = "Oturum gerekli. Lütfen giriş yapın." },
             statusCode: StatusCodes.Status401Unauthorized));
+
+    // Geçici parolalı oturum HİÇBİR korumalı işlem yapamaz. Bu kontrol
+    // şart, çünkü .NET yetkiyi belirteçten değil DEPARTMANDAN okuyor:
+    // belirteçteki boş yetki listesi burada tek başına işe yaramazdı.
+    if (me.MustChangePassword)
+        return (me, Results.Json(new
+        {
+            message = "Önce geçici parolanızı değiştirmelisiniz.",
+            code = "password_change_required",
+            requiredPermission = permission,
+        }, statusCode: StatusCodes.Status403Forbidden));
 
     if (!Permissions.Has(me.Department, permission))
         return (me, Results.Json(new

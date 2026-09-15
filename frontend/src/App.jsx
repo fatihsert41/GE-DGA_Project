@@ -3,6 +3,9 @@ import api, { clearApiCache, session } from './api'
 import { can, canAny } from './permissions'
 // Giriş ekranı HEMEN yüklenir: kullanıcının ilk gördüğü şey o.
 import LoginScreen from './components/LoginScreen'
+// Parola değiştirme de HEMEN yüklenir: geçici parolalı kullanıcının
+// göreceği ilk ekran o.
+import ChangePasswordScreen from './components/ChangePasswordScreen'
 import NoPermission from './components/NoPermission'
 
 // Kod bölme: her ekran İLK AÇILDIĞINDA ayrı dosya olarak indirilir.
@@ -20,6 +23,7 @@ const MaintenancePanel = lazy(() => import('./components/MaintenancePanel'))
 const NameplateForm = lazy(() => import('./components/NameplateForm'))
 const TestsOverview = lazy(() => import('./components/TestsOverview'))
 const PersonnelPanel = lazy(() => import('./components/PersonnelPanel'))
+const AdminPanel = lazy(() => import('./components/AdminPanel'))
 const NotificationsPanel = lazy(() => import('./components/NotificationsPanel'))
 const ManagerDashboard = lazy(() => import('./components/ManagerDashboard'))
 const ReviewQueue = lazy(() => import('./components/ReviewQueue'))
@@ -64,6 +68,7 @@ const MODULES = [
   { id: 'engineering', label: 'Mühendislik' },
   { id: 'admin', label: 'Yönetim' },
   { id: 'comm', label: 'İletişim' },
+  { id: 'account', label: 'Hesabım' },
 ]
 
 const VIEWS = [
@@ -89,8 +94,13 @@ const VIEWS = [
     permission: 'manager.view' },
   { id: 'personnel', code: 'PR01', label: 'Personel', module: 'admin',
     permission: 'personnel.view' },
+  // Sistem Yönetimi — kullanıcı hesapları. Yönetim departmanında bile yok.
+  { id: 'users', code: 'AD01', label: 'Kullanıcı Yönetimi', module: 'admin',
+    permission: 'users.manage' },
   // Gelen kutusu, yeni bildirim ve gönderilenler TEK ekranda (Faz 11).
   { id: 'notifications', code: 'BL01', label: 'Bildirimler', module: 'comm' },
+  // Herkes kendi parolasını değiştirebilir — yetki gerekmez.
+  { id: 'password', code: 'PW01', label: 'Parolamı Değiştir', module: 'account' },
 ]
 
 const ROLE_TR = {
@@ -149,6 +159,7 @@ export default function App() {
           employeeNo: me.employeeNo, name: me.name, role: me.role,
           specialty: me.specialty, department: me.department,
           departmentName: me.departmentName, permissions: me.permissions,
+          mustChangePassword: Boolean(me.mustChangePassword),
         }
         session.save(session.token(), next)
         setUser(next)
@@ -284,6 +295,13 @@ export default function App() {
   const trained = health?.model_trained
 
   if (!user) return <LoginScreen onLogin={setUser} />
+
+  // Geçici parolayla girildiyse uygulama AÇILMAZ: tek yapılabilecek iş
+  // parolayı değiştirmek. Sunucu da aynı kuralı uyguluyor (belirteçte yetki
+  // yok, .NET 403 döner); bu ekran kullanıcıyı boş menüyle bırakmamak için.
+  if (user.mustChangePassword) {
+    return <ChangePasswordScreen user={user} onDone={setUser} onLogout={logout} />
+  }
 
   const today = new Date().toLocaleDateString('tr-TR',
     { day: '2-digit', month: '2-digit', year: 'numeric' })
@@ -479,6 +497,13 @@ export default function App() {
                   )}
 
                   {view === 'personnel' && <PersonnelPanel currentUser={user} />}
+
+                  {view === 'users' && <AdminPanel currentUser={user} />}
+
+                  {view === 'password' && (
+                    <ChangePasswordScreen user={user} embedded
+                      onDone={(next) => { setUser(next); setStatusMsg('Parola değiştirildi') }} />
+                  )}
 
                   {view === 'notifications' && (
                     selected

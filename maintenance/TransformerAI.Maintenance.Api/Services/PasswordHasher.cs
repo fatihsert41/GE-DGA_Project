@@ -2,8 +2,12 @@ using System.Security.Cryptography;
 
 namespace TransformerAI.Maintenance.Api.Services;
 
-/// <summary>PIN özetleme ve doğrulama. (Faz 9.0b)</summary>
+/// <summary>Parola özetleme ve doğrulama. (Faz 9.0b'de PIN için yazıldı)</summary>
 /// <remarks>
+/// Sistem Yönetimi fazında 4 haneli PIN'den en az 10 karakterli parolaya
+/// geçildi. Algoritma DEĞİŞMEDİ — değişmesine gerek de yoktu: özetleme,
+/// neyin özetlendiğinden bağımsızdır. Değişen, girdinin gücü.
+///
 /// <b>ÖZETLEME (hashing) ŞİFRELEME DEĞİLDİR.</b> Bu ayrım öğrenilmesi
 /// gereken en önemli şey:
 ///
@@ -12,62 +16,62 @@ namespace TransformerAI.Maintenance.Api.Services;
 /// <item>Özetleme <i>tek yönlüdür</i>: geri döndürülemez.</item>
 /// </list>
 ///
-/// PIN'i şifreleyip saklamak YANLIŞ olurdu, çünkü sistemin anahtarı
-/// olsaydı sistemi ele geçiren PIN'leri de açardı. Özetlemede böyle bir
-/// anahtar yok — veritabanı bütünüyle sızsa bile PIN'ler okunamaz.
-/// Doğrulama, girilen PIN'in özetini hesaplayıp saklanan özetle
-/// karşılaştırarak yapılır.
+/// Parolayı şifreleyip saklamak YANLIŞ olurdu, çünkü sistemin anahtarı
+/// olsaydı sistemi ele geçiren parolaları da açardı. Özetlemede böyle bir
+/// anahtar yok — veritabanı bütünüyle sızsa bile parolalar okunamaz.
+/// Doğrulama, girilen parolanın özetini hesaplayıp saklanan özetle
+/// karşılaştırarak yapılır. Bu yüzden Sistem Yöneticisi de kimsenin
+/// parolasını GÖREMEZ; yalnızca sıfırlayabilir.
 ///
 /// <b>TUZ (salt) neden gerekli?</b> Özetleme aynı girdiye hep aynı
-/// çıktıyı verir. Tuz olmasaydı, PIN'i "1234" olan bütün personelin
-/// özeti aynı olurdu — saldırgan bir tanesini çözse hepsini çözerdi.
-/// Ayrıca 4 haneli PIN'in yalnızca 10.000 olasılığı var; önceden
-/// hesaplanmış bir tablo (rainbow table) saniyeler içinde eşleştirirdi.
-/// Kişiye özel tuz, her kaydı ayrı bir probleme dönüştürür.
+/// çıktıyı verir. Tuz olmasaydı, parolası aynı olan herkesin özeti aynı
+/// olurdu — saldırgan bir tanesini çözse hepsini çözerdi. Kişiye özel tuz,
+/// her kaydı ayrı bir probleme dönüştürür ve önceden hesaplanmış
+/// tabloları (rainbow table) işe yaramaz kılar.
 ///
 /// <b>Neden PBKDF2 ve neden 100.000 tur?</b> SHA-256 gibi hızlı bir
 /// özetleyici burada DEZAVANTAJDIR: saldırgan saniyede milyarlarca
 /// deneme yapar. PBKDF2 özetlemeyi kasten yavaşlatır. 100.000 tur,
 /// giriş yapan kullanıcı için fark edilmez (~100 ms) ama kaba kuvvet
 /// saldırısının maliyetini 100.000 katına çıkarır.
-///
-/// ⚠ SINIR: 4-6 haneli bir PIN güçlü bir parola değildir. Bu sınıf
-/// onu kabul edilebilir kılan iki şeyden birini sağlar (özetleme);
-/// diğeri <b>deneme sınırlaması</b>dır ve <c>AuthService</c>'te. İkisi
-/// birlikte banka kartı seviyesinde koruma verir: sicilini bilen birine
-/// karşı korur, sistemi elinde tutan birine karşı değil.
 /// </remarks>
-public static class PinHasher
+public static class PasswordHasher
 {
     // Tur sayısı. Donanım hızlandıkça artırılmalı; bu yüzden sabit tek
-    // yerde ve saklanan kayıtla birlikte sürümlenebilir olmalı.
+    // yerde duruyor.
     private const int Iterations = 100_000;
     private const int SaltBytes = 16;
     private const int HashBytes = 32;
 
     private static readonly HashAlgorithmName Algorithm = HashAlgorithmName.SHA256;
 
-    /// <summary>Yeni bir PIN için tuz ve özet üretir.</summary>
-    public static (string Hash, string Salt) Hash(string pin)
+    /// <summary>Yeni bir parola için tuz ve özet üretir.</summary>
+    public static (string Hash, string Salt) Hash(string password)
     {
-        if (string.IsNullOrWhiteSpace(pin))
-            throw new ArgumentException("PIN boş olamaz.", nameof(pin));
+        if (string.IsNullOrWhiteSpace(password))
+            throw new ArgumentException("Parola boş olamaz.", nameof(password));
 
         // RandomNumberGenerator: kriptografik olarak güvenli rastgelelik.
         // Random sınıfı BURADA KULLANILMAZ — tahmin edilebilir üretir ve
         // tuzun tüm amacı tahmin edilemez olmasıdır.
         var salt = RandomNumberGenerator.GetBytes(SaltBytes);
-        var hash = Derive(pin, salt);
+        var hash = Derive(password, salt);
 
         return (Convert.ToBase64String(hash), Convert.ToBase64String(salt));
     }
 
-    /// <summary>Girilen PIN, saklanan özetle eşleşiyor mu?</summary>
-    public static bool Verify(string pin, string hash, string salt)
+    /// <summary>Girilen parola, saklanan özetle eşleşiyor mu?</summary>
+    public static bool Verify(string password, string hash, string salt)
     {
-        if (string.IsNullOrWhiteSpace(pin) ||
+        if (string.IsNullOrWhiteSpace(password) ||
             string.IsNullOrWhiteSpace(hash) ||
             string.IsNullOrWhiteSpace(salt))
+            return false;
+
+        // Aşırı uzun girdi: özetlemeden ÖNCE reddedilir. 1 MB'lık bir
+        // "parola" ile 100.000 tur PBKDF2, tek istekle sunucuyu meşgul
+        // edebilirdi (hizmet dışı bırakma).
+        if (password.Length > PasswordPolicy.MaxLength)
             return false;
 
         byte[] expected, saltBytes;
@@ -81,7 +85,7 @@ public static class PinHasher
             return false;      // bozuk kayıt: doğrulama başarısız sayılır
         }
 
-        var actual = Derive(pin, saltBytes);
+        var actual = Derive(password, saltBytes);
 
         // FixedTimeEquals: karşılaştırmayı SABİT SÜREDE yapar.
         //
@@ -93,6 +97,6 @@ public static class PinHasher
         return CryptographicOperations.FixedTimeEquals(actual, expected);
     }
 
-    private static byte[] Derive(string pin, byte[] salt) =>
-        Rfc2898DeriveBytes.Pbkdf2(pin, salt, Iterations, Algorithm, HashBytes);
+    private static byte[] Derive(string password, byte[] salt) =>
+        Rfc2898DeriveBytes.Pbkdf2(password, salt, Iterations, Algorithm, HashBytes);
 }

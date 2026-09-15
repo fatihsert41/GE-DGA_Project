@@ -112,7 +112,13 @@ public class TokenIssuer
     };
 
     /// <summary>Bir personel için imzalı belirteç üretir.</summary>
-    public string Issue(Technician person, DateTime expiresAtUtc)
+    /// <param name="person">Belirtecin sahibi.</param>
+    /// <param name="expiresAtUtc">Bitiş zamanı.</param>
+    /// <param name="permissions">Belirtece yazılacak yetkiler. Verilmezse
+    /// departmanın yetkileri. Geçici parolalı oturumda BOŞ liste verilir
+    /// (bkz. AuthService.EffectivePermissions).</param>
+    public string Issue(Technician person, DateTime expiresAtUtc,
+                        IReadOnlyList<string>? permissions = null)
     {
         var payload = new Payload(
             person.EmployeeNo,
@@ -122,7 +128,7 @@ public class TokenIssuer
             Convert.ToBase64String(RandomNumberGenerator.GetBytes(12)),
             person.Department.ToString(),
             DepartmentCatalog.Name(person.Department),
-            Models.Permissions.For(person.Department));
+            permissions ?? Models.Permissions.For(person.Department));
 
         var json = JsonSerializer.SerializeToUtf8Bytes(payload, JsonOpts);
         var body = Base64Url(json);

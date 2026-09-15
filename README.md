@@ -164,7 +164,10 @@ bir test olarak yazılı.
 
 ## Departmanlar ve yetkiler
 
-Giriş sicil numarası + PIN ile yapılır (demo: PIN = sicilin son 4 hanesi).
+Giriş sicil numarası + parola ile yapılır. Demo hesapların geçici parolası
+`Demo-<sicil>` (ör. `Demo-10502`); ilk girişte kendi parolanızı belirlemeniz
+zorunludur. Yeni kullanıcıları **10001 · Kerem Aksoy (Sistem Yönetimi)** AD01
+ekranından açar; Yönetim departmanı kullanıcı hesabı açamaz.
 Yetki **kişiye veya role değil departmana** bağlıdır ve işlem bazlıdır —
 "Testler ekranı" diye bir yetki yok, "yağ testi kaydetme" diye bir yetki var.
 

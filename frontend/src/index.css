@@ -1952,3 +1952,19 @@ button.primary:hover { background: linear-gradient(#4679b0, #2a5a8d); border-col
 }
 .limit-std { font-size: 0.7rem; color: var(--muted); margin-top: 2px; }
 .np-bad { color: var(--critical); font-weight: 600; }
+
+
+/* ---------------------------------------------------------------------
+   Sistem Yönetimi — kullanıcı hesapları (AD01) ve parola ekranı
+   ------------------------------------------------------------------- */
+.temp-password {
+  display: inline-block; margin: 6px 0; padding: 8px 14px;
+  font-family: var(--mono, Consolas, monospace); font-size: 1.25rem;
+  letter-spacing: 0.08em; user-select: all;
+  background: var(--surface); border: 1px dashed var(--rule-strong);
+}
+.user-flags { display: flex; flex-wrap: wrap; gap: 4px; }
+.pw-rules { margin: 6px 0 0; padding-left: 18px; font-size: 0.8rem; }
+.pw-rules li.ok { color: var(--ink-soft); }
+.pw-rules li.bad { color: var(--critical); }
+.audit-table td { font-size: 0.8rem; }

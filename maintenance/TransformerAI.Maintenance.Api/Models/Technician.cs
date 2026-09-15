@@ -34,9 +34,13 @@ public enum PersonnelRole
     Supervisor = 2,   // filo geneli görür, öncelik ve bütçe kararı verir
 }
 
-/// <summary>Saha teknisyeni.</summary>
+/// <summary>Personel — sistemin kullanıcı hesabı.</summary>
 /// <remarks>
 /// <c>WorkOrder</c> gibi bir varlık (entity), o yüzden <c>class</c>.
+/// Sınıfın adı tarihsel olarak "Technician" kaldı (Faz 7.6'da yalnızca
+/// saha teknisyenleri vardı); bugün her departmandan kullanıcıyı temsil
+/// ediyor. Adı değiştirmek tablo, ilişki ve migration zincirine dokunurdu
+/// ve hiçbir davranış kazandırmazdı.
 /// </remarks>
 public class Technician
 {
@@ -79,51 +83,88 @@ public class Technician
 
     public bool IsActive { get; set; } = true;
 
-    // --- Kimlik doğrulama (Faz 9.0b) ---------------------------------
-    // PIN'in KENDİSİ hiçbir zaman saklanmaz; yalnızca özeti ve tuzu.
-    // Ayrıntılı gerekçe: Services/PinHasher.cs
-
+    // --- Kimlik doğrulama -------------------------------------------------
+    //
+    // Parolanın KENDİSİ hiçbir zaman saklanmaz; yalnızca özeti ve tuzu.
+    // Ayrıntılı gerekçe: Services/PasswordHasher.cs
+    //
+    // Faz 9.0b'de bu alanlar 4 haneli PIN içindi. Sistem Yönetimi fazında
+    // parolaya geçildi; C# adları değişti, veritabanı sütun adları
+    // (PinHash / PinSalt) KORUNDU — bkz. DbContext. Sütun yeniden
+    // adlandırmak hiçbir davranış kazandırmadan migration riski eklerdi.
+    //
     // ⚠ [JsonIgnore] ŞART (Faz 10'da fark edilen açık): iş emri JSON'a
     // çevrilirken içindeki Technician nesnesi BÜTÜN alanlarıyla
-    // yazılıyordu. Yani GET /workorders cevabında personelin PIN özeti
-    // ve tuzu açıkta duruyordu. Özet düz PIN değildir, ama 4 haneli bir
-    // PIN'in 10.000 olasılığını elindeki özet ve tuzla denemek saniyeler
-    // sürer — sunucudaki deneme sınırı bu durumda hiç devreye girmez.
-    // Kural: kimlik doğrulama alanları hiçbir cevap gövdesine girmez.
+    // yazılıyordu. Kural: kimlik doğrulama alanları hiçbir cevap
+    // gövdesine girmez.
 
-    /// <summary>PIN özeti (PBKDF2). Düz metin PIN asla saklanmaz.</summary>
+    /// <summary>Parola özeti (PBKDF2). Düz metin parola asla saklanmaz.</summary>
     [JsonIgnore]
-    public string PinHash { get; set; } = string.Empty;
+    public string PasswordHash { get; set; } = string.Empty;
 
-    /// <summary>Kişiye özel tuz — aynı PIN farklı özet üretsin diye.</summary>
+    /// <summary>Kişiye özel tuz — aynı parola farklı özet üretsin diye.</summary>
     [JsonIgnore]
-    public string PinSalt { get; set; } = string.Empty;
+    public string PasswordSalt { get; set; } = string.Empty;
 
-    /// <summary>Arka arkaya yanlış PIN denemesi sayısı.</summary>
+    /// <summary>Parola geçici mi — ilk girişte değiştirilmeli mi?</summary>
     /// <remarks>
-    /// Özetleme tek başına yetmez. 4 haneli PIN'in 10.000 olasılığı var;
-    /// sınırsız deneme hakkı olsa bir betik saniyeler içinde bulur.
-    /// Deneme sınırlaması, kısa PIN'i kabul edilebilir kılan ikinci
-    /// yarıdır. Başarılı girişte SIFIRLANIR.
+    /// Yeni hesapta ve sıfırlamada <c>true</c>. Bu durumdayken verilen
+    /// belirtecin yetki listesi BOŞTUR: kullanıcı parolasını değiştirmeden
+    /// hiçbir işlem yapamaz — Python servisinde bile, çünkü Python yetkiyi
+    /// belirteçten okuyor.
+    ///
+    /// Neden gerekli? Geçici parolayı iki kişi bilir: kullanıcı ve onu
+    /// veren admin. Kullanıcı değiştirene kadar hesap "yalnızca onun" değildir.
     /// </remarks>
+    [JsonIgnore]
+    public bool MustChangePassword { get; set; }
+
+    [JsonIgnore]
+    public DateTime? PasswordChangedAt { get; set; }
+
+    /// <summary>Arka arkaya yanlış parola denemesi sayısı.</summary>
+    /// <remarks>
+    /// Özetleme tek başına yetmez: sınırsız deneme hakkı olan bir betik
+    /// zayıf parolayı eninde sonunda bulur. Başarılı girişte SIFIRLANIR.
+    /// </remarks>
+    [JsonIgnore]
     public int FailedAttempts { get; set; }
 
     /// <summary>Bu ana kadar giriş kapalı (null ise kapalı değil).</summary>
+    [JsonIgnore]
     public DateTime? LockedUntil { get; set; }
+
+    /// <summary>Son başarılı giriş — "bu hesap hiç kullanıldı mı?"</summary>
+    [JsonIgnore]
+    public DateTime? LastLoginAt { get; set; }
+
+    // --- Hesap yaşam döngüsü (Sistem Yönetimi) ------------------------------
+    //
+    // DateTime? ve BAŞLANGIÇ DEĞERİ YOK — bilinçli. "= DateTime.UtcNow"
+    // yazsaydık, HasData ile gelen demo kayıtları her migration üretiminde
+    // "değişmiş" görünür ve EF her seferinde yeni bir veri güncelleme
+    // migration'ı üretirdi. Kurulumla gelen kayıtlarda null = "sistemle
+    // birlikte geldi".
+
+    [JsonIgnore]
+    public DateTime? CreatedAt { get; set; }
+
+    [JsonIgnore]
+    public string? CreatedByName { get; set; }
+
+    [JsonIgnore]
+    public DateTime? DeactivatedAt { get; set; }
+
+    [JsonIgnore]
+    public string? DeactivationReason { get; set; }
 
     /// <summary>Bu teknisyene atanmış iş emirleri.</summary>
     /// <remarks>
     /// <b>Navigation property (gezinme özelliği).</b> Veritabanında böyle bir
     /// sütun YOKTUR; ilişki <c>work_orders.TechnicianId</c> sütununda durur.
-    /// Bu özellik, ilişkiyi C# tarafında nesne olarak gezebilmek içindir:
-    /// <c>technician.WorkOrders</c> yazınca EF Core arka planda JOIN yapar.
-    ///
-    /// Python tarafında bunu elle yapardık: ayrı bir sorgu çalıştırıp
-    /// sonuçları birleştirmek. Burada ilişki modelin parçası.
     ///
     /// [JsonIgnore] ŞART: iş emri JSON'a çevrilirken içindeki teknisyeni de
-    /// yazar, teknisyen de iş emirlerini yazar, o iş emirleri de teknisyeni...
-    /// Sonsuz döngü. Bu özellik SORGU için var, cevap gövdesi için değil.
+    /// yazar, teknisyen de iş emirlerini yazar... Sonsuz döngü.
     /// </remarks>
     [JsonIgnore]
     public List<WorkOrder> WorkOrders { get; set; } = new();
@@ -150,12 +191,5 @@ public record AssignRequest(string? TechnicianId = null);
 /// Çünkü <b>geçmiş kayıt değişmemelidir.</b> Personel işten ayrılsa,
 /// soyadı değişse ya da kaydı kaldırılsa bile üç yıl önceki testin kim
 /// tarafından yapıldığı okunabilir kalmalı.
-///
-/// Bu, Faz 8.6'daki "kayıt silinmez, geçersiz işaretlenir" kararıyla
-/// aynı ilkenin devamı: geçmiş, bugünün durumuna göre yeniden yazılmaz.
-///
-/// ⚠ Bu bir GÜVENLİK katmanı değildir — parola yoktur, herkes herkesin
-/// sicilini seçebilir. Amaç izlenebilirlik (traceability): kaydın
-/// sorumlusunu belirlemek, kötü niyetliyi engellemek değil.
 /// </remarks>
 public record RecordedBy(string EmployeeNo, string Name, string Role);

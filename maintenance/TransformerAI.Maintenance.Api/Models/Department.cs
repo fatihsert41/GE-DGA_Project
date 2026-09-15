@@ -21,7 +21,7 @@ namespace TransformerAI.Maintenance.Api.Models;
 /// </remarks>
 public enum Department
 {
-    /// <summary>Yönetim — tam yetki.</summary>
+    /// <summary>Yönetim — kullanıcı hesabı yönetimi DIŞINDA tam yetki.</summary>
     Management = 0,
 
     /// <summary>Yağ laboratuvarı — DGA ve yağ kalitesi numuneleri.</summary>
@@ -38,6 +38,9 @@ public enum Department
 
     /// <summary>Mühendislik — test onayı, model incelemesi, eşik ve kök neden kararları. (Faz 12)</summary>
     Engineering = 5,
+
+    /// <summary>Sistem Yönetimi — kullanıcı hesapları. Operasyon işi YAPMAZ.</summary>
+    SystemAdmin = 6,
 }
 
 /// <summary>Bir yetkinin tanımı — arayüzde gösterilecek adıyla.</summary>
@@ -109,6 +112,11 @@ public static class Permissions
     public const string EngineeringLimits = "engineering.limits";
     public const string EngineeringRca = "engineering.rca";
 
+    // --- Sistem Yönetimi ----------------------------------------------------
+    // Hesap açma, parola sıfırlama, kilit açma, pasife alma. Yönetim
+    // departmanında BİLE yok: "işi yapan" ile "hesabı veren" ayrı olmalı.
+    public const string UsersManage = "users.manage";
+
     /// <summary>Tüm yetkiler, arayüzde gösterilecek adlarıyla.</summary>
     public static readonly IReadOnlyList<PermissionInfo> Catalog = new List<PermissionInfo>
     {
@@ -129,6 +137,7 @@ public static class Permissions
         new(EngineeringReviewModel, "Model tanısını inceleme (uzman kararı)", "Mühendislik"),
         new(EngineeringLimits, "Varlığa özel eşik tanımlama", "Mühendislik"),
         new(EngineeringRca, "Kök neden analizi kaydı", "Mühendislik"),
+        new(UsersManage, "Kullanıcı hesabı açma, parola sıfırlama, pasife alma", "Sistem"),
     };
 
     private static readonly IReadOnlyList<string> All =
@@ -138,10 +147,11 @@ public static class Permissions
     private static readonly IReadOnlyDictionary<Department, IReadOnlyList<string>> Map =
         new Dictionary<Department, IReadOnlyList<string>>
         {
-            // Yönetim her yere girip çıkar. Listeyi elle yazmak yerine
-            // katalogdan türetiyoruz: yeni bir yetki eklendiğinde yönetime
-            // vermeyi unutmak mümkün olmasın.
-            [Department.Management] = All,
+            // Yönetim her operasyon işine girip çıkar — ama kullanıcı hesabı
+            // VEREMEZ. Listeyi katalogdan türetiyoruz (yeni bir operasyon
+            // yetkisi eklendiğinde yönetime vermeyi unutmak mümkün olmasın),
+            // ve kullanıcı yönetimini açıkça çıkarıyoruz.
+            [Department.Management] = All.Where(p => p != UsersManage).ToList(),
 
             // Bildirim göndermek HERKESİN temel yetkisi (kullanıcı kararı,
             // 14 Eyl): laboratuvar "numune hazır", saha "trafoda yağ kaçağı
@@ -180,6 +190,15 @@ public static class Permissions
                 EngineeringApprove, EngineeringReviewModel, EngineeringLimits,
                 EngineeringRca, AnalysisRun, ManagerView, NotificationsSend,
             },
+
+            // Sistem Yönetimi hesapları yönetir ama OPERASYONA DOKUNMAZ:
+            // test girmez, iş emri görmez/yürütmez, mühendislik kararı
+            // vermez. Hesap verebilen biri aynı zamanda ölçüm girebilseydi,
+            // kendine sahte bir hesap açıp o hesapla kayıt girebilirdi.
+            [Department.SystemAdmin] = new[]
+            {
+                UsersManage, PersonnelView, PersonnelManage, NotificationsSend,
+            },
         };
 
     /// <summary>Departmanın yetkileri.</summary>
@@ -204,7 +223,8 @@ public static class DepartmentCatalog
         new Dictionary<Department, (string, string)>
         {
             [Department.Management] = ("Yönetim",
-                "Tam yetki: bütün ekranlar, bütün test girişleri, personel yönetimi."),
+                "Bütün operasyon ekranları ve işlemleri. Kullanıcı hesabı açamaz: "
+                + "hesaplar Sistem Yönetimi'nde."),
             [Department.OilLaboratory] = ("Yağ Laboratuvarı",
                 "DGA ve yağ kalitesi numunelerini analiz eder ve kaydeder."),
             [Department.ElectricalTesting] = ("Elektriksel Test",
@@ -216,6 +236,9 @@ public static class DepartmentCatalog
             [Department.Engineering] = ("Mühendislik",
                 "Sınır dışı test sonuçlarını onaylar, model tanılarını inceler, "
                 + "varlığa özel eşik ve kök neden kararlarını verir."),
+            [Department.SystemAdmin] = ("Sistem Yönetimi",
+                "Kullanıcı hesaplarını açar, parola sıfırlar, kilidi açar, pasife alır. "
+                + "Test girmez, iş emri yürütmez, mühendislik kararı vermez."),
         };
 
     public static string Name(Department d) =>
@@ -225,6 +248,8 @@ public static class DepartmentCatalog
         d.ToString(),
         Name(d),
         Texts.TryGetValue(d, out var t) ? t.Description : "",
+        // "Tam yetki" artık Yönetim için bile tam değil: kullanıcı yönetimi
+        // hariç. Arayüz bu bayrakla "tüm operasyon yetkileri" yazar.
         FullAccess: d == Department.Management,
         Permissions.For(d));
 
