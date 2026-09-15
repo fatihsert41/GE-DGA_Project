@@ -50,6 +50,9 @@ public class MaintenanceDbContext : DbContext
 
     public DbSet<Notification> Notifications => Set<Notification>();
 
+    /// <summary>root_cause_analyses tablosu (Faz 12.5).</summary>
+    public DbSet<RootCauseAnalysis> RootCauseAnalyses => Set<RootCauseAnalysis>();
+
     /// <summary>Tablo/sütun ayrıntılarını burada tanımlıyoruz.</summary>
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -196,6 +199,39 @@ public class MaintenanceDbContext : DbContext
         note.HasOne(n => n.Recipient)
             .WithMany()
             .HasForeignKey(n => n.RecipientId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // --- Kök neden analizi (Faz 12.5) --------------------------------
+        var rca = modelBuilder.Entity<RootCauseAnalysis>();
+        rca.ToTable("root_cause_analyses");
+        rca.HasKey(r => r.Id);
+        rca.Property(r => r.Id).HasMaxLength(20);
+        rca.Property(r => r.WorkOrderId).HasMaxLength(20).IsRequired();
+        rca.Property(r => r.TransformerId).HasMaxLength(20).IsRequired();
+        // Enum METİN olarak (diğer enum'larla aynı gerekçe). HasDefaultValue
+        // YOK: ilk değer Insulation = 0 anlamlı bir seçenek (Department'taki
+        // tuzakla aynı durum).
+        rca.Property(r => r.FailureMode).HasConversion<string>().HasMaxLength(30);
+        rca.Property(r => r.Finding).HasMaxLength(2000).IsRequired();
+        rca.Property(r => r.RootCause).HasMaxLength(2000).IsRequired();
+        rca.Property(r => r.CorrectiveAction).HasMaxLength(2000).IsRequired();
+        rca.Property(r => r.PreventiveAction).HasMaxLength(2000);
+        rca.Property(r => r.RecordedById).HasMaxLength(20);
+        rca.Property(r => r.RecordedByName).HasMaxLength(100);
+        rca.Property(r => r.RecordedByEmployeeNo).HasMaxLength(20);
+
+        // İş emri başına TEK analiz: veritabanı seviyesinde benzersiz.
+        rca.HasIndex(r => r.WorkOrderId).IsUnique();
+        // "Benzer analiz" sorgusunun iki ekseni.
+        rca.HasIndex(r => r.TransformerId);
+        rca.HasIndex(r => r.FailureMode);
+
+        // Analizi olan iş emri SİLİNEMEZ (Restrict). Bildirimde Cascade
+        // kullanmıştık, çünkü bildirim iş emrinin ekiydi; RCA ise bağımsız
+        // bir öğrenme kaydı — iş emriyle birlikte sessizce yok olmamalı.
+        rca.HasOne(r => r.WorkOrder)
+            .WithMany()
+            .HasForeignKey(r => r.WorkOrderId)
             .OnDelete(DeleteBehavior.Restrict);
 
         // --- Demo teknisyenleri ------------------------------------------

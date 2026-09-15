@@ -39,6 +39,8 @@ builder.Services.AddDbContext<MaintenanceDbContext>(options =>
 // Veritabanı bağlamı asla singleton olmamalı: içinde o isteğe ait
 // değişiklikleri izler, paylaşılırsa istekler birbirine karışır.
 builder.Services.AddScoped<WorkOrderRepository>();
+// Faz 12.5 — kök neden analizi. Scoped: DbContext taşıyor.
+builder.Services.AddScoped<RcaRepository>();
 
 // ML servisi istemcisi. AddHttpClient bir "tipli istemci" kaydeder:
 // MlServiceClient isteyen herkes, adresi ve zaman aşımı ayarlanmış bir
@@ -851,6 +853,133 @@ app.MapGet("/notifications/sent",
 })
 .WithSummary("Oturum sahibinin gönderdiği mesajlar ve okunma durumları.");
 
+
+// ---------------------------------------------------------------------------
+// Kök neden analizi — MH04 (Faz 12.5)
+// ---------------------------------------------------------------------------
+//
+// Okuma uç noktaları açık (iş emirleri gibi): bir arızanın neden olduğu
+// bilgisi saklanacak bir şey değil, öğrenilecek bir şeydir. Yazmak
+// `engineering.rca` ister.
+//
+// Sıra önemli: sabit yollar (/rca/schema, /rca/pending, /rca/similar)
+// parametreli bir yoldan önce tanımlanmalı. Burada /rca/{id} yok, ama
+// /workorders/summary'deki dersi unutmamak için yine de üstte.
+
+app.MapGet("/rca/schema", () => Results.Ok(new
+{
+    failureModes = Enum.GetValues<FailureMode>()
+        .Select(m => new { code = m.ToString(), label = RcaRules.Label(m) }),
+    textMin = RcaRules.TextMin,
+    textMax = RcaRules.TextMax,
+    criticalPriority = RcaRules.CriticalPriority,
+    requiredWhen = new[]
+    {
+        $"Tamamlanmış iş emrinin önceliği ≥ {RcaRules.CriticalPriority:0.0}",
+        "Tamamlanmış onarım ya da değişim işi",
+    },
+}))
+.WithSummary("Arıza türleri ve RCA kuralları.");
+
+app.MapGet("/rca/pending", async (RcaRepository repo, CancellationToken ct) =>
+{
+    var orders = await repo.PendingAsync(ct);
+    var now = DateTime.UtcNow;
+    return Results.Ok(new
+    {
+        count = orders.Count,
+        items = orders.Select(o => new
+        {
+            workOrder = o,
+            requiredBecause = RcaRules.RequiredBecause(o),
+            waitingDays = o.CompletedAt is null
+                ? (int?)null
+                : (int)(now - o.CompletedAt.Value).TotalDays,
+        }),
+    });
+})
+.WithSummary("Kök neden analizi bekleyen tamamlanmış kritik işler.");
+
+app.MapGet("/rca", async (RcaRepository repo, string? transformerId,
+                          string? failureMode, CancellationToken ct) =>
+{
+    FailureMode? mode = Enum.TryParse<FailureMode>(failureMode, out var m) ? m : null;
+    var items = await repo.ListAsync(transformerId, mode, ct);
+    return Results.Ok(new { count = items.Count, items });
+})
+.WithSummary("Kayıtlı kök neden analizleri.");
+
+app.MapGet("/rca/similar", async (RcaRepository repo, string transformerId,
+                                  string? failureMode, string? excludeWorkOrderId,
+                                  CancellationToken ct) =>
+{
+    FailureMode? mode = Enum.TryParse<FailureMode>(failureMode, out var m) ? m : null;
+    var past = await repo.ListAsync(ct: ct);
+    var items = RcaRules.Similar(transformerId, mode, past, excludeWorkOrderId);
+    return Results.Ok(new { count = items.Count, items });
+})
+.WithSummary("Benzer geçmiş analizler (aynı arıza türü / aynı trafo).");
+
+app.MapGet("/workorders/{id}/rca",
+    async (WorkOrderRepository orders, RcaRepository repo, string id, CancellationToken ct) =>
+{
+    var order = await orders.GetAsync(id);
+    if (order is null)
+        return Results.NotFound(new { message = $"İş emri bulunamadı: {id}" });
+
+    var rca = await repo.GetByWorkOrderAsync(id, ct);
+    var past = await repo.ListAsync(ct: ct);
+    return Results.Ok(new
+    {
+        workOrder = order,
+        required = RcaRules.IsRequired(order),
+        requiredBecause = RcaRules.RequiredBecause(order),
+        rca,
+        similar = RcaRules.Similar(order.TransformerId, rca?.FailureMode, past, id),
+    });
+})
+.WithSummary("İş emrinin kök neden analizi (varsa) ve benzer geçmiş analizler.");
+
+app.MapPost("/workorders/{id}/rca",
+    async (WorkOrderRepository orders, RcaRepository repo, AuthService auth,
+           HttpRequest http, string id, CreateRcaRequest request, CancellationToken ct) =>
+{
+    var (me, denied) = await RequireAsync(auth, http, Permissions.EngineeringRca, ct);
+    if (denied is not null) return denied;
+
+    var order = await orders.GetAsync(id);
+    var existing = order is null ? null : await repo.GetByWorkOrderAsync(id, ct);
+    if (RcaRules.CanRecord(order, existing is not null) is { } block)
+        return Results.Json(new { message = block.Message }, statusCode: block.Status);
+
+    var (mode, problems) = RcaRules.Validate(request);
+    if (problems.Count > 0)
+        return Results.BadRequest(new { message = "Kök neden analizi kaydedilemedi.", problems });
+
+    var rca = new RootCauseAnalysis
+    {
+        Id = $"RCA-{order!.Seq:D4}",
+        WorkOrderId = order.Id,
+        TransformerId = order.TransformerId,
+        FailureMode = mode!.Value,
+        Finding = request.Finding!.Trim(),
+        RootCause = request.RootCause!.Trim(),
+        CorrectiveAction = request.CorrectiveAction!.Trim(),
+        PreventiveAction = string.IsNullOrWhiteSpace(request.PreventiveAction)
+            ? null
+            : request.PreventiveAction.Trim(),
+        RecordedAt = DateTime.UtcNow,
+        RecordedById = me!.Id,
+        RecordedByName = me.Name,
+        RecordedByEmployeeNo = me.EmployeeNo,
+    };
+
+    var saved = await repo.AddAsync(rca, ct);
+    return saved is null
+        ? Results.Conflict(new { message = "Bu iş emri için az önce başka bir kök neden analizi kaydedildi." })
+        : Results.Created($"/workorders/{id}/rca", saved);
+})
+.WithSummary("Tamamlanmış iş emrine kök neden analizi yazar (Mühendislik).");
 
 app.Run();
 

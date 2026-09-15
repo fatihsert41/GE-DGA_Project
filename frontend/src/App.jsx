@@ -25,6 +25,7 @@ const ManagerDashboard = lazy(() => import('./components/ManagerDashboard'))
 const ReviewQueue = lazy(() => import('./components/ReviewQueue'))
 const ModelReviewQueue = lazy(() => import('./components/ModelReviewQueue'))
 const LimitsQueue = lazy(() => import('./components/LimitsQueue'))
+const RcaQueue = lazy(() => import('./components/RcaQueue'))
 
 const Loading = () => (
   <div className="panel"><p className="empty">Yükleniyor…</p></div>
@@ -81,6 +82,9 @@ const VIEWS = [
   // Faz 12.4 — tek trafo için süreli, gerekçeli, dört gözlü eşik istisnası.
   { id: 'limits', code: 'MH03', label: 'Varlığa Özel Eşik', module: 'engineering',
     permission: 'engineering.limits' },
+  // Faz 12.5 — kapanan kritik iş emrinin kök neden analizi.
+  { id: 'rca', code: 'MH04', label: 'Kök Neden Analizi', module: 'engineering',
+    permission: 'engineering.rca' },
   { id: 'manager', code: 'YN01', label: 'Yönetim Özeti', module: 'admin',
     permission: 'manager.view' },
   { id: 'personnel', code: 'PR01', label: 'Personel', module: 'admin',
@@ -464,6 +468,8 @@ export default function App() {
                           onBack={() => setSelected(null)} />
                       : <LimitsQueue onOpenTransformer={(id) => setSelected({ id })} />
                   )}
+
+                  {view === 'rca' && <RcaQueue />}
 
                   {view === 'manager' && (
                     selected

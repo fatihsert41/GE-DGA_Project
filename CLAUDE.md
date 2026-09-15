@@ -194,7 +194,36 @@ iki mühendisle denenmeli — 10833 önerir, 10921 onaylar).
 Testler: `tests/test_asset_limits.py` (21) → **282 Python** + 123 .NET.
 Ayrıca: gaz üretim hızı deneyi ölçüldü ve rafa kaldırıldı
 (`docs/DENEY-GAZ-URETIM-HIZI.md`).
-**SIRADAKİ: 12.5 kök neden analizi (RCA, MH04).**
+**✅ 12.5 TAMAM (15 Eyl, eski bilgisayarda) — Kök neden analizi (MH04).**
+**.NET'te** (iş emirleri orada; ortak DB yok kuralı). Model
+`Models/RootCauseAnalysis.cs` (`FailureMode` enum: 10 tür, "Belirlenemedi"
+dahil), kurallar SAF `Services/RcaRules.cs`, depo `Data/RcaRepository.cs`,
+migration `KokNedenAnalizi` (yalnızca CreateTable + 3 indeks). Uç noktalar:
+`GET /rca/schema`, `GET /rca/pending`, `GET /rca?transformerId&failureMode`,
+`GET /rca/similar`, `GET|POST /workorders/{id}/rca` (yazma
+`engineering.rca`). Kararlar:
+* **Zorunlu olduğu iş:** tamamlanmış VE (öncelik ≥ 2.5 ya da
+  Onarım/Değişim). 2.5 = bildirimlerdeki "yüksek" eşiğiyle aynı. Rutin iş
+  kuyruğa düşmez (damga yorgunluğu). Kural bellekte süzülür, SQL'e ikinci
+  kez yazılmadı.
+* Yalnızca **Done** işe (Cancelled/Planned/InProgress → 409). İş emri başına
+  **tek** RCA (benzersiz indeks → yarışta 409). **Güncelleme uç noktası YOK**
+  (denetim kaydı). Kimlik `RCA-{iş emri Seq}`: ayrı sayaç yarışı yok.
+* Bulgu / kök neden / alınan önlem ≥20 karakter; tekrarı önleme isteğe bağlı.
+  Arıza türü yalnızca HARF: `Enum.TryParse("Winding, Core")` sessizce
+  1|2=3=Bushing yapıyordu, testle korunuyor.
+* **Benzer analiz:** aynı tür +3, aynı trafo +2; "Belirlenemedi" tür
+  eşleşmesi sayılmaz; en yeni üstte, en fazla 5. Form YAZMADAN ÖNCE gösterir.
+* İş emri silinirse RCA gitmez (`Restrict`) — bildirimdeki Cascade'in tersi.
+⚠ **Bulunan hata düzeltildi:** arayüzdeki "Bitir" düğmesi hiç
+çalışmıyordu — sunucu tamamlarken not istiyor (Faz 7'den beri), arayüz
+göndermiyordu, her tıklama 409. Artık not formu açılıyor
+(`MaintenancePanel.jsx`, `api.maintenance.setStatus(id, status, note)`).
+Demo DB'de tamamlanmış iş emri YOK → MH04 kuyruğu boş başlar; akış: BK01'de
+kritik işi başlat/bitir (10502 veya planlamacı) → MH04'te 10833 yazar.
+Doğrulama: DB KOPYASI üzerinde ayrı örnekle (5099) uçtan uca 20/20.
+Testler: `RcaRulesTests.cs` (27) → 282 Python + **150 .NET**.
+**SIRADAKİ: 12.6 Mühendislik ekranları MH01–04 son hâli + belgeler (Faz 12'yi kapatır).**
 
 **Yol haritası belgesi: `docs/FAZ12-15-YOL-HARITASI.md`**.
 Önerilen sıra: **12 Mühendislik departmanı + onay akışı** (test onay
