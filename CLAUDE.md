@@ -223,6 +223,45 @@ Demo DB'de tamamlanmış iş emri YOK → MH04 kuyruğu boş başlar; akış: BK
 kritik işi başlat/bitir (10502 veya planlamacı) → MH04'te 10833 yazar.
 Doğrulama: DB KOPYASI üzerinde ayrı örnekle (5099) uçtan uca 20/20.
 Testler: `RcaRulesTests.cs` (27) → 282 Python + **150 .NET**.
+**✅ Sistem Yönetimi TAMAM (15 Eyl, eski bilgisayarda; 12.6'nın önüne alındı).**
+Kullanıcı kararları: sicil + parola · ayrı Sistem Yöneticisi · geçici parola
+ilk girişte değişir · önce bu, sonra 12.6.
+* Yeni `Department.SystemAdmin` + `users.manage`. **Yönetim bu yetkiyi
+  ALMAZ** (`All` eksi `UsersManage`): işi yapan ile hesabı veren ayrı.
+  Sistem Yönetimi operasyona dokunmaz (test/iş emri/mühendislik yok).
+* Kurallar SAF: `Services/PasswordPolicy.cs` (≥10 karakter, sicil/ad/yaygın
+  parola yok, karmaşıklık kuralı YOK — NIST 800-63B) ve
+  `Services/UserAdminRules.cs`. **Yetki yükseltme koruması:** kimse kendi
+  departmanını değiştiremez (403), admin kendini pasife alamaz; son aktif
+  Sistem Yöneticisi / Yönetim taşınamaz, pasife alınamaz.
+* Geçici parola: SİSTEM üretir (12 karakter, 0/O/1/l/I yok), bir kez
+  gösterir. `MustChangePassword` iken belirteçte yetki listesi BOŞ (Python
+  da yazamaz) ve oturum 15 dk; .NET'te `RequireAsync` ayrıca 403
+  `password_change_required` döner — çünkü .NET yetkiyi departmandan okur.
+* Parola değişince / sıfırlanınca / pasife alınca / departman değişince
+  kişinin BÜTÜN oturumları kapanır. Değiştirme kapısı da giriş sayacına
+  yazılır (kaba kuvvete kilitlenir).
+* `PinHasher` → `PasswordHasher`; C# adı `PasswordHash`, DB sütunu hâlâ
+  `PinHash` (`HasColumnName`). Migration `SistemYonetimi`'ne **ELLE** SQL
+  eklendi: eski PIN özetleri ve oturumlar silinir, açılış bloğu herkese
+  `Demo-<sicil>` atar. Olmasaydı herkes eski PIN'le girmeye devam ederdi.
+* Yeni tablo `user_audit_events` (FK yok, kayıt silinmez): açıldı,
+  sıfırlandı, değiştirildi, kilitlendi (yapan=sistem), kilit açıldı,
+  pasife alındı, etkinleştirildi, departman değişti.
+* Açık bulundu ve kapatıldı: `/personnel/by-employee-no/{sicil}` kimliksizdi
+  (kullanıcı sayımı) → artık `personnel.view` istiyor. Giriş ekranındaki
+  demo hesap tablosu ve "PIN = son 4 hane" ipucu kaldırıldı. Pasif hesap
+  mesajı artık yalnızca DOĞRU parolayla gösteriliyor.
+* Arayüz: `AdminPanel.jsx` (AD01), `ChangePasswordScreen.jsx` (zorunlu tam
+  sayfa + PW01 "Hesabım"), `LoginScreen.jsx` parolaya geçti.
+* **İlk .NET entegrasyon testleri:** `AuthServiceTests.cs` bellek içi SQLite
+  (EF InMemory DEĞİL — benzersiz indeks ve SQL davranışını taklit etmez).
+Testler: `PasswordHasherTests`, `UserAdminRulesTests`, `AuthServiceTests`,
+`PermissionTests` güncellendi → 282 Python + **199 .NET**. Uçtan uca (PIN
+dönemi DB kopyası, migration dahil) 36/36.
+⚠ Bilinen sınır: kapatılan oturumun belirteci Python'da süresi dolana kadar
+geçerli (imzalı belirteç ödünleşimi, TokenIssuer).
+
 **SIRADAKİ: 12.6 Mühendislik ekranları MH01–04 son hâli + belgeler (Faz 12'yi kapatır).**
 
 **Yol haritası belgesi: `docs/FAZ12-15-YOL-HARITASI.md`**.
@@ -242,7 +281,10 @@ kalitesi, model sürüm takibi). İLK İŞ: belgenin sonundaki 5 soruyu sor.
 Restricted olduğu için `npm` (npm.ps1) engelleniyor, arayüz penceresi
 sessizce açılmıyordu.
 
-**Giriş gerekli** (Faz 9.0): sicil + PIN. PIN = sicilin son 4 hanesi.
+**Giriş gerekli: sicil + PAROLA** (15 Eyl'de PIN'den geçildi). Demo
+hesapların geçici parolası `Demo-<sicil>` (ör. `Demo-10502`); ilk girişte
+kendi parolanı belirlemeden hiçbir işlem yapılamaz. Kullanıcı hesapları
+**AD01**'den açılır — **10001 Kerem Aksoy (Sistem Yönetimi)**.
 
 **Faz 10 — Departmanlar, yetkiler, bildirim gönderme TAMAM.**
 Yetki ROLE değil DEPARTMANA bağlı ve işlem bazlı. Harita TEK YERDE:
@@ -251,7 +293,8 @@ yetkiyi belirteçten okur (`auth.require_permission`), .NET'e sormaz.
 
 | Sicil | Kişi | Departman | Yapabildikleri |
 |---|---|---|---|
-| 10502 | Zeynep Şahin | **Yönetim** | tam yetki |
+| 10001 | Kerem Aksoy | **Sistem Yönetimi** | kullanıcı aç/sıfırla/kilit aç/pasife al, departman değiştir — operasyon YOK |
+| 10502 | Zeynep Şahin | **Yönetim** | kullanıcı yönetimi HARİÇ tam yetki |
 | 10318 | Elif Demir | Bakım Planlama | iş emri planla/ata, bildirim gönder, personeli gör |
 | 10455, 10740 | Mehmet Kaya, Selin Öztürk | Yağ Laboratuvarı | DGA + yağ testi, numune analizi |
 | 10247 | Ahmet Yılmaz | Elektriksel Test | elektriksel + buşing/kademe testi |

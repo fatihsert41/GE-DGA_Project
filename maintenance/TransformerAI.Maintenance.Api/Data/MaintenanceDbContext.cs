@@ -53,6 +53,9 @@ public class MaintenanceDbContext : DbContext
     /// <summary>root_cause_analyses tablosu (Faz 12.5).</summary>
     public DbSet<RootCauseAnalysis> RootCauseAnalyses => Set<RootCauseAnalysis>();
 
+    /// <summary>user_audit_events tablosu (Sistem Yönetimi).</summary>
+    public DbSet<UserAuditEvent> UserAuditEvents => Set<UserAuditEvent>();
+
     /// <summary>Tablo/sütun ayrıntılarını burada tanımlıyoruz.</summary>
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -114,9 +117,16 @@ public class MaintenanceDbContext : DbContext
         // numarasında da aynı gerekçeyle unique index kullanılmıştı.)
         tech.HasIndex(t => t.EmployeeNo).IsUnique();
 
-        // PIN alanları (Faz 9.0b). Özet ve tuz base64 metin olarak durur.
-        tech.Property(t => t.PinHash).HasMaxLength(100);
-        tech.Property(t => t.PinSalt).HasMaxLength(50);
+        // Parola alanları. Özet ve tuz base64 metin olarak durur.
+        //
+        // HasColumnName: C# adı değişti (PinHash → PasswordHash) ama
+        // veritabanı sütunu AYNI KALDI. Sütun yeniden adlandırmak hiçbir
+        // davranış kazandırmadan migration riski eklerdi. ORM'nin nesne
+        // adı ile tablo adını ayırabilmesi tam olarak bunun için var.
+        tech.Property(t => t.PasswordHash).HasColumnName("PinHash").HasMaxLength(100);
+        tech.Property(t => t.PasswordSalt).HasColumnName("PinSalt").HasMaxLength(50);
+        tech.Property(t => t.CreatedByName).HasMaxLength(130);
+        tech.Property(t => t.DeactivationReason).HasMaxLength(500);
 
         // --- Oturumlar (Faz 9.0b) ----------------------------------------
         var sess = modelBuilder.Entity<Session>();
@@ -234,6 +244,24 @@ public class MaintenanceDbContext : DbContext
             .HasForeignKey(r => r.WorkOrderId)
             .OnDelete(DeleteBehavior.Restrict);
 
+        // --- Kullanıcı hesabı denetim izi (Sistem Yönetimi) --------------
+        var audit = modelBuilder.Entity<UserAuditEvent>();
+        audit.ToTable("user_audit_events");
+        audit.HasKey(a => a.Id);
+        audit.Property(a => a.Action).HasMaxLength(40).IsRequired();
+        audit.Property(a => a.TargetId).HasMaxLength(20).IsRequired();
+        audit.Property(a => a.TargetEmployeeNo).HasMaxLength(20);
+        audit.Property(a => a.TargetName).HasMaxLength(100);
+        audit.Property(a => a.ActorId).HasMaxLength(20);
+        audit.Property(a => a.ActorEmployeeNo).HasMaxLength(20);
+        audit.Property(a => a.ActorName).HasMaxLength(100);
+        audit.Property(a => a.Detail).HasMaxLength(500);
+        audit.HasIndex(a => a.At);
+        audit.HasIndex(a => a.TargetId);
+        // Yabancı anahtar YOK, bilinçli: denetim kaydı kişi kaydından
+        // bağımsız yaşamalı. Kişi kaydına bağlı olsaydı, bir gün kayıt
+        // silindiğinde "bu hesabı kim açtı" izi de onunla giderdi.
+
         // --- Demo teknisyenleri ------------------------------------------
         // HasData: başlangıç verisi migration'ın İÇİNE yazılır. Ayrı bir
         // "seed" betiği çalıştırmaya gerek kalmaz; veritabanı nerede
@@ -282,6 +310,15 @@ public class MaintenanceDbContext : DbContext
                 Specialty = Specialty.Thermal,
                 Role = PersonnelRole.Engineer,
                 Department = Department.Engineering,
-                MaxOpenOrders = 2, IsActive = true });
+                MaxOpenOrders = 2, IsActive = true },
+            // Sistem Yönetimi. Rol "Mühendis": süpervizör olsaydı yüksek
+            // öncelikli iş emri bildirimleri (NotificationPlanner) ona da
+            // giderdi — hesap yöneticisinin iş emriyle ilgisi yok.
+            // Kapasite 0: iş emri almaz (zaten yürütme yetkisi de yok).
+            new Technician { Id = "TK-09", EmployeeNo = "10001", Name = "Kerem Aksoy",
+                Specialty = Specialty.General,
+                Role = PersonnelRole.Engineer,
+                Department = Department.SystemAdmin,
+                MaxOpenOrders = 0, IsActive = true });
     }
 }

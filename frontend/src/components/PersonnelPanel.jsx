@@ -61,7 +61,7 @@ function PermissionMatrix({ catalog, items }) {
                 <td>
                   <div className="perm-tags">
                     {d.fullAccess
-                      ? <span className="perm-tag full">Tam yetki — her ekran ve her işlem</span>
+                      ? <span className="perm-tag full">Tüm operasyon yetkileri — kullanıcı hesabı yönetimi hariç</span>
                       : d.permissions.map((p) => (
                         <span key={p} className="perm-tag">{label(p)}</span>
                       ))}
@@ -252,13 +252,13 @@ export default function PersonnelPanel({ currentUser }) {
       <div className="panel">
         <h2>Kimlik ve İzlenebilirlik</h2>
         <p className="note" style={{ marginTop: 0 }}>
-          Sisteme sicil numarası ve PIN ile girilir. Girilen her ölçüm,
+          Sisteme sicil numarası ve parola ile girilir. Girilen her ölçüm,
           yağ testi ve elektriksel test <b>kimin kaydettiği</b> bilgisiyle
           saklanır; hatalı bir kaydı geçersiz işaretleyen kişi de kayda
           geçer.
         </p>
         <div className="tmeta">
-          <span className="k">PIN saklama</span>
+          <span className="k">Parola saklama</span>
           <span>PBKDF2 · 100.000 tur · kişiye özel tuz
             <span className="muted"> (düz metin saklanmaz)</span></span>
           <span className="k">Hatalı deneme</span>
@@ -278,8 +278,9 @@ export default function PersonnelPanel({ currentUser }) {
           yerel ağda çalışıyor; gerçek kurulumda şart), çok faktörlü
           doğrulama ve parola politikası yok. Departmanı değiştirilen
           kişinin ölçüm servisindeki yetkileri yeniden giriş yapana kadar
-          eski kalır. Dört haneli PIN güçlü bir parola değildir — amaç
-          güvenlikten çok <b>izlenebilirliktir</b>.
+          eski kalır. Parola en az 10 karakterdir; geçici parolayla açılan
+          oturum parola değiştirilene kadar <b>hiçbir işlem</b> yapamaz.
+          Hesapları <b>Sistem Yönetimi</b> açar (AD01).
         </div>
       </div>
     </div>

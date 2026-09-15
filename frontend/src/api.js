@@ -47,6 +47,19 @@ export const session = {
   },
 }
 
+/** Giriş (ya da parola değiştirme) cevabından oturum kullanıcısı. */
+export const userFromLogin = (result) => ({
+  employeeNo: result.employeeNo,
+  name: result.name,
+  role: result.role,
+  specialty: result.specialty,
+  department: result.department,
+  departmentName: result.departmentName,
+  permissions: result.permissions || [],
+  mustChangePassword: Boolean(result.mustChangePassword),
+  expiresAt: result.expiresAt,
+})
+
 // Her isteğe belirteci ekle. İki istemciye de ayrı ayrı takılıyor:
 // Python kimliği imzadan doğrular, .NET hem imzayı hem oturum satırını.
 const attachToken = (config) => {
@@ -118,14 +131,34 @@ export const api = {
   // Giriş .NET'te: personel kaydı orada duruyor. Python belirteci
   // imzasından doğruluyor, kimlik için .NET'e SORMUYOR — böylece .NET
   // kapalıyken de ölçüm girilebilir.
-  login: (employeeNo, pin) =>
-    maint.post('/auth/login', { employeeNo, pin }).then((r) => r.data),
+  login: (employeeNo, password) =>
+    maint.post('/auth/login', { employeeNo, password }).then((r) => r.data),
+  // Başarılıysa sunucu kişinin BÜTÜN oturumlarını kapatır ve yeni belirteç
+  // döner; çağıran onu saklamalı (bkz. ChangePasswordScreen).
+  changePassword: (currentPassword, newPassword) =>
+    maint.post('/auth/change-password', { currentPassword, newPassword })
+      .then((r) => r.data),
   logout: () => maint.post('/auth/logout')
     .then((r) => r.data)
     // Oturum kapanınca başka kullanıcının verisi önbellekte kalmasın.
     .finally(() => cache.clear()),
   me: () => maint.get('/auth/me').then((r) => r.data),
   personnel: () => maint.get('/technicians').then((r) => r.data),
+
+  // --- Sistem Yönetimi — kullanıcı hesapları (AD01) -----------------------
+  // Önbelleğe ALINMIYOR: kilit durumu ve son giriş sürekli değişir.
+  admin: {
+    users: () => maint.get('/admin/users').then((r) => r.data),
+    createUser: (body) => maint.post('/admin/users', body).then((r) => r.data),
+    resetPassword: (id) =>
+      maint.post(`/admin/users/${id}/reset-password`).then((r) => r.data),
+    unlock: (id) => maint.post(`/admin/users/${id}/unlock`).then((r) => r.data),
+    deactivate: (id, reason) =>
+      maint.post(`/admin/users/${id}/deactivate`, { reason }).then((r) => r.data),
+    activate: (id) => maint.post(`/admin/users/${id}/activate`).then((r) => r.data),
+    audit: (limit = 100) =>
+      maint.get('/admin/audit', { params: { limit } }).then((r) => r.data),
+  },
 
   // --- Bildirimler (Faz 9.2) ----------------------------------------------
   notifications: (unreadOnly = false) =>
