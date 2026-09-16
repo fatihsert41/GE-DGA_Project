@@ -39,6 +39,11 @@ services:
     build: ./frontend
     ports:
       - "8080:80"
+      - "8443:443"
+    volumes:
+      # Sertifika bağlıysa nginx HTTPS'i açar ve 8080'i 8443'e yönlendirir.
+      # Yoksa (klasör boş) her şey düz HTTP çalışmaya devam eder.
+      - ./certs:/etc/nginx/certs:ro
     depends_on:
       - backend
       - maintenance

@@ -32,7 +32,13 @@ def _cors_origins() -> list[str]:
     kökenden geldiği için CORS'a aslında ihtiyacı yok; varsayılan yalnızca
     arayüzün adresi. Başka bir köken gerekirse ortam değişkeniyle eklenir.
     """
-    raw = os.environ.get("TRANSFORMERAI_CORS_ORIGINS", "http://localhost:5173")
+    # (16 Eyl) Vite artık TLS ile açılıyor; https:// köken varsayılana
+    # eklendi. http:// olan duruyor: sertifikası olmayan bir bilgisayarda
+    # dev sunucusu HTTP'ye düşüyor.
+    raw = os.environ.get(
+        "TRANSFORMERAI_CORS_ORIGINS",
+        "https://localhost:5173,http://localhost:5173",
+    )
     return [origin.strip() for origin in raw.split(",") if origin.strip()]
 
 

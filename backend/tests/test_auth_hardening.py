@@ -96,7 +96,11 @@ def test_kucuk_saat_farki_tolere_edilir():
 def test_cors_varsayilani_yalnizca_arayuz(monkeypatch):
     from app import main
     monkeypatch.delenv("TRANSFORMERAI_CORS_ORIGINS", raising=False)
-    assert main._cors_origins() == ["http://localhost:5173"]
+    # Yalnızca arayüzün kendi adresi — TLS'li ve TLS'siz hâli.
+    assert main._cors_origins() == [
+        "https://localhost:5173",
+        "http://localhost:5173",
+    ]
 
 
 def test_cors_ortam_degiskeniyle_genisletilir(monkeypatch):

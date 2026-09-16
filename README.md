@@ -471,8 +471,16 @@ Faz 6'daki doğrulama için kullanılan gerçek veri seti açık kaynaklıdır v
   katmanı sonraki adım olarak belgelenmiştir.
 - İş emri numaraları tek servis örneği varsayar; yatay ölçeklemede
   veritabanı dizisi (sequence) gerekir.
-- **HTTPS yoktur.** Docker kurulumu yerel ağ içindir; gerçek kurulumda nginx
-  önüne TLS sertifikası şarttır, aksi hâlde parola ve belirteç ağda açık gider.
+- **TLS kendinden imzalı sertifikayla kurulur.** Trafik şifrelenir
+  (geliştirmede Vite `https://localhost:5173`, Docker'da nginx `:8443`), ancak
+  sertifikayı onaylayan bir otorite yoktur: tarayıcı bir kez uyarır. Gerçek
+  kurulumda kurumun sertifikası kullanılmalıdır. Sertifika üretimi:
+  `openssl req -x509 -newkey rsa:2048 -nodes -days 825 -keyout certs/dev-key.pem
+  -out certs/dev-cert.pem -subj "/CN=localhost" -addext
+  "subjectAltName=DNS:localhost,IP:127.0.0.1"` (proje kökünden; `certs/` git'e
+  girmez). Sertifika yoksa her iki ortam da düz HTTP'ye düşer.
+- **Çok faktörlü doğrulama ve e-postayla parola sıfırlama yoktur;** parola
+  sıfırlama Sistem Yönetimi ekranından (AD01) elle yapılır.
 - Python servisi oturum tablosunu görmez: .NET'te kapatılan bir oturumun
   belirteci Python'da **en fazla 20 dakika** daha geçerli kalabilir (imzalı
   belirteç + yenileme ödünleşimi; önceden 9 saatti).

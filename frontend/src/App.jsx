@@ -3,6 +3,7 @@ import api, { clearApiCache, session } from './api'
 import { can, canAny } from './permissions'
 // Giriş ekranı HEMEN yüklenir: kullanıcının ilk gördüğü şey o.
 import LoginScreen from './components/LoginScreen'
+import BrandLogo from './components/BrandLogo'
 // Parola değiştirme de HEMEN yüklenir: geçici parolalı kullanıcının
 // göreceği ilk ekran o.
 import ChangePasswordScreen from './components/ChangePasswordScreen'
@@ -342,10 +343,10 @@ export default function App() {
       {/* --- Başlık çubuğu ------------------------------------------------ */}
       <header className="erp-titlebar">
         <div className="erp-brand">
-          <span className="erp-logo" aria-hidden="true" />
+          <BrandLogo variant="mark" className="erp-logo-img" />
           <div>
-            <b>TransformerAI</b>
-            <span>Varlık İzleme ve Bakım Yönetim Sistemi</span>
+            <b>GE Vernova</b>
+            <span>Grid Solutions · TransformerAI</span>
           </div>
         </div>
 
@@ -373,7 +374,7 @@ export default function App() {
       <div className="erp-body">
         {/* --- Modül ağacı ------------------------------------------------ */}
         <nav className="erp-menu" aria-label="Ana menü">
-          <div className="erp-menu-head">Ana Menü</div>
+          <div className="erp-menu-head">GE Grid Solutions</div>
           {MODULES.map((m) => {
             const isOpen = !collapsed.has(m.id)
             return (

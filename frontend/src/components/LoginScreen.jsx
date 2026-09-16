@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import api, { session, userFromLogin } from '../api'
+import BrandLogo from './BrandLogo'
 
 /* Giriş ekranı. (Faz 9.0d, Sistem Yönetimi ile parolaya geçti)
  *
@@ -14,6 +15,11 @@ import api, { session, userFromLogin } from '../api'
  *
  * Geçici parolayla girildiyse sunucu `mustChangePassword: true` döner;
  * App uygulamayı açmadan önce parola değiştirme ekranını gösterir.
+ *
+ * (16 Eyl) Buradaki "Bu giriş ne kadar koruyor?" açılır bölümü kaldırıldı:
+ * sıraladığı eksiklerin başında HTTPS/TLS geliyordu, o da artık kuruldu
+ * (bkz. `frontend/vite.config.js` ve `frontend/nginx.conf`). Güvenlik
+ * özetinin yeri README; giriş ekranı kurumsal ve sade kalıyor.
  */
 
 export default function LoginScreen({ onLogin }) {
@@ -50,11 +56,11 @@ export default function LoginScreen({ onLogin }) {
     <div className="login-wrap">
       <form className="panel login-card" onSubmit={submit}>
         <div className="login-brand">
-          <span className="login-mark" aria-hidden="true" />
+          <BrandLogo variant="mark" className="login-mark-img" />
           <div>
-            <h1 className="login-title">TransformerAI</h1>
+            <h1 className="login-title">GE Vernova</h1>
             <div className="muted login-sub">
-              DGA Tabanlı Trafo İzleme ve Bakım Planlama
+              Grid Solutions · TransformerAI
             </div>
           </div>
         </div>
@@ -89,24 +95,9 @@ export default function LoginScreen({ onLogin }) {
           kilitlendiyse <b>Sistem Yöneticinize</b> başvurun.
         </p>
 
-        {/* Sistemin sınırlarını gizlemek, kullanıcıyı var olmayan bir
-            güvenceye dayandırmaktır. Bu yüzden açıkça yazılıyor. */}
-        <details className="login-scope">
-          <summary>Bu giriş ne kadar koruyor?</summary>
-          <div className="login-scope-body">
-            <p><b>Var olanlar:</b> parola veritabanında düz metin olarak
-              saklanmaz (PBKDF2, 100.000 tur, kişiye özel tuz); en az 10
-              karakter, sicil ya da ad içeremez; 5 hatalı denemeden sonra
-              15 dakika kilit; geçici parolayla açılan oturum parola
-              değişene kadar hiçbir işlem yapamaz; oturum süreli ve iptal
-              edilebilir; yetkiler departmana bağlıdır ve her istekte
-              sunucuda kontrol edilir; hesap işlemleri denetim izine yazılır.</p>
-            <p><b>Olmayanlar:</b> HTTPS/TLS yok — bu demo yerel ağda
-              çalışıyor, gerçek kurulumda şarttır, aksi halde parola ve
-              oturum anahtarı ağda açık gider. Çok faktörlü doğrulama ve
-              e-postayla parola sıfırlama da yok.</p>
-          </div>
-        </details>
+        <div className="login-foot">
+          <BrandLogo variant="lockup" className="login-lockup" />
+        </div>
       </form>
     </div>
   )

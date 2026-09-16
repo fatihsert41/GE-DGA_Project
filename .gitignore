@@ -42,3 +42,16 @@ frontend/.vite/
 
 # Keep placeholders
 !backend/artifacts/.gitkeep
+
+# Marka varlıkları depoya girmez (bkz. frontend/public/brand/README.md)
+frontend/public/brand/*
+!frontend/public/brand/README.md
+
+# Yerel geliştirme TLS sertifikaları
+certs/
+
+# Mimari diyagram üretiminde Edge geçici profili
+docs/architecture/src/edge-profile/
+
+# Yerel geliştirme notları (repoya girmez)
+CLAUDE.md

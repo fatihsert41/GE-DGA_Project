@@ -993,24 +993,6 @@ td.num, span.num, b.num {
 
 .login-card .primary { margin-top: 18px; }
 
-.login-demo {
-  margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--rule);
-  font-size: 0.82rem;
-}
-.login-accounts { margin-top: 8px; }
-.login-accounts td { padding: 5px 10px; font-size: 0.8rem; }
-
-.login-scope { margin-top: 16px; font-size: 0.82rem; }
-.login-scope summary {
-  cursor: pointer; color: var(--accent); text-underline-offset: 2px;
-}
-.login-scope-body {
-  margin-top: 10px; padding: 12px 14px; border-radius: 8px;
-  background: var(--surface-2); line-height: 1.55;
-}
-.login-scope-body p { margin: 0 0 9px; }
-.login-scope-body p:last-child { margin-bottom: 0; }
-
 /* Üst çubukta aktif kullanıcı */
 .top-right { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
 .who { text-align: right; line-height: 1.25; }
@@ -1968,3 +1950,109 @@ button.primary:hover { background: linear-gradient(#4679b0, #2a5a8d); border-col
 .pw-rules li.ok { color: var(--ink-soft); }
 .pw-rules li.bad { color: var(--critical); }
 .audit-table td { font-size: 0.8rem; }
+
+/* =====================================================================
+   Marka katmanı — GE Vernova / Grid Solutions (16 Eyl)
+
+   Kullanıcı isteği: "Platform arayüzünü GE Vernova olarak ayarla, menüye
+   ve ekrana bu logoları koy, arayüzü güzelleştir."
+
+   Faz 11 ERP katmanının ÜSTÜNE yazıldı; oradaki kurallar silinmedi,
+   burada eziliyor (aynı gerekçe: geri almak bu bloğu silmek kadar kolay).
+   Değişen tek şey KURUMSAL KİMLİK: lacivert → GE Vernova yeşili/teal.
+
+   DEĞİŞMEYEN: risk rampası ve grafik serisi renkleri. Onlar renk körlüğü
+   doğrulamasından geçti ve anlam taşıyor; marka rengi anlam taşımaz.
+   ===================================================================== */
+
+:root {
+  --ge-teal: #0b6e6e;          /* ana marka rengi */
+  --ge-teal-dark: #064f52;
+  --ge-teal-light: #128b86;
+  --ge-teal-tint: #e6f2f1;
+
+  --accent: var(--ge-teal);
+  --erp-navy: var(--ge-teal-dark);
+  --erp-bar-top: var(--ge-teal);
+  --erp-bar-bottom: var(--ge-teal-dark);
+  --erp-select: #cfe8e5;
+  --erp-hover: #eaf5f3;
+}
+
+/* --- Başlık çubuğu --------------------------------------------------- */
+
+.erp-titlebar {
+  background: linear-gradient(100deg, var(--ge-teal-dark) 0%, var(--ge-teal) 55%, var(--ge-teal-light) 100%);
+  border-bottom: 1px solid #033b3d;
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.12) inset;
+}
+.erp-brand b { font-weight: 600; letter-spacing: 0.04em; }
+.erp-brand span { color: #c7e4e0; letter-spacing: 0.02em; }
+
+/* Logo yuvası: dosya varsa görsel, yoksa yazı işareti (BrandLogo.jsx).
+   İkisi de aynı kutuyu doldurur ki çubuk yüksekliği zıplamasın. */
+.brand-img-mark, .brand-fallback-mark {
+  width: 26px; height: 26px; flex: none; object-fit: contain;
+}
+.brand-fallback {
+  display: inline-flex; align-items: center; justify-content: center; gap: 4px;
+}
+.brand-fallback-mark {
+  border-radius: 50%; background: #fff; color: var(--ge-teal-dark);
+  font-size: 11px; font-style: normal;
+}
+.brand-fallback-mark b { font-weight: 700; letter-spacing: 0.02em; }
+.erp-logo { display: none; }   /* eski CSS ile çizilen amblem yerini logoya bıraktı */
+
+/* --- Sol menü -------------------------------------------------------- */
+
+.erp-menu-head {
+  background: linear-gradient(var(--ge-teal-light), var(--ge-teal));
+  letter-spacing: 0.06em; text-transform: uppercase; font-size: 11px;
+}
+.erp-menu-item.active, .erp-menu-item[aria-current="true"] {
+  border-left: 3px solid var(--ge-teal);
+}
+
+/* --- Giriş ekranı ---------------------------------------------------- */
+
+.login-wrap {
+  background:
+    radial-gradient(1100px 520px at 15% -10%, rgba(18, 139, 134, 0.55), transparent 70%),
+    linear-gradient(160deg, #064f52 0%, #0b6e6e 45%, #08363a 100%);
+}
+.login-card {
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  box-shadow: 0 18px 48px rgba(3, 40, 42, 0.45);
+  padding: 30px 30px 24px;
+}
+.login-brand { align-items: center; gap: 12px; }
+.login-mark { display: none; }
+.brand-img-mark.login-mark-img, .brand-fallback-mark.login-mark-img {
+  width: 42px; height: 42px; font-size: 15px;
+  background: var(--ge-teal); color: #fff;
+}
+.brand-img-mark.login-mark-img { background: none; }
+.login-title { font-size: 1.35rem; font-weight: 600; color: var(--ge-teal-dark); }
+.login-sub { letter-spacing: 0.03em; }
+
+.login-card .primary {
+  background: linear-gradient(var(--ge-teal-light), var(--ge-teal));
+  border-color: var(--ge-teal-dark); color: #fff; font-weight: 600;
+  width: 100%; padding: 9px 14px;
+}
+.login-card .primary:hover:not(:disabled) {
+  background: linear-gradient(var(--ge-teal), var(--ge-teal-dark));
+}
+
+.login-foot {
+  display: flex; align-items: center; justify-content: center;
+  margin-top: 22px; padding-top: 14px; border-top: 1px solid var(--rule);
+}
+.brand-img-lockup { height: 18px; width: auto; object-fit: contain; opacity: 0.85; }
+.brand-fallback-lockup { gap: 6px; color: var(--ge-teal-dark); font-size: 13px; }
+.brand-fallback-lockup b { font-weight: 700; }
+.brand-fallback-lockup i {
+  font-style: normal; letter-spacing: 0.18em; font-size: 11px; color: var(--muted);
+}

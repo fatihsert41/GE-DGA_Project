@@ -3,19 +3,20 @@ using TransformerAI.Maintenance.Api.Models;
 namespace TransformerAI.Maintenance.Api.Services;
 
 /// <summary>
-/// Bir iş emri için en uygun teknisyeni seçer.
+/// Picks the most suitable technician for a work order.
 /// </summary>
 /// <remarks>
-/// WorkOrderPlanner gibi bu sınıf da SAFTIR: HTTP ve veritabanı bilmez.
-/// Girdi teknisyen yükleri + iş emri + trafo konumu, çıktı bir seçim.
-/// Böylece "TR-01'in işi kime gitmeli?" sorusu veritabanı olmadan test edilir.
+/// Like WorkOrderPlanner, this class is PURE: it knows nothing about HTTP or
+/// the database. Input: technician workloads + work order + location;
+/// output: a choice. That lets "who should handle TR-01?" be unit-tested
+/// without a database.
 /// </remarks>
 public class AssignmentService
 {
-    /// <summary>Seçim ve gerekçesi.</summary>
+    /// <summary>The chosen technician and the reasoning.</summary>
     public record Assignment(Technician Technician, int Score, string Reason);
 
-    /// <summary>Arıza ailesine göre hangi uzmanlık gerekir?</summary>
+    /// <summary>Which specialty does this fault family require?</summary>
     public static Specialty RequiredSpecialty(WorkOrderKind kind, string? family)
     {
         if (kind == WorkOrderKind.Sampling)
@@ -29,18 +30,18 @@ public class AssignmentService
             "Termal" => Specialty.Thermal,
             _ => Specialty.General,
         };
-        // switch ifadesi: Python'daki match/case veya sözlük araması gibi.
-        // "_" varsayılan dal (Python'daki else).
+        // Switch expression: similar to Python's match/case or a dict lookup.
+        // "_" is the default arm (Python's else).
     }
 
     /// <summary>
-    /// Adaylar arasından en uygun teknisyeni seçer.
+    /// Selects the best technician among the candidates.
     /// </summary>
-    /// <param name="workloads">Teknisyenler ve anlık açık iş sayıları.</param>
-    /// <param name="kind">İşin türü.</param>
-    /// <param name="location">Trafonun konumu (ML servisinden).</param>
-    /// <param name="family">Arıza ailesi: Deşarj / Termal / Normal.</param>
-    /// <returns>Uygun kimse yoksa null.</returns>
+    /// <param name="workloads">Technicians and their current open-order counts.</param>
+    /// <param name="kind">Type of work.</param>
+    /// <param name="location">Transformer location (from the ML service).</param>
+    /// <param name="family">Fault family: Deşarj (discharge) / Termal (thermal) / Normal.</param>
+    /// <returns>null when nobody is eligible.</returns>
     public Assignment? Choose(IReadOnlyList<TechnicianWorkload> workloads,
                               WorkOrderKind kind,
                               string? location,
@@ -48,13 +49,14 @@ public class AssignmentService
     {
         var needed = RequiredSpecialty(kind, family);
 
-        // Kapasitesi dolu, pasif ve İŞ YÜRÜTME YETKİSİ OLMAYANLAR elenir.
+        // Filter out anyone who is inactive, at capacity, or NOT PERMITTED
+        // to execute work orders.
         //
-        // ⚠ Faz 12'de fark edilen hata: Faz 10'da departmanlar gelince bu
-        // filtre eklenmemişti. Sistem bir iş emrini yağ laboratuvarındaki
-        // bir mühendise atayabiliyordu; o kişi "Başlat" dediğinde sunucu
-        // 403 döndürüyordu — iş atanmış görünüp hiç yürütülemiyordu.
-        // Atama ile yetki aynı kurala bakmalı.
+        // ⚠ Bug found in Phase 12: when departments arrived in Phase 10 this
+        // filter was missing. The system could assign a work order to an oil
+        // laboratory engineer; when that person pressed "Start" the server
+        // returned 403 — the order looked assigned but could never be run.
+        // Assignment and authorization must follow the same rule.
         var candidates = workloads
             .Where(w => w.Technician.IsActive && w.HasCapacity
                         && Permissions.Has(w.Technician.Department,
@@ -66,17 +68,17 @@ public class AssignmentService
             return null;
         }
 
-        // Puanlama: yüksek puan daha iyi.
-        //   uzmanlık eşleşmesi   +5
-        //   genel uzmanlık       +1  (her işi yapar ama uzman tercih edilir)
-        // Puan eşitse yükü az olan kazanır — böylece iş dağılır.
+        // Scoring: higher is better.
+        //   specialty match      +5
+        //   general specialty    +1  (can do any job, but specialists win)
+        // On a tie the least-loaded technician wins, spreading the work.
         //
-        // ⚠ KALDIRILAN KURAL: burada bir de "bölge eşleşmesi +10" vardı
-        // (yol süresi en pahalı kalemdir). Bu kurulumdaki tüm personel
-        // aynı bölgede olduğu için kural artık ayrım üretmiyordu —
-        // üstelik trafo konumları farklı olduğundan bazı varlıkları
-        // sessizce kayırıyordu. Çok bölgeli bir işletmede geri gelmesi
-        // gereken bir kuraldır; tek bölgede yanlış çalışır.
+        // ⚠ REMOVED RULE: there used to be a "region match +10" bonus
+        // (travel time is the most expensive item). All staff in this
+        // installation share one region, so the rule no longer
+        // discriminated — and because transformer locations differ, it
+        // silently favoured some assets. It belongs back in a multi-region
+        // operation; in a single region it behaves wrongly.
         var scored = candidates
             .Select(w =>
             {
@@ -101,7 +103,7 @@ public class AssignmentService
             .OrderByDescending(a => a.Score)
             .ThenBy(a => workloads.First(w => w.Technician.Id == a.Technician.Id)
                                   .OpenOrders)
-            .ThenBy(a => a.Technician.Id)   // eşitlikte deterministik olsun
+            .ThenBy(a => a.Technician.Id)   // deterministic on ties
             .ToList();
 
         return scored.FirstOrDefault();

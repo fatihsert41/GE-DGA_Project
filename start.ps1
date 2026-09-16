@@ -20,13 +20,38 @@ param(
 $ErrorActionPreference = "Stop"
 $root = $PSScriptRoot
 
+# Arayuz TLS ile aciliyor mu? (certs/ varsa Vite https dinler)
+$useTls = (Test-Path (Join-Path $root "certs\dev-cert.pem")) -and
+          (Test-Path (Join-Path $root "certs\dev-key.pem"))
+$uiUrl = if ($useTls) { "https://localhost:5173/" } else { "http://localhost:5173/" }
+
+# Kendinden imzali sertifikayi KABUL ET. Bu yalnizca bu yerel baslatma
+# betiginin kendi saglik yoklamasi icin; uygulama kodunda boyle bir sey YOK.
+if ($useTls) {
+    [System.Net.ServicePointManager]::ServerCertificateValidationCallback = { $true }
+    # Windows PowerShell 5.1 varsayilan olarak eski TLS surumlerini deniyor;
+    # Vite yalnizca TLS 1.2/1.3 konusuyor, aradaki el sikisma dusuyordu.
+    [System.Net.ServicePointManager]::SecurityProtocol =
+        [System.Net.SecurityProtocolType]::Tls12 -bor [System.Net.SecurityProtocolType]::Tls11
+}
+
 $services = @(
     @{ Name = "Python / ML";      Port = 8000; Url = "http://localhost:8000/health" }
     @{ Name = ".NET / Bakim";     Port = 5080; Url = "http://localhost:5080/health" }
-    @{ Name = "React / Arayuz";   Port = 5173; Url = "http://localhost:5173/" }
+    @{ Name = "React / Arayuz";   Port = 5173; Url = $uiUrl }
 )
 
 function Test-Service($url) {
+    # https icin curl.exe: Windows PowerShell 5.1'in Invoke-WebRequest'i
+    # kendinden imzali sertifikali TLS baglantisinda el sikismayi
+    # tamamlayamiyor (curl ayni adrese 200 donerken). curl.exe Windows 10'dan
+    # beri isletim sistemiyle geliyor; -k sertifika dogrulamasini atlar ve
+    # bu YALNIZCA bu yerel saglik yoklamasi icindir.
+    if ($url -like "https://*") {
+        $code = & curl.exe -k -s -o NUL -w "%{http_code}" --max-time 3 $url 2>$null
+        if ($code -match '^[1-5]\d\d$' -and $code -ne "000") { return [int]$code }
+        return $null
+    }
     try {
         $r = Invoke-WebRequest -Uri $url -TimeoutSec 3 -UseBasicParsing
         return $r.StatusCode
@@ -161,5 +186,8 @@ Start-Process powershell -ArgumentList @(
 Write-Host "Uc pencere acildi. Servislerin ayaga kalkmasi ~20 saniye surer." -ForegroundColor Cyan
 Start-Sleep -Seconds 22
 Show-Status
-Write-Host "Arayuz: http://localhost:5173" -ForegroundColor Green
+Write-Host "Arayuz: $uiUrl" -ForegroundColor Green
+if ($useTls) {
+    Write-Host "  (kendinden imzali sertifika: tarayici bir kez uyarir -> Gelismis, Devam et)" -ForegroundColor DarkGray
+}
 Write-Host "API dokumantasyonu: http://localhost:8000/docs" -ForegroundColor Green
