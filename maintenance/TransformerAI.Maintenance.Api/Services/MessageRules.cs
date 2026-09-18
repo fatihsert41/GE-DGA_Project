@@ -46,7 +46,7 @@ public static class MessageRules
     {
         var problems = new List<string>();
 
-        if (string.IsNullOrWhiteSpace(request.Subject))
+        if (string.IsNullOrWhiteSpace(request.Subject)) 
             problems.Add("Konu boş olamaz.");
         else if (request.Subject.Trim().Length > SubjectMax)
             problems.Add($"Konu en fazla {SubjectMax} karakter olabilir.");

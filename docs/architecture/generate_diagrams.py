@@ -522,6 +522,131 @@ def uml_domain():
                "ASP.NET Core + EF Core (SQLite)"), W, H
 
 
+
+# ======================================================================
+# 5) Technology flow (Turkish): which technology is used at which step
+# ======================================================================
+def _wrap(textline, width):
+    words, lines, cur = textline.split(), [], ""
+    for w in words:
+        if len(cur) + len(w) + 1 > width:
+            lines.append(cur)
+            cur = w
+        else:
+            cur = f"{cur} {w}".strip()
+    if cur:
+        lines.append(cur)
+    return lines
+
+
+def _step(b, x, y, w, h, num, title, desc, techs, color, fill):
+    """One flow step: number badge, title, description, technology chips."""
+    b.append(rect(x, y, w, h, fill, color, 10, 1.8))
+    b.append(f'<circle cx="{x + 24}" cy="{y + 26}" r="15" fill="{color}"/>')
+    b.append(text(x + 24, y + 31, str(num), 14, "#fff", 700, "middle"))
+    b.append(text(x + 48, y + 31, title, 15, INK, 700))
+    for i, line in enumerate(_wrap(desc, 27)):
+        b.append(text(x + 14, y + 66 + i * 18, line, 12.5, MUTED))
+    ty = y + h - 16 - 30 * len(techs)
+    for t in techs:
+        tw = chip_width(t, 12.5)
+        b.append(rect(x + 14, ty, tw, 24, "#fff", color, 5, 1.2))
+        b.append(text(x + 23, ty + 17, t, 12.5, INK, 600, font=MONO))
+        ty += 30
+
+
+def tech_flow():
+    W, H = 1760, 1110
+    b = []
+    NW, GAP, X0 = 200, 32, 96
+
+    lanes = [
+        (120, "TANI AKIŞI · Python", PY, "#f3f8fc", [
+            ("Numune girişi", "NA01 ekranında yağdaki gaz değerleri girilir.",
+             ["React", "Vite"]),
+            ("İstek yönlendirme", "/api ile başlayan istek Python servisine gider.",
+             ["Vite proxy", "nginx"]),
+            ("API katmanı", "POST /predict karşılanır, belirteç ve yetki kontrol edilir.",
+             ["FastAPI"]),
+            ("Klasik yöntemler", "Duval, Rogers, IEC, Anahtar Gaz ve IEEE risk seviyesi.",
+             ["Python (core)"]),
+            ("ML tahmini", "Arıza sınıfı ve güven değeri hesaplanır.",
+             ["scikit-learn", "XGBoost", "pandas"]),
+            ("Açıklama", "Kararı en çok etkileyen gazlar bulunur.",
+             ["SHAP"]),
+            ("Kayıt ve sonuç", "Ölçüm kaydedilir, sonuç ekrana döner.",
+             ["SQLite · dga.db"]),
+        ]),
+        (520, "BAKIM AKIŞI · .NET", NET, "#f7f1f9", [
+            ("Bakım ekranı", "BK01 açılır, iş emri önerileri istenir.",
+             ["React"]),
+            ("İstek yönlendirme", "/maint ile başlayan istek .NET servisine gider.",
+             ["Vite proxy", "nginx"]),
+            ("API katmanı", "Uç nokta çalışır, yetki departmandan okunur.",
+             ["ASP.NET Core", "C#"]),
+            ("Risk okuma", "Filo riski Python'dan alınır, kopyalanmaz.",
+             ["HttpClient", "JSON"]),
+            ("İş emri önerisi", "Risk ve tarihe göre 3 / 7 / 14 / 30 gün kuralı.",
+             ["WorkOrderPlanner"]),
+            ("Teknisyen ataması", "Uzmanlık ve iş yüküne göre en uygun kişi seçilir.",
+             ["AssignmentService"]),
+            ("Kayıt ve bildirim", "İş emri kaydedilir, ilgili kişiye bildirim gider.",
+             ["EF Core", "SQLite · maint.db"]),
+        ]),
+    ]
+
+    num = 1
+    for ly, label, color, fill, steps in lanes:
+        b.append(rect(30, ly, W - 60, 330, "#ffffff", color, 12, 1.2))
+        b.append(f'<rect x="30" y="{ly}" width="40" height="330" rx="12" fill="{color}"/>')
+        b.append(f'<text x="0" y="0" font-family="{FONT}" font-size="14" fill="#fff" '
+                 f'font-weight="700" text-anchor="middle" '
+                 f'transform="translate(55 {ly + 165}) rotate(-90)">{esc(label)}</text>')
+        for i, (title, desc, techs) in enumerate(steps):
+            x = X0 + i * (NW + GAP)
+            _step(b, x, ly + 20, NW, 290, num, title, desc, techs, color, fill)
+            if i < len(steps) - 1:
+                b.append(arrow([(x + NW + 2, ly + 165), (x + NW + GAP - 2, ly + 165)]))
+            num += 1
+
+    # Cross-service call: step 11 (.NET) asks step 3 (Python) for risk
+    x11 = X0 + 3 * (NW + GAP) + NW / 2
+    x3 = X0 + 2 * (NW + GAP) + NW / 2
+    b.append(arrow([(x11, 540), (x11, 485), (x3, 485), (x3, 432)], dashed=True,
+                   color=INK))
+    b.append(text((x11 + x3) / 2, 476, "GET /fleet/overview · HTTP + JSON",
+                  12.5, INK, 700, "middle"))
+    b.append(text((x11 + x3) / 2 + 330, 476,
+                  "Veritabanı ortak değil: .NET sadece HTTP ile sorar",
+                  12, MUTED, 400, "middle"))
+
+    # Shared infrastructure band
+    iy = 880
+    b.append(rect(30, iy, W - 60, 150, "#fbfaf7", DATA, 12, 1.4))
+    b.append(text(50, iy + 32, "ORTAK ALTYAPI", 14, INK, 700))
+    infra = [
+        ("Docker Compose", "Üç servisi tek komutla başlatır"),
+        ("nginx", "Arayüzü sunar, /api ve /maint yönlendirir"),
+        ("GitHub Actions", "Her push'ta testleri Linux'ta çalıştırır"),
+        ("pytest · 300", "Python testleri"),
+        ("xUnit · 227", ".NET testleri"),
+        ("Git · GitHub", "Sürüm kontrolü"),
+    ]
+    cw = (W - 100) / len(infra)
+    for i, (name, desc) in enumerate(infra):
+        x = 50 + i * cw
+        b.append(rect(x, iy + 50, cw - 16, 80, "#fff", DATA, 8, 1.2))
+        b.append(text(x + 14, iy + 80, name, 14, INK, 700, font=MONO))
+        for j, line in enumerate(_wrap(desc, 30)):
+            b.append(text(x + 14, iy + 102 + j * 16, line, 12, MUTED))
+
+    b.append(text(W - 40, 106, "Akış: arayüz → Python tanı koyar → .NET bakımı planlar",
+                  13, MUTED, 400, "end"))
+    return svg(W, H, "".join(b), "Teknoloji Akışı — Ne Nerede Kullanıldı?",
+               "Tanı akışı Python'da, bakım akışı .NET'te; iki servis HTTP ile "
+               "konuşur"), W, H
+
+
 def render(name, content, w, h, edge):
     src = OUT / "src"
     src.mkdir(exist_ok=True)
@@ -555,9 +680,15 @@ def main():
     edge = next((p for p in EDGE_CANDIDATES if p.exists()), None)
     if edge is None:
         raise SystemExit("Microsoft Edge not found; SVGs are in src/.")
-    for name, fn in [("01-system-architecture", system_architecture),
-                     ("02-python-layers", python_layers),
-                     ("03-uml-maintenance-domain", uml_domain)]:
+    import sys
+    jobs = [("01-system-architecture", system_architecture),
+            ("02-python-layers", python_layers),
+            ("03-uml-maintenance-domain", uml_domain),
+            ("05-technology-flow-tr", tech_flow)]
+    only = sys.argv[1:]  # optional: render only the named diagrams
+    for name, fn in jobs:
+        if only and name not in only:
+            continue
         content, w, h = fn()
         render(name, content, w, h, edge)
 
